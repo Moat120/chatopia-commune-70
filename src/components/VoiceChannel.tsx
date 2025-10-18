@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, Settings } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { connect, Room, LocalTrack } from "twilio-video";
 
 interface VoiceChannelProps {
   channelId: string;
@@ -10,6 +12,7 @@ interface VoiceChannelProps {
 }
 
 const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
+  const [room, setRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(false);
@@ -17,142 +20,209 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   const { toast } = useToast();
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const screenStreamRef = useRef<MediaStream | null>(null);
+  const remoteVideoRef = useRef<HTMLDivElement>(null);
 
-  const startVoiceConnection = async () => {
+  const connectToRoom = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        video: false 
+      // Get Twilio token from edge function
+      const { data, error } = await supabase.functions.invoke('twilio-token', {
+        body: { roomName: channelId }
       });
-      
-      localStreamRef.current = stream;
+
+      if (error) throw error;
+
+      // Connect to Twilio Video room
+      const room = await connect(data.token, {
+        name: channelId,
+        audio: true,
+        video: false,
+        networkQuality: { local: 1, remote: 1 },
+        bandwidthProfile: {
+          video: {
+            mode: 'collaboration',
+            renderDimensions: {
+              high: { height: 1440, width: 2560 },
+              standard: { height: 720, width: 1280 },
+              low: { height: 360, width: 640 }
+            }
+          }
+        },
+        preferredVideoCodecs: [{ codec: 'VP8', simulcast: true }],
+        maxAudioBitrate: 16000,
+      });
+
+      setRoom(room);
       setIsConnected(true);
-      
+
+      // Handle local tracks
+      room.localParticipant.tracks.forEach((publication: any) => {
+        if (publication.track) {
+          handleTrackPublication(publication);
+        }
+      });
+
+      // Handle remote participants
+      room.participants.forEach(participant => {
+        participant.tracks.forEach((publication: any) => {
+          if (publication.track) {
+            attachTrack(publication.track);
+          }
+        });
+
+        participant.on('trackSubscribed', (track: LocalTrack) => {
+          attachTrack(track);
+        });
+      });
+
+      room.on('participantConnected', participant => {
+        console.log(`Participant "${participant.identity}" connected`);
+
+        participant.tracks.forEach((publication: any) => {
+          if (publication.track) {
+            attachTrack(publication.track);
+          }
+        });
+
+        participant.on('trackSubscribed', (track: LocalTrack) => {
+          attachTrack(track);
+        });
+      });
+
+      room.on('participantDisconnected', participant => {
+        console.log(`Participant "${participant.identity}" disconnected`);
+      });
+
       toast({
         title: "Connecté !",
-        description: `Vous êtes maintenant dans ${channelName}`,
+        description: `Vous êtes dans ${channelName}`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Connection error:', error);
       toast({
-        title: "Erreur",
-        description: "Impossible d'accéder au microphone",
+        title: "Erreur de connexion",
+        description: error.message,
         variant: "destructive",
       });
     }
   };
 
-  const startVideo = async () => {
-    if (!localStreamRef.current) {
-      await startVoiceConnection();
+  const handleTrackPublication = (publication: any) => {
+    if (publication.track.kind === 'video' && localVideoRef.current) {
+      publication.track.attach(localVideoRef.current);
     }
+  };
+
+  const attachTrack = (track: any) => {
+    if (track.kind === 'video' && remoteVideoRef.current) {
+      const element = track.attach();
+      element.style.width = '100%';
+      element.style.height = 'auto';
+      remoteVideoRef.current.appendChild(element);
+    }
+  };
+
+  const toggleVideo = async () => {
+    if (!room) return;
 
     try {
-      const videoStream = await navigator.mediaDevices.getUserMedia({ 
-        video: {
-          width: { ideal: 2560 },
-          height: { ideal: 1440 },
-          frameRate: { ideal: 60 }
-        } 
-      });
-      
-      videoStream.getVideoTracks().forEach(track => {
-        localStreamRef.current?.addTrack(track);
-      });
-      
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = localStreamRef.current;
+      if (isVideoOn) {
+        room.localParticipant.videoTracks.forEach((publication: any) => {
+          publication.track.stop();
+          publication.unpublish();
+        });
+        setIsVideoOn(false);
+      } else {
+        const videoTrack = await (navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 2560 },
+            height: { ideal: 1440 },
+            frameRate: { ideal: 60 }
+          }
+        }) as Promise<MediaStream>);
+
+        const tracks = videoTrack.getVideoTracks();
+        if (tracks.length > 0) {
+          await room.localParticipant.publishTrack(tracks[0]);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = videoTrack;
+          }
+        }
+        setIsVideoOn(true);
       }
-      
-      setIsVideoOn(true);
-      
-      toast({
-        title: "Caméra activée",
-        description: "Votre vidéo est maintenant partagée",
-      });
     } catch (error) {
       toast({
-        title: "Erreur",
-        description: "Impossible d'accéder à la caméra",
+        title: "Erreur caméra",
+        description: "Impossible d'activer la caméra",
         variant: "destructive",
       });
     }
   };
 
-  const stopVideo = () => {
-    localStreamRef.current?.getVideoTracks().forEach(track => track.stop());
-    setIsVideoOn(false);
-  };
+  const toggleScreenShare = async () => {
+    if (!room) return;
 
-  const startScreenShare = async () => {
     try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { ideal: 2560 },
-          height: { ideal: 1440 },
-          frameRate: { ideal: 60 }
-        },
-        audio: true
-      });
-      
-      screenStreamRef.current = screenStream;
-      
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = screenStream;
+      if (isScreenSharing) {
+        room.localParticipant.videoTracks.forEach((publication: any) => {
+          if (publication.track.name === 'screen') {
+            publication.track.stop();
+            publication.unpublish();
+          }
+        });
+        setIsScreenSharing(false);
+      } else {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: 2560 },
+            height: { ideal: 1440 },
+            frameRate: { ideal: 60 }
+          }
+        });
+
+        const tracks = screenStream.getVideoTracks();
+        if (tracks.length > 0) {
+          await room.localParticipant.publishTrack(tracks[0], { name: 'screen' });
+        }
+        setIsScreenSharing(true);
+
+        tracks[0].onended = () => {
+          toggleScreenShare();
+        };
       }
-      
-      setIsScreenSharing(true);
-      
-      screenStream.getVideoTracks()[0].onended = () => {
-        stopScreenShare();
-      };
-      
-      toast({
-        title: "Partage d'écran activé",
-        description: "Vous partagez maintenant votre écran en 1440p 60fps",
-      });
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Erreur partage d'écran",
         description: "Impossible de partager l'écran",
         variant: "destructive",
       });
     }
   };
 
-  const stopScreenShare = () => {
-    screenStreamRef.current?.getTracks().forEach(track => track.stop());
-    setIsScreenSharing(false);
-    
-    if (localVideoRef.current && localStreamRef.current) {
-      localVideoRef.current.srcObject = localStreamRef.current;
+  const toggleMute = () => {
+    if (room) {
+      room.localParticipant.audioTracks.forEach((publication: any) => {
+        if (isMuted) {
+          publication.track.enable();
+        } else {
+          publication.track.disable();
+        }
+      });
+      setIsMuted(!isMuted);
     }
   };
 
   const disconnect = () => {
-    localStreamRef.current?.getTracks().forEach(track => track.stop());
-    screenStreamRef.current?.getTracks().forEach(track => track.stop());
-    setIsConnected(false);
-    setIsVideoOn(false);
-    setIsScreenSharing(false);
-    
-    toast({
-      title: "Déconnecté",
-      description: "Vous avez quitté le canal vocal",
-    });
-  };
-
-  const toggleMute = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = !track.enabled;
+    if (room) {
+      room.disconnect();
+      setRoom(null);
+      setIsConnected(false);
+      setIsVideoOn(false);
+      setIsScreenSharing(false);
+      
+      toast({
+        title: "Déconnecté",
+        description: "Vous avez quitté le canal vocal",
       });
-      setIsMuted(!isMuted);
     }
   };
 
@@ -167,22 +237,28 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       <Card className="p-4 bg-card">
         <h3 className="font-semibold mb-4">Canal vocal : {channelName}</h3>
         
-        {(isVideoOn || isScreenSharing) && (
-          <div className="mb-4 relative aspect-video bg-black rounded-lg overflow-hidden">
-            <video
-              ref={localVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-contain"
-            />
-          </div>
-        )}
+        <div className="space-y-4">
+          {(isVideoOn || isScreenSharing) && (
+            <div className="aspect-video bg-black rounded-lg overflow-hidden">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-contain"
+              />
+            </div>
+          )}
 
-        <div className="flex flex-wrap gap-2">
+          <div ref={remoteVideoRef} className="grid grid-cols-2 gap-2">
+            {/* Remote participant videos will be added here */}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mt-4">
           {!isConnected ? (
-            <Button onClick={startVoiceConnection} className="flex-1">
-              Rejoindre le canal vocal
+            <Button onClick={connectToRoom} className="flex-1">
+              Rejoindre avec Twilio Video (1440p 60fps)
             </Button>
           ) : (
             <>
@@ -195,7 +271,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
               </Button>
               
               <Button
-                onClick={isVideoOn ? stopVideo : startVideo}
+                onClick={toggleVideo}
                 variant={isVideoOn ? "secondary" : "outline"}
                 size="icon"
               >
@@ -203,7 +279,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
               </Button>
               
               <Button
-                onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+                onClick={toggleScreenShare}
                 variant={isScreenSharing ? "secondary" : "outline"}
                 size="icon"
               >
@@ -223,9 +299,10 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
         
         {isConnected && (
           <div className="mt-4 text-sm text-muted-foreground">
-            <p className="flex items-center gap-2">
-              <Settings className="w-4 h-4" />
-              Qualité: {isScreenSharing ? "1440p 60fps (partage d'écran)" : isVideoOn ? "1440p 60fps (caméra)" : "Audio seulement"}
+            <p>
+              ✅ Connecté avec Twilio Video
+              <br />
+              📹 Qualité: {isScreenSharing ? "Partage 1440p 60fps" : isVideoOn ? "Vidéo 1440p 60fps" : "Audio HD"}
             </p>
           </div>
         )}
