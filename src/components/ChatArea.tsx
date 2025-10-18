@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Hash, Send } from "lucide-react";
+import { Hash, Send, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import VoiceChannel from "./VoiceChannel";
 
 interface ChatAreaProps {
   channelId: string | null;
@@ -118,6 +119,20 @@ const ChatArea = ({ channelId }: ChatAreaProps) => {
     );
   }
 
+  // Voice channel
+  if (channel?.type === 'voice') {
+    return (
+      <div className="flex-1 flex flex-col bg-[hsl(var(--chat-background))]">
+        <div className="h-12 px-4 flex items-center gap-2 border-b border-border shadow-sm">
+          <Volume2 className="w-5 h-5 text-muted-foreground" />
+          <h2 className="font-semibold text-foreground">{channel?.name}</h2>
+        </div>
+        <VoiceChannel channelId={channelId} channelName={channel?.name || ""} />
+      </div>
+    );
+  }
+
+  // Text channel
   return (
     <div className="flex-1 flex flex-col bg-[hsl(var(--chat-background))]">
       <div className="h-12 px-4 flex items-center gap-2 border-b border-border shadow-sm">

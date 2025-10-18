@@ -1,7 +1,6 @@
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import CreateServerDialog from "./CreateServerDialog";
 
 interface ServerSidebarProps {
   selectedServerId: string | null;
@@ -42,13 +41,7 @@ const ServerSidebar = ({ selectedServerId, onSelectServer }: ServerSidebarProps)
         </button>
       ))}
       
-      <Button
-        size="icon"
-        variant="ghost"
-        className="w-12 h-12 rounded-2xl hover:rounded-xl bg-muted hover:bg-primary transition-all"
-      >
-        <Plus className="w-6 h-6" />
-      </Button>
+      <CreateServerDialog />
     </div>
   );
 };

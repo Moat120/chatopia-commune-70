@@ -1,4 +1,4 @@
-import { Hash, Plus, ChevronDown, LogOut } from "lucide-react";
+import { Hash, Plus, ChevronDown, LogOut, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -100,7 +100,7 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
           </div>
 
           <div className="space-y-0.5">
-            {channels?.map((channel) => (
+            {channels?.filter((c: any) => c.type === 'text').map((channel: any) => (
               <button
                 key={channel.id}
                 onClick={() => onSelectChannel(channel.id)}
@@ -111,6 +111,31 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
                 }`}
               >
                 <Hash className="w-4 h-4" />
+                {channel.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-2 py-4">
+          <div className="flex items-center justify-between px-2 mb-1">
+            <span className="text-xs font-semibold text-muted-foreground uppercase">
+              Canaux vocaux
+            </span>
+          </div>
+
+          <div className="space-y-0.5">
+            {channels?.filter((c: any) => c.type === 'voice').map((channel: any) => (
+              <button
+                key={channel.id}
+                onClick={() => onSelectChannel(channel.id)}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${
+                  selectedChannelId === channel.id
+                    ? "bg-[hsl(var(--active-channel))] text-foreground"
+                    : "text-muted-foreground hover:bg-[hsl(var(--hover-bg))] hover:text-foreground"
+                }`}
+              >
+                <Volume2 className="w-4 h-4" />
                 {channel.name}
               </button>
             ))}
