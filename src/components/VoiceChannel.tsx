@@ -26,9 +26,9 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     try {
       const userId = localStorage.getItem('currentUser') 
         ? JSON.parse(localStorage.getItem('currentUser')!).id 
-        : null;
+        : crypto.randomUUID();
 
-      // Get Twilio token from edge function
+      // Get Twilio token from edge function (no auth required)
       const response = await fetch(
         `https://wgautxbjngwjmvxyythm.supabase.co/functions/v1/twilio-token`,
         {
@@ -44,7 +44,10 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       );
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to get token');
+      if (!response.ok) {
+        console.error('Token error:', data);
+        throw new Error(data.error || 'Failed to get token');
+      }
 
       // Connect to Twilio Video room
       const room = await connect(data.token, {

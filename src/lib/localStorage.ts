@@ -101,7 +101,14 @@ export const updateCurrentUser = (updates: Partial<User>) => {
 // Server operations
 export const getServers = (): Server[] => {
   initializeData();
-  return JSON.parse(localStorage.getItem('servers') || '[]');
+  const joinedServerIds = JSON.parse(localStorage.getItem('joinedServers') || '[]');
+  const allServers = JSON.parse(localStorage.getItem('servers') || '[]');
+  
+  // Include user's own servers and joined servers
+  const user = getCurrentUser();
+  return allServers.filter((s: Server) => 
+    s.owner_id === user.id || joinedServerIds.includes(s.id)
+  );
 };
 
 export const addServer = (name: string, icon_url?: string): Server => {
@@ -113,15 +120,15 @@ export const addServer = (name: string, icon_url?: string): Server => {
     owner_id: user.id,
     created_at: new Date().toISOString()
   };
-  const servers = getServers();
-  servers.push(server);
-  localStorage.setItem('servers', JSON.stringify(servers));
+  const allServers = JSON.parse(localStorage.getItem('servers') || '[]');
+  allServers.push(server);
+  localStorage.setItem('servers', JSON.stringify(allServers));
   return server;
 };
 
 export const getServer = (id: string): Server | null => {
-  const servers = getServers();
-  return servers.find(s => s.id === id) || null;
+  const allServers = JSON.parse(localStorage.getItem('servers') || '[]');
+  return allServers.find((s: Server) => s.id === id) || null;
 };
 
 // Channel operations

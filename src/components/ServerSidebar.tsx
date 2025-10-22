@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getServers } from "@/lib/localStorage";
 import CreateServerDialog from "./CreateServerDialog";
+import JoinServerDialog from "./JoinServerDialog";
 
 interface ServerSidebarProps {
   selectedServerId: string | null;
@@ -37,6 +38,10 @@ const ServerSidebar = ({ selectedServerId, onSelectServer }: ServerSidebarProps)
           )}
         </button>
       ))}
+      
+      <div className="mt-2 border-t border-border pt-2">
+        <JoinServerDialog onServerJoined={onSelectServer} />
+      </div>
       
       <CreateServerDialog />
     </div>

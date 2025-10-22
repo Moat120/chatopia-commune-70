@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { getServer, getChannels, getCurrentUser } from "@/lib/localStorage";
 import SettingsDialog from "./SettingsDialog";
+import InviteDialog from "./InviteDialog";
 
 interface ChannelSidebarProps {
   serverId: string | null;
@@ -47,7 +48,10 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
     <div className="w-60 bg-[hsl(var(--channel-sidebar))] flex flex-col">
       <div className="h-12 px-4 flex items-center justify-between border-b border-border shadow-sm">
         <h2 className="font-semibold text-foreground">{server?.name}</h2>
-        <ChevronDown className="w-4 h-4 text-foreground" />
+        <div className="flex items-center gap-1">
+          {server && <InviteDialog serverId={server.id} serverName={server.name} />}
+          <ChevronDown className="w-4 h-4 text-foreground" />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
