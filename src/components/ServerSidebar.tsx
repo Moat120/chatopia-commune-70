@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect } from "react";
+import { getServers } from "@/lib/localStorage";
 import CreateServerDialog from "./CreateServerDialog";
 
 interface ServerSidebarProps {
@@ -8,18 +8,15 @@ interface ServerSidebarProps {
 }
 
 const ServerSidebar = ({ selectedServerId, onSelectServer }: ServerSidebarProps) => {
-  const { data: servers } = useQuery({
-    queryKey: ["servers"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("servers")
-        .select("*")
-        .order("created_at", { ascending: true });
+  const [servers, setServers] = useState(getServers());
 
-      if (error) throw error;
-      return data as any[];
-    },
-  });
+  useEffect(() => {
+    const handleStorage = () => {
+      setServers(getServers());
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   return (
     <div className="w-[72px] flex flex-col items-center gap-2 py-3 bg-[hsl(var(--server-sidebar))]">

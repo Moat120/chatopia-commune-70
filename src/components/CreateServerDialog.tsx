@@ -4,70 +4,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { addServer, addChannel } from "@/lib/localStorage";
 
 const CreateServerDialog = () => {
   const [open, setOpen] = useState(false);
   const [serverName, setServerName] = useState("");
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const createServer = useMutation({
-    mutationFn: async (name: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Non authentifié");
-
-      const { data: server, error: serverError } = await (supabase as any)
-        .from("servers")
-        .insert({ name, owner_id: user.id })
-        .select()
-        .single();
-
-      if (serverError) throw serverError;
-
-      // Add user as member
-      const { error: memberError } = await (supabase as any)
-        .from("server_members")
-        .insert({ server_id: server.id, user_id: user.id });
-
-      if (memberError) throw memberError;
-
-      // Create default channels
-      const { error: channelError } = await (supabase as any)
-        .from("channels")
-        .insert([
-          { server_id: server.id, name: "général", type: "text" },
-          { server_id: server.id, name: "vocal", type: "voice" },
-        ]);
-
-      if (channelError) throw channelError;
-
-      return server;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["servers"] });
-      toast({
-        title: "Serveur créé !",
-        description: "Votre nouveau serveur a été créé avec succès.",
-      });
-      setServerName("");
-      setOpen(false);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erreur",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!serverName.trim()) return;
-    createServer.mutate(serverName);
+
+    const server = addServer(serverName.trim());
+    
+    // Create default channels
+    addChannel(server.id, "général", "text");
+    addChannel(server.id, "vocal", "voice");
+
+    // Trigger storage event for other components
+    window.dispatchEvent(new StorageEvent('storage', { key: 'servers' }));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'channels' }));
+
+    toast({
+      title: "Serveur créé !",
+      description: "Votre nouveau serveur a été créé avec succès.",
+    });
+    setServerName("");
+    setOpen(false);
   };
 
   return (
@@ -96,8 +60,8 @@ const CreateServerDialog = () => {
               required
             />
           </div>
-          <Button type="submit" className="w-full" disabled={createServer.isPending}>
-            {createServer.isPending ? "Création..." : "Créer"}
+          <Button type="submit" className="w-full">
+            Créer
           </Button>
         </form>
       </DialogContent>

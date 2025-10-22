@@ -1,9 +1,7 @@
-import { Hash, Plus, ChevronDown, LogOut, Volume2 } from "lucide-react";
+import { Hash, ChevronDown, Volume2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
-import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
+import { getServer, getChannels, getCurrentUser } from "@/lib/localStorage";
 
 interface ChannelSidebarProps {
   serverId: string | null;
@@ -12,66 +10,26 @@ interface ChannelSidebarProps {
 }
 
 const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: ChannelSidebarProps) => {
-  const navigate = useNavigate();
-  const { toast } = useToast();
+  const [server, setServer] = useState(serverId ? getServer(serverId) : null);
+  const [channels, setChannels] = useState(serverId ? getChannels(serverId) : []);
+  const [profile] = useState(getCurrentUser());
 
-  const { data: server } = useQuery({
-    queryKey: ["server", serverId],
-    queryFn: async () => {
-      if (!serverId) return null;
-      const { data, error } = await (supabase as any)
-        .from("servers")
-        .select("*")
-        .eq("id", serverId)
-        .single();
+  useEffect(() => {
+    if (serverId) {
+      setServer(getServer(serverId));
+      setChannels(getChannels(serverId));
+    }
+  }, [serverId]);
 
-      if (error) throw error;
-      return data as any;
-    },
-    enabled: !!serverId,
-  });
-
-  const { data: channels } = useQuery({
-    queryKey: ["channels", serverId],
-    queryFn: async () => {
-      if (!serverId) return [];
-      const { data, error } = await (supabase as any)
-        .from("channels")
-        .select("*")
-        .eq("server_id", serverId)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
-      return data as any[];
-    },
-    enabled: !!serverId,
-  });
-
-  const { data: profile } = useQuery({
-    queryKey: ["profile"],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const { data, error } = await (supabase as any)
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (error) throw error;
-      return data as any;
-    },
-  });
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast({
-      title: "Déconnecté",
-      description: "À bientôt !",
-    });
-    navigate("/auth");
-  };
+  useEffect(() => {
+    const handleStorage = () => {
+      if (serverId) {
+        setChannels(getChannels(serverId));
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [serverId]);
 
   if (!serverId) {
     return (
@@ -100,7 +58,7 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
           </div>
 
           <div className="space-y-0.5">
-            {channels?.filter((c: any) => c.type === 'text').map((channel: any) => (
+            {channels.filter(c => c.type === 'text').map((channel) => (
               <button
                 key={channel.id}
                 onClick={() => onSelectChannel(channel.id)}
@@ -125,7 +83,7 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
           </div>
 
           <div className="space-y-0.5">
-            {channels?.filter((c: any) => c.type === 'voice').map((channel: any) => (
+            {channels.filter(c => c.type === 'voice').map((channel) => (
               <button
                 key={channel.id}
                 onClick={() => onSelectChannel(channel.id)}
@@ -155,14 +113,6 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
             <div className="text-xs text-muted-foreground">{profile?.status}</div>
           </div>
         </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={handleLogout}
-          className="w-8 h-8 flex-shrink-0"
-        >
-          <LogOut className="w-4 h-4" />
-        </Button>
       </div>
     </div>
   );

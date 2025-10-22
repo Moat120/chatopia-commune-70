@@ -24,12 +24,27 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
 
   const connectToRoom = async () => {
     try {
-      // Get Twilio token from edge function
-      const { data, error } = await supabase.functions.invoke('twilio-token', {
-        body: { roomName: channelId }
-      });
+      const userId = localStorage.getItem('currentUser') 
+        ? JSON.parse(localStorage.getItem('currentUser')!).id 
+        : null;
 
-      if (error) throw error;
+      // Get Twilio token from edge function
+      const response = await fetch(
+        `https://wgautxbjngwjmvxyythm.supabase.co/functions/v1/twilio-token`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            roomName: channelId,
+            userId 
+          })
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to get token');
 
       // Connect to Twilio Video room
       const room = await connect(data.token, {

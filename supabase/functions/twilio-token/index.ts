@@ -12,27 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
+    const { roomName, userId } = await req.json();
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    );
-
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-      throw new Error('No user found');
-    }
-
-    const { roomName } = await req.json();
+    // Generate a random user ID if not provided
+    const identity = userId || crypto.randomUUID();
 
     const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const twilioApiKeySid = Deno.env.get('TWILIO_API_KEY_SID');
@@ -47,7 +30,7 @@ serve(async (req) => {
       twilioAccountSid,
       twilioApiKeySid,
       twilioApiKeySecret,
-      user.id,
+      identity,
       roomName
     );
 
