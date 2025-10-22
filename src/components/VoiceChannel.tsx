@@ -273,7 +273,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
         <div className="flex flex-wrap gap-2 mt-4">
           {!isConnected ? (
             <Button onClick={connectToRoom} className="flex-1">
-              Rejoindre avec Twilio Video (1440p 60fps)
+              Rejoindre le canal vocal
             </Button>
           ) : (
             <>
@@ -281,6 +281,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                 onClick={toggleMute}
                 variant={isMuted ? "destructive" : "secondary"}
                 size="icon"
+                title={isMuted ? "Activer le micro" : "Couper le micro"}
               >
                 {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </Button>
@@ -289,6 +290,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                 onClick={toggleVideo}
                 variant={isVideoOn ? "secondary" : "outline"}
                 size="icon"
+                title={isVideoOn ? "Désactiver la caméra" : "Activer la caméra"}
               >
                 {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
               </Button>
@@ -297,6 +299,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                 onClick={toggleScreenShare}
                 variant={isScreenSharing ? "secondary" : "outline"}
                 size="icon"
+                title={isScreenSharing ? "Arrêter le partage" : "Partager l'écran"}
               >
                 <Monitor className="w-4 h-4" />
               </Button>
@@ -305,6 +308,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                 onClick={disconnect}
                 variant="destructive"
                 size="icon"
+                title="Quitter le canal"
               >
                 <PhoneOff className="w-4 h-4" />
               </Button>
@@ -313,12 +317,18 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
         </div>
         
         {isConnected && (
-          <div className="mt-4 text-sm text-muted-foreground">
-            <p>
-              ✅ Connecté avec Twilio Video
-              <br />
-              📹 Qualité: {isScreenSharing ? "Partage 1440p 60fps" : isVideoOn ? "Vidéo 1440p 60fps" : "Audio HD"}
-            </p>
+          <div className="mt-4 space-y-2">
+            <div className="text-sm text-muted-foreground">
+              <p className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                Connecté au canal vocal
+              </p>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>🎤 Micro: {isMuted ? "Coupé" : "Actif"}</p>
+              {isVideoOn && <p>📹 Caméra: Active (1440p 60fps)</p>}
+              {isScreenSharing && <p>🖥️ Partage d'écran: Actif (1440p 60fps)</p>}
+            </div>
           </div>
         )}
       </Card>

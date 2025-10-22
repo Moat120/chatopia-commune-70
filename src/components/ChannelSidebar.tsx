@@ -2,6 +2,7 @@ import { Hash, ChevronDown, Volume2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { getServer, getChannels, getCurrentUser } from "@/lib/localStorage";
+import SettingsDialog from "./SettingsDialog";
 
 interface ChannelSidebarProps {
   serverId: string | null;
@@ -12,7 +13,7 @@ interface ChannelSidebarProps {
 const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: ChannelSidebarProps) => {
   const [server, setServer] = useState(serverId ? getServer(serverId) : null);
   const [channels, setChannels] = useState(serverId ? getChannels(serverId) : []);
-  const [profile] = useState(getCurrentUser());
+  const [profile, setProfile] = useState(getCurrentUser());
 
   useEffect(() => {
     if (serverId) {
@@ -22,9 +23,12 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
   }, [serverId]);
 
   useEffect(() => {
-    const handleStorage = () => {
-      if (serverId) {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'channels' && serverId) {
         setChannels(getChannels(serverId));
+      }
+      if (e.key === 'currentUser') {
+        setProfile(getCurrentUser());
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -102,7 +106,7 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
       </div>
 
       <div className="p-2 bg-[hsl(var(--server-sidebar))] flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-sm font-semibold">
             {profile?.username?.charAt(0).toUpperCase()}
           </div>
@@ -110,9 +114,10 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
             <div className="text-sm font-semibold text-foreground truncate">
               {profile?.username}
             </div>
-            <div className="text-xs text-muted-foreground">{profile?.status}</div>
+            <div className="text-xs text-muted-foreground truncate">{profile?.status || "En ligne"}</div>
           </div>
         </div>
+        <SettingsDialog />
       </div>
     </div>
   );

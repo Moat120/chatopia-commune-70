@@ -87,6 +87,14 @@ export const updateCurrentUser = (updates: Partial<User>) => {
   const user = getCurrentUser();
   const updated = { ...user, ...updates };
   localStorage.setItem('currentUser', JSON.stringify(updated));
+  
+  // Trigger storage event manually for same-window updates
+  window.dispatchEvent(new StorageEvent('storage', {
+    key: 'currentUser',
+    newValue: JSON.stringify(updated),
+    oldValue: JSON.stringify(user)
+  }));
+  
   return updated;
 };
 
