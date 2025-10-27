@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getServer, getChannels, getCurrentUser } from "@/lib/localStorage";
 import SettingsDialog from "./SettingsDialog";
 import InviteDialog from "./InviteDialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface ChannelSidebarProps {
   serverId: string | null;
@@ -111,9 +112,12 @@ const ChannelSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Channe
 
       <div className="p-2 bg-[hsl(var(--server-sidebar))] flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-sm font-semibold">
-            {profile?.username?.charAt(0).toUpperCase()}
-          </div>
+          <Avatar className="w-8 h-8">
+            <AvatarImage src={profile?.avatar_url} />
+            <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+              {profile?.username?.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-foreground truncate">
               {profile?.username}
