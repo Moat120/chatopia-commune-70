@@ -3,74 +3,35 @@ import { Button } from "@/components/ui/button";
 import { Mic, MicOff, PhoneOff, Volume2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrentUser } from "@/lib/localStorage";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card } from "@/components/ui/card";
 
 interface VoiceChannelProps {
   channelId: string;
   channelName: string;
 }
 
-interface PeerConnection {
+interface UserPresence {
   userId: string;
   username: string;
-  connection: RTCPeerConnection;
-  stream?: MediaStream;
+  avatar_url?: string;
+  channelId: string;
+  joinedAt: number;
+  isSpeaking?: boolean;
 }
 
 const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [peers, setPeers] = useState<PeerConnection[]>([]);
+  const [connectedUsers, setConnectedUsers] = useState<UserPresence[]>([]);
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const { toast } = useToast();
 
-  const createPeerConnection = (userId: string, username: string): RTCPeerConnection => {
-    const configuration: RTCConfiguration = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ]
-    };
-
-    const pc = new RTCPeerConnection(configuration);
-
-    // Add local stream tracks
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStreamRef.current!);
-      });
-    }
-
-    // Handle incoming tracks
-    pc.ontrack = (event) => {
-      console.log('Received remote track from', username);
-      const [remoteStream] = event.streams;
-      
-      setPeers(prevPeers => {
-        const existingPeer = prevPeers.find(p => p.userId === userId);
-        if (existingPeer) {
-          return prevPeers.map(p => 
-            p.userId === userId ? { ...p, stream: remoteStream } : p
-          );
-        }
-        return [...prevPeers, { userId, username, connection: pc, stream: remoteStream }];
-      });
-
-      // Play audio
-      const audio = new Audio();
-      audio.srcObject = remoteStream;
-      audio.autoplay = true;
-      audio.play().catch(e => console.error('Error playing audio:', e));
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log('ICE connection state:', pc.iceConnectionState);
-      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-        setPeers(prevPeers => prevPeers.filter(p => p.userId !== userId));
-      }
-    };
-
-    return pc;
+  const updateConnectedUsers = () => {
+    const channelKey = `voice_channel_${channelId}`;
+    const users = JSON.parse(localStorage.getItem(channelKey) || '[]');
+    setConnectedUsers(users);
   };
 
   const joinChannel = async () => {
@@ -91,25 +52,31 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       audioContextRef.current = new AudioContext();
 
       // Store presence in localStorage
-      const presence = {
+      const presence: UserPresence = {
         userId: user.id,
         username: user.username,
+        avatar_url: user.avatar_url,
         channelId,
         joinedAt: Date.now(),
       };
 
       const channelKey = `voice_channel_${channelId}`;
       const currentUsers = JSON.parse(localStorage.getItem(channelKey) || '[]');
-      currentUsers.push(presence);
-      localStorage.setItem(channelKey, JSON.stringify(currentUsers));
+      
+      // Remove any existing entry for this user
+      const filteredUsers = currentUsers.filter((u: UserPresence) => u.userId !== user.id);
+      filteredUsers.push(presence);
+      
+      localStorage.setItem(channelKey, JSON.stringify(filteredUsers));
 
       // Notify other windows
       window.dispatchEvent(new StorageEvent('storage', { 
         key: channelKey,
-        newValue: JSON.stringify(currentUsers)
+        newValue: JSON.stringify(filteredUsers)
       }));
 
       setIsConnected(true);
+      updateConnectedUsers();
 
       toast({
         title: "Connecté au canal vocal",
@@ -133,17 +100,11 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       localStreamRef.current = null;
     }
 
-    // Close all peer connections
-    peers.forEach(peer => {
-      peer.connection.close();
-    });
-    setPeers([]);
-
     // Remove from localStorage
     const user = getCurrentUser();
     const channelKey = `voice_channel_${channelId}`;
     const currentUsers = JSON.parse(localStorage.getItem(channelKey) || '[]');
-    const updatedUsers = currentUsers.filter((u: any) => u.userId !== user.id);
+    const updatedUsers = currentUsers.filter((u: UserPresence) => u.userId !== user.id);
     localStorage.setItem(channelKey, JSON.stringify(updatedUsers));
 
     // Notify other windows
@@ -159,6 +120,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
 
     setIsConnected(false);
     setIsMuted(false);
+    setConnectedUsers([]);
 
     toast({
       title: "Déconnecté",
@@ -180,17 +142,18 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       const channelKey = `voice_channel_${channelId}`;
-      if (e.key === channelKey && isConnected) {
-        const users = JSON.parse(e.newValue || '[]');
-        const currentUser = getCurrentUser();
-        
-        // Update peer list (simplified - no actual P2P in this demo)
-        const otherUsers = users.filter((u: any) => u.userId !== currentUser.id);
-        console.log('Other users in channel:', otherUsers);
+      if (e.key === channelKey) {
+        updateConnectedUsers();
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
+    
+    // Initial load
+    if (isConnected) {
+      updateConnectedUsers();
+    }
+    
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [channelId, isConnected]);
 
@@ -203,7 +166,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6">
+    <div className="flex-1 flex flex-col p-8 space-y-6">
       <div className="text-center space-y-2">
         <Volume2 className="w-16 h-16 mx-auto text-primary" />
         <h3 className="text-xl font-semibold">{channelName}</h3>
@@ -213,7 +176,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       </div>
 
       {isConnected && (
-        <div className="flex flex-col items-center gap-4 w-full max-w-md">
+        <div className="flex flex-col items-center gap-6 w-full max-w-4xl mx-auto">
           <div className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg">
             <div className={`w-3 h-3 rounded-full ${isMuted ? 'bg-destructive' : 'bg-green-500'} animate-pulse`} />
             <span className="text-sm font-medium">
@@ -221,17 +184,32 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
             </span>
           </div>
 
-          {peers.length > 0 && (
-            <div className="w-full space-y-2">
+          {connectedUsers.length > 0 && (
+            <div className="w-full space-y-4">
               <p className="text-sm text-muted-foreground text-center">
-                {peers.length} {peers.length === 1 ? 'utilisateur connecté' : 'utilisateurs connectés'}
+                {connectedUsers.length} {connectedUsers.length === 1 ? 'utilisateur' : 'utilisateurs'} dans le canal
               </p>
-              <div className="space-y-2">
-                {peers.map(peer => (
-                  <div key={peer.userId} className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded">
-                    <Volume2 className="w-4 h-4 text-primary" />
-                    <span className="text-sm">{peer.username}</span>
-                  </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {connectedUsers.map(user => (
+                  <Card key={user.userId} className="p-4 flex flex-col items-center gap-3 hover:bg-accent/50 transition-colors">
+                    <div className="relative">
+                      <Avatar className="w-20 h-20 border-2 border-primary">
+                        <AvatarImage src={user.avatar_url} />
+                        <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                          {user.username.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-background ${
+                        user.userId === getCurrentUser().id && !isMuted ? 'bg-green-500 animate-pulse' : 'bg-green-500'
+                      }`} />
+                    </div>
+                    <div className="text-center w-full">
+                      <p className="text-sm font-medium truncate">{user.username}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {user.userId === getCurrentUser().id ? '(Vous)' : ''}
+                      </p>
+                    </div>
+                  </Card>
                 ))}
               </div>
             </div>
