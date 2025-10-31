@@ -25,9 +25,12 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<UserPresence[]>([]);
+  const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const channelRef = useRef<any>(null);
+  const audioAnalyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const { toast } = useToast();
 
   const ICE_SERVERS = {
@@ -80,6 +83,58 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     return pc;
   };
 
+  const startVoiceDetection = (stream: MediaStream) => {
+    const audioContext = new AudioContext();
+    const analyser = audioContext.createAnalyser();
+    const microphone = audioContext.createMediaStreamSource(stream);
+    
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.8;
+    microphone.connect(analyser);
+    audioAnalyserRef.current = analyser;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    const detectVoice = () => {
+      if (!audioAnalyserRef.current) return;
+      
+      analyser.getByteFrequencyData(dataArray);
+      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+      
+      const user = getCurrentUser();
+      if (average > 20 && !isMuted) {
+        setSpeakingUsers(prev => new Set(prev).add(user.id));
+        
+        // Broadcast speaking state
+        if (channelRef.current) {
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'speaking',
+            payload: { userId: user.id, speaking: true }
+          });
+        }
+      } else {
+        setSpeakingUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(user.id);
+          return newSet;
+        });
+        
+        if (channelRef.current) {
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'speaking',
+            payload: { userId: user.id, speaking: false }
+          });
+        }
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(detectVoice);
+    };
+    
+    detectVoice();
+  };
+
   const joinChannel = async () => {
     try {
       const user = getCurrentUser();
@@ -95,6 +150,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       });
 
       localStreamRef.current = stream;
+      startVoiceDetection(stream);
 
       // Join Supabase Realtime channel for signaling
       const channel = supabase.channel(`voice_${channelId}`, {
@@ -190,6 +246,17 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
               await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
             }
           }
+        })
+        .on('broadcast', { event: 'speaking' }, ({ payload }) => {
+          setSpeakingUsers(prev => {
+            const newSet = new Set(prev);
+            if (payload.speaking) {
+              newSet.add(payload.userId);
+            } else {
+              newSet.delete(payload.userId);
+            }
+            return newSet;
+          });
         });
 
       await channel.subscribe(async (status) => {
@@ -222,6 +289,12 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   };
 
   const leaveChannel = async () => {
+    // Stop voice detection
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
     // Stop all tracks
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
@@ -238,9 +311,11 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       channelRef.current = null;
     }
 
+    audioAnalyserRef.current = null;
     setIsConnected(false);
     setIsMuted(false);
     setConnectedUsers([]);
+    setSpeakingUsers(new Set());
 
     toast({
       title: "Déconnecté",
@@ -291,27 +366,35 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                 {connectedUsers.length} {connectedUsers.length === 1 ? 'utilisateur' : 'utilisateurs'} dans le canal
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {connectedUsers.map(user => (
-                  <Card key={user.userId} className="p-4 flex flex-col items-center gap-3 hover:bg-accent/50 transition-colors">
-                    <div className="relative">
-                      <Avatar className="w-20 h-20 border-2 border-primary">
-                        <AvatarImage src={user.avatar_url} />
-                        <AvatarFallback className="bg-primary text-primary-foreground text-xl">
-                          {user.username.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-background ${
-                        user.userId === getCurrentUser().id && !isMuted ? 'bg-green-500 animate-pulse' : 'bg-green-500'
-                      }`} />
-                    </div>
-                    <div className="text-center w-full">
-                      <p className="text-sm font-medium truncate">{user.username}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {user.userId === getCurrentUser().id ? '(Vous)' : ''}
-                      </p>
-                    </div>
-                  </Card>
-                ))}
+                {connectedUsers.map(user => {
+                  const isSpeaking = speakingUsers.has(user.userId);
+                  return (
+                    <Card key={user.userId} className="p-4 flex flex-col items-center gap-3 hover:bg-accent/50 transition-colors">
+                      <div className="relative">
+                        <Avatar className={`w-20 h-20 border-4 transition-all duration-200 ${
+                          isSpeaking 
+                            ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.6)]' 
+                            : 'border-border'
+                        }`}>
+                          <AvatarImage src={user.avatar_url} />
+                          <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                            {user.username.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-background transition-all ${
+                          isSpeaking ? 'bg-green-500 animate-pulse scale-110' : 'bg-green-500'
+                        }`} />
+                      </div>
+                      <div className="text-center w-full">
+                        <p className="text-sm font-medium truncate">{user.username}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {user.userId === getCurrentUser().id ? '(Vous)' : ''}
+                          {isSpeaking && ' 🎤'}
+                        </p>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
