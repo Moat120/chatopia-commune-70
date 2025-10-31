@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getCurrentUser } from "@/lib/localStorage";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 
 interface VoiceChannelProps {
   channelId: string;
@@ -25,13 +26,58 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   const [isMuted, setIsMuted] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<UserPresence[]>([]);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const channelRef = useRef<any>(null);
   const { toast } = useToast();
 
-  const updateConnectedUsers = () => {
-    const channelKey = `voice_channel_${channelId}`;
-    const users = JSON.parse(localStorage.getItem(channelKey) || '[]');
-    setConnectedUsers(users);
+  const ICE_SERVERS = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ]
+  };
+
+  const createPeerConnection = (userId: string): RTCPeerConnection => {
+    const pc = new RTCPeerConnection(ICE_SERVERS);
+
+    // Add local stream tracks to peer connection
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => {
+        pc.addTrack(track, localStreamRef.current!);
+      });
+    }
+
+    // Handle incoming tracks
+    pc.ontrack = (event) => {
+      console.log('Received remote track from', userId);
+      const remoteAudio = new Audio();
+      remoteAudio.srcObject = event.streams[0];
+      remoteAudio.play();
+    };
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate && channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'ice-candidate',
+          payload: {
+            candidate: event.candidate,
+            from: getCurrentUser().id,
+            to: userId
+          }
+        });
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log(`Connection state with ${userId}:`, pc.connectionState);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        peersRef.current.delete(userId);
+      }
+    };
+
+    return pc;
   };
 
   const joinChannel = async () => {
@@ -49,38 +95,120 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       });
 
       localStreamRef.current = stream;
-      audioContextRef.current = new AudioContext();
 
-      // Store presence in localStorage
-      const presence: UserPresence = {
-        userId: user.id,
-        username: user.username,
-        avatar_url: user.avatar_url,
-        channelId,
-        joinedAt: Date.now(),
-      };
+      // Join Supabase Realtime channel for signaling
+      const channel = supabase.channel(`voice_${channelId}`, {
+        config: { presence: { key: user.id } }
+      });
 
-      const channelKey = `voice_channel_${channelId}`;
-      const currentUsers = JSON.parse(localStorage.getItem(channelKey) || '[]');
-      
-      // Remove any existing entry for this user
-      const filteredUsers = currentUsers.filter((u: UserPresence) => u.userId !== user.id);
-      filteredUsers.push(presence);
-      
-      localStorage.setItem(channelKey, JSON.stringify(filteredUsers));
+      channelRef.current = channel;
 
-      // Notify other windows
-      window.dispatchEvent(new StorageEvent('storage', { 
-        key: channelKey,
-        newValue: JSON.stringify(filteredUsers)
-      }));
+      // Track presence
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState();
+          const users: UserPresence[] = [];
+          
+          Object.keys(state).forEach((key) => {
+            const presences = state[key];
+            presences.forEach((presence: any) => {
+              users.push(presence);
+            });
+          });
+          
+          setConnectedUsers(users);
+        })
+        .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+          console.log('User joined:', newPresences);
+          // Create peer connection for new user
+          newPresences.forEach(async (presence: any) => {
+            if (presence.userId !== user.id && !peersRef.current.has(presence.userId)) {
+              const pc = createPeerConnection(presence.userId);
+              peersRef.current.set(presence.userId, pc);
+              
+              // Create and send offer
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+              
+              channel.send({
+                type: 'broadcast',
+                event: 'offer',
+                payload: {
+                  offer,
+                  from: user.id,
+                  to: presence.userId
+                }
+              });
+            }
+          });
+        })
+        .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+          console.log('User left:', leftPresences);
+          leftPresences.forEach((presence: any) => {
+            const pc = peersRef.current.get(presence.userId);
+            if (pc) {
+              pc.close();
+              peersRef.current.delete(presence.userId);
+            }
+          });
+        })
+        .on('broadcast', { event: 'offer' }, async ({ payload }) => {
+          if (payload.to === user.id) {
+            console.log('Received offer from', payload.from);
+            const pc = createPeerConnection(payload.from);
+            peersRef.current.set(payload.from, pc);
+            
+            await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            
+            channel.send({
+              type: 'broadcast',
+              event: 'answer',
+              payload: {
+                answer,
+                from: user.id,
+                to: payload.from
+              }
+            });
+          }
+        })
+        .on('broadcast', { event: 'answer' }, async ({ payload }) => {
+          if (payload.to === user.id) {
+            console.log('Received answer from', payload.from);
+            const pc = peersRef.current.get(payload.from);
+            if (pc) {
+              await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
+            }
+          }
+        })
+        .on('broadcast', { event: 'ice-candidate' }, async ({ payload }) => {
+          if (payload.to === user.id) {
+            console.log('Received ICE candidate from', payload.from);
+            const pc = peersRef.current.get(payload.from);
+            if (pc && payload.candidate) {
+              await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            }
+          }
+        });
 
-      setIsConnected(true);
-      updateConnectedUsers();
-
-      toast({
-        title: "Connecté au canal vocal",
-        description: `Vous êtes maintenant dans ${channelName}`,
+      await channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            userId: user.id,
+            username: user.username,
+            avatar_url: user.avatar_url,
+            channelId,
+            joinedAt: Date.now(),
+          });
+          
+          setIsConnected(true);
+          
+          toast({
+            title: "Connecté au canal vocal",
+            description: `Vous êtes maintenant dans ${channelName}`,
+          });
+        }
       });
 
     } catch (error) {
@@ -93,29 +221,21 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     }
   };
 
-  const leaveChannel = () => {
+  const leaveChannel = async () => {
     // Stop all tracks
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
     }
 
-    // Remove from localStorage
-    const user = getCurrentUser();
-    const channelKey = `voice_channel_${channelId}`;
-    const currentUsers = JSON.parse(localStorage.getItem(channelKey) || '[]');
-    const updatedUsers = currentUsers.filter((u: UserPresence) => u.userId !== user.id);
-    localStorage.setItem(channelKey, JSON.stringify(updatedUsers));
+    // Close all peer connections
+    peersRef.current.forEach(pc => pc.close());
+    peersRef.current.clear();
 
-    // Notify other windows
-    window.dispatchEvent(new StorageEvent('storage', { 
-      key: channelKey,
-      newValue: JSON.stringify(updatedUsers)
-    }));
-
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
+    // Unsubscribe from channel
+    if (channelRef.current) {
+      await supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
     }
 
     setIsConnected(false);
@@ -137,25 +257,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       }
     }
   };
-
-  // Listen for other users joining/leaving
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      const channelKey = `voice_channel_${channelId}`;
-      if (e.key === channelKey) {
-        updateConnectedUsers();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Initial load
-    if (isConnected) {
-      updateConnectedUsers();
-    }
-    
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [channelId, isConnected]);
 
   useEffect(() => {
     return () => {
