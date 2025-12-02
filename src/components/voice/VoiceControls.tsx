@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, PhoneOff, Phone, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface VoiceControlsProps {
   isConnected: boolean;
@@ -24,17 +25,23 @@ const VoiceControls = ({
         onClick={onJoin}
         disabled={isConnecting}
         size="lg"
-        className="gap-2 min-w-[180px]"
+        className={cn(
+          "gap-3 px-8 py-6 rounded-2xl font-medium",
+          "bg-success hover:bg-success/90 text-success-foreground",
+          "transition-all duration-300",
+          "hover:shadow-lg hover:shadow-success/20",
+          isConnecting && "opacity-70"
+        )}
       >
         {isConnecting ? (
           <>
             <Loader2 className="h-5 w-5 animate-spin" />
-            Connexion...
+            <span>Connexion...</span>
           </>
         ) : (
           <>
             <Phone className="h-5 w-5" />
-            Rejoindre
+            <span>Rejoindre le vocal</span>
           </>
         )}
       </Button>
@@ -45,31 +52,39 @@ const VoiceControls = ({
     <div className="flex items-center gap-3">
       <Button
         onClick={onToggleMute}
-        variant={isMuted ? "destructive" : "secondary"}
         size="lg"
-        className="gap-2"
+        className={cn(
+          "gap-2 px-6 py-6 rounded-2xl font-medium transition-all duration-300",
+          isMuted 
+            ? "bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20" 
+            : "bg-secondary hover:bg-secondary/80 text-foreground border border-border/50"
+        )}
       >
         {isMuted ? (
           <>
             <MicOff className="h-5 w-5" />
-            Micro coupé
+            <span>Réactiver</span>
           </>
         ) : (
           <>
             <Mic className="h-5 w-5" />
-            Micro actif
+            <span>Couper</span>
           </>
         )}
       </Button>
 
       <Button
         onClick={onLeave}
-        variant="destructive"
         size="lg"
-        className="gap-2"
+        className={cn(
+          "gap-2 px-6 py-6 rounded-2xl font-medium",
+          "bg-destructive hover:bg-destructive/90",
+          "transition-all duration-300",
+          "hover:shadow-lg hover:shadow-destructive/20"
+        )}
       >
         <PhoneOff className="h-5 w-5" />
-        Quitter
+        <span>Quitter</span>
       </Button>
     </div>
   );

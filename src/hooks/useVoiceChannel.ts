@@ -10,6 +10,8 @@ export interface VoiceUser {
   isMuted: boolean;
 }
 
+export type ConnectionQuality = 'excellent' | 'good' | 'poor' | 'connecting';
+
 interface UseVoiceChannelProps {
   channelId: string;
   onError?: (error: string) => void;
@@ -20,6 +22,8 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<VoiceUser[]>([]);
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>('connecting');
+  const [audioLevel, setAudioLevel] = useState(0);
   
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -27,12 +31,41 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const isSpeakingRef = useRef(false);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPingRef = useRef<number>(Date.now());
 
   const currentUser = getCurrentUser();
 
+  // Monitor connection quality
+  const startConnectionMonitor = useCallback(() => {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+    }
+
+    pingIntervalRef.current = setInterval(() => {
+      const now = Date.now();
+      const latency = now - lastPingRef.current;
+      
+      if (latency < 100) {
+        setConnectionQuality('excellent');
+      } else if (latency < 300) {
+        setConnectionQuality('good');
+      } else {
+        setConnectionQuality('poor');
+      }
+      
+      lastPingRef.current = now;
+    }, 2000);
+  }, []);
+
   // Clean up all resources
   const cleanup = useCallback(async () => {
-    console.log("[VoiceChannel] Cleaning up resources");
+    console.log("[Voice] Cleaning up resources");
+    
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
     
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
@@ -42,7 +75,6 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
         track.stop();
-        console.log("[VoiceChannel] Stopped track:", track.kind);
       });
       streamRef.current = null;
     }
@@ -63,10 +95,12 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
     setIsConnecting(false);
     setIsMuted(false);
     setConnectedUsers([]);
+    setConnectionQuality('connecting');
+    setAudioLevel(0);
     isSpeakingRef.current = false;
   }, []);
 
-  // Voice activity detection
+  // Voice activity detection with audio level
   const startVoiceDetection = useCallback((stream: MediaStream) => {
     try {
       audioContextRef.current = new AudioContext({ sampleRate: 48000 });
@@ -74,12 +108,12 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
       analyserRef.current = audioContextRef.current.createAnalyser();
       
       analyserRef.current.fftSize = 256;
-      analyserRef.current.smoothingTimeConstant = 0.5;
+      analyserRef.current.smoothingTimeConstant = 0.4;
       source.connect(analyserRef.current);
 
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-      let lastUpdate = 0;
-      const UPDATE_INTERVAL = 100; // ms
+      let lastBroadcast = 0;
+      const BROADCAST_INTERVAL = 80;
 
       const detectSpeaking = () => {
         if (!analyserRef.current || !channelRef.current) {
@@ -87,20 +121,20 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
           return;
         }
 
-        const now = Date.now();
-        if (now - lastUpdate < UPDATE_INTERVAL) {
-          animationRef.current = requestAnimationFrame(detectSpeaking);
-          return;
-        }
-        lastUpdate = now;
-
         analyserRef.current.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        const speaking = average > 15 && !isMuted;
+        const normalizedLevel = Math.min(average / 50, 1);
+        
+        setAudioLevel(normalizedLevel);
+        
+        const speaking = average > 12 && !isMuted;
+        const now = Date.now();
 
-        // Only broadcast if speaking state changed
-        if (speaking !== isSpeakingRef.current) {
+        // Broadcast state changes
+        if ((speaking !== isSpeakingRef.current) || (now - lastBroadcast > BROADCAST_INTERVAL)) {
           isSpeakingRef.current = speaking;
+          lastBroadcast = now;
+          
           channelRef.current.track({
             odId: currentUser.id,
             username: currentUser.username,
@@ -114,9 +148,9 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
       };
 
       detectSpeaking();
-      console.log("[VoiceChannel] Voice detection started");
+      console.log("[Voice] Detection started");
     } catch (error) {
-      console.error("[VoiceChannel] Voice detection error:", error);
+      console.error("[Voice] Detection error:", error);
     }
   }, [currentUser, isMuted]);
 
@@ -124,11 +158,11 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
   const join = useCallback(async () => {
     if (isConnected || isConnecting) return;
     
-    console.log("[VoiceChannel] Joining channel:", channelId);
+    console.log("[Voice] Joining:", channelId);
     setIsConnecting(true);
+    setConnectionQuality('connecting');
 
     try {
-      // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -138,9 +172,7 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
       });
       
       streamRef.current = stream;
-      console.log("[VoiceChannel] Microphone access granted");
 
-      // Create Supabase Realtime channel
       const channel = supabase.channel(`voice-${channelId}`, {
         config: {
           presence: { key: currentUser.id },
@@ -150,7 +182,6 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
 
       channelRef.current = channel;
 
-      // Handle presence sync
       channel.on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
         const users: VoiceUser[] = [];
@@ -167,23 +198,19 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
           });
         });
         
-        console.log("[VoiceChannel] Users synced:", users.length);
         setConnectedUsers(users);
       });
 
-      // Subscribe to channel
       await new Promise<void>((resolve, reject) => {
         channel.subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            console.log("[VoiceChannel] Subscribed to channel");
             resolve();
           } else if (status === 'CHANNEL_ERROR') {
-            reject(new Error('Failed to subscribe to channel'));
+            reject(new Error('Erreur de connexion au canal'));
           }
         });
       });
 
-      // Track presence
       await channel.track({
         odId: currentUser.id,
         username: currentUser.username,
@@ -194,20 +221,20 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
 
       setIsConnected(true);
       setIsConnecting(false);
+      setConnectionQuality('excellent');
       
-      // Start voice detection
       startVoiceDetection(stream);
+      startConnectionMonitor();
 
     } catch (error: any) {
-      console.error("[VoiceChannel] Join error:", error);
+      console.error("[Voice] Join error:", error);
       await cleanup();
       onError?.(error.message || "Impossible d'accéder au microphone");
     }
-  }, [channelId, currentUser, isConnected, isConnecting, cleanup, startVoiceDetection, onError]);
+  }, [channelId, currentUser, isConnected, isConnecting, cleanup, startVoiceDetection, startConnectionMonitor, onError]);
 
   // Leave the voice channel
   const leave = useCallback(async () => {
-    console.log("[VoiceChannel] Leaving channel");
     await cleanup();
   }, [cleanup]);
 
@@ -221,7 +248,6 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
       audioTrack.enabled = !newMuted;
       setIsMuted(newMuted);
       
-      // Broadcast mute state
       if (channelRef.current) {
         channelRef.current.track({
           odId: currentUser.id,
@@ -231,12 +257,9 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
           isMuted: newMuted
         });
       }
-      
-      console.log("[VoiceChannel] Mute toggled:", newMuted);
     }
   }, [currentUser]);
 
-  // Cleanup on unmount or channel change
   useEffect(() => {
     return () => {
       cleanup();
@@ -249,6 +272,8 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
     isMuted,
     connectedUsers,
     currentUserId: currentUser.id,
+    connectionQuality,
+    audioLevel,
     join,
     leave,
     toggleMute
