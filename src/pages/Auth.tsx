@@ -2,28 +2,20 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Session } from "@supabase/supabase-js";
-import { Loader2, Mail, Lock, User as UserIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Session } from "@supabase/supabase-js";
+import { Loader2 } from "lucide-react";
 
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
-        setUser(session?.user ?? null);
-        
         if (session) {
           navigate("/");
         }
@@ -32,8 +24,6 @@ const Auth = () => {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
-      
       if (session) {
         navigate("/");
       }
@@ -63,99 +53,28 @@ const Auth = () => {
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-    const username = formData.get("username") as string;
-
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            username,
-          },
-        },
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Compte créé",
-        description: "Vérifiez votre email pour confirmer votre compte.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Erreur",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-    } catch (error: any) {
-      toast({
-        title: "Erreur de connexion",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 noise">
-      <div className="w-full max-w-md animate-fade-in-up">
+      <div className="w-full max-w-sm animate-fade-in-up">
         {/* Logo/Brand */}
-        <div className="text-center mb-8 space-y-3">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center glow-primary">
-            <span className="text-3xl font-bold gradient-text">V</span>
+        <div className="text-center mb-10 space-y-4">
+          <div className="mx-auto w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 flex items-center justify-center shadow-2xl shadow-primary/20">
+            <span className="text-4xl font-bold gradient-text">V</span>
           </div>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Bienvenue</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Connectez-vous pour continuer
+            <h1 className="text-3xl font-bold tracking-tight">Bienvenue</h1>
+            <p className="text-muted-foreground mt-2">
+              Connecte-toi pour retrouver tes amis
             </p>
           </div>
         </div>
 
         {/* Auth Card */}
-        <div className="glass rounded-3xl p-8 space-y-6">
-          {/* Google Sign In */}
+        <div className="glass rounded-3xl p-8">
           <Button
             onClick={handleGoogleSignIn}
-            variant="outline"
             disabled={googleLoading}
-            className={cn(
-              "w-full py-6 rounded-xl font-medium",
-              "bg-secondary/50 hover:bg-secondary/80",
-              "border-border/50 hover:border-border",
-              "transition-all duration-300"
-            )}
+            className="w-full py-6 rounded-2xl font-medium text-base bg-foreground text-background hover:bg-foreground/90 transition-all duration-300 hover:shadow-xl hover:scale-[1.02]"
           >
             {googleLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -184,152 +103,10 @@ const Auth = () => {
             )}
           </Button>
 
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border/50"></div>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-3 text-muted-foreground">ou</span>
-            </div>
-          </div>
-
-          {/* Email/Password Tabs */}
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 rounded-xl bg-secondary/50 p-1">
-              <TabsTrigger 
-                value="signin"
-                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
-              >
-                Connexion
-              </TabsTrigger>
-              <TabsTrigger 
-                value="signup"
-                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
-              >
-                Inscription
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="signin" className="mt-6">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signin-email" className="text-sm font-medium">
-                    Email
-                  </Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signin-email"
-                      name="email"
-                      type="email"
-                      placeholder="vous@exemple.com"
-                      required
-                      className="pl-10 py-5 rounded-xl bg-secondary/30 border-border/50 focus:border-primary/50"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signin-password" className="text-sm font-medium">
-                    Mot de passe
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signin-password"
-                      name="password"
-                      type="password"
-                      placeholder="••••••••"
-                      required
-                      className="pl-10 py-5 rounded-xl bg-secondary/30 border-border/50 focus:border-primary/50"
-                    />
-                  </div>
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full py-5 rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-primary/20" 
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    "Se connecter"
-                  )}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup" className="mt-6">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-username" className="text-sm font-medium">
-                    Nom d'utilisateur
-                  </Label>
-                  <div className="relative">
-                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signup-username"
-                      name="username"
-                      type="text"
-                      placeholder="VotreNom"
-                      required
-                      className="pl-10 py-5 rounded-xl bg-secondary/30 border-border/50 focus:border-primary/50"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email" className="text-sm font-medium">
-                    Email
-                  </Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signup-email"
-                      name="email"
-                      type="email"
-                      placeholder="vous@exemple.com"
-                      required
-                      className="pl-10 py-5 rounded-xl bg-secondary/30 border-border/50 focus:border-primary/50"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password" className="text-sm font-medium">
-                    Mot de passe
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signup-password"
-                      name="password"
-                      type="password"
-                      placeholder="Min. 6 caractères"
-                      required
-                      minLength={6}
-                      className="pl-10 py-5 rounded-xl bg-secondary/30 border-border/50 focus:border-primary/50"
-                    />
-                  </div>
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full py-5 rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-primary/20" 
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    "Créer un compte"
-                  )}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <p className="text-center text-xs text-muted-foreground/60 mt-6">
+            En continuant, tu acceptes nos conditions d'utilisation
+          </p>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-xs text-muted-foreground/60 mt-6">
-          En continuant, vous acceptez nos conditions d'utilisation
-        </p>
       </div>
     </div>
   );
