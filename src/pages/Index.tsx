@@ -1,66 +1,170 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import ServerSidebar from "@/components/ServerSidebar";
-import ChannelSidebar from "@/components/ChannelSidebar";
-import ChatArea from "@/components/ChatArea";
-import UsernameDialog from "@/components/UsernameDialog";
-import { getServers } from "@/lib/localStorage";
-import { joinServerByInvite } from "@/lib/invitations";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import FriendsSidebar from "@/components/friends/FriendsSidebar";
+import PrivateChatPanel from "@/components/friends/PrivateChatPanel";
+import PrivateCallPanel from "@/components/friends/PrivateCallPanel";
+import { Friend } from "@/hooks/useFriends";
 import { useToast } from "@/hooks/use-toast";
+import { MessageCircle } from "lucide-react";
 
 const Index = () => {
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [activeCall, setActiveCall] = useState<{
+    friend: Friend;
+    isIncoming: boolean;
+    callId?: string;
+  } | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{
+    friend: Friend;
+    callId: string;
+  } | null>(null);
 
+  // Listen for incoming calls
   useEffect(() => {
-    // Check for invite code in URL
-    const params = new URLSearchParams(window.location.search);
-    const inviteCode = params.get('invite');
-    
-    if (inviteCode) {
-      const result = joinServerByInvite(inviteCode);
-      if (result.success) {
-        toast({
-          title: "Serveur rejoint !",
-          description: "Vous avez rejoint le serveur avec succès",
-        });
-        setSelectedServerId(result.serverId!);
-        // Clean URL
-        window.history.replaceState({}, '', '/');
-      } else {
-        toast({
-          title: "Erreur",
-          description: result.error,
-          variant: "destructive",
-        });
-      }
-    }
+    if (!user) return;
 
-    // Auto-select first server
-    const servers = getServers();
-    if (servers.length > 0 && !selectedServerId) {
-      setSelectedServerId(servers[0].id);
+    const channel = supabase
+      .channel("incoming-calls")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "private_calls",
+          filter: `callee_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const call = payload.new as any;
+          if (call.status === "ringing") {
+            // Fetch caller info
+            const { data: caller } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", call.caller_id)
+              .single();
+
+            if (caller) {
+              setIncomingCall({
+                friend: caller as Friend,
+                callId: call.id,
+              });
+              toast({
+                title: "Appel entrant",
+                description: `${caller.username} vous appelle`,
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, toast]);
+
+  const handleStartCall = (friend: Friend) => {
+    setActiveCall({ friend, isIncoming: false });
+  };
+
+  const handleAcceptIncomingCall = () => {
+    if (incomingCall) {
+      setActiveCall({
+        friend: incomingCall.friend,
+        isIncoming: true,
+        callId: incomingCall.callId,
+      });
+      setIncomingCall(null);
     }
-  }, [toast]);
+  };
+
+  const handleDeclineIncomingCall = async () => {
+    if (incomingCall) {
+      await supabase
+        .from("private_calls")
+        .update({ status: "declined", ended_at: new Date().toISOString() })
+        .eq("id", incomingCall.callId);
+      setIncomingCall(null);
+    }
+  };
 
   return (
-    <>
-      <UsernameDialog />
-      <div className="flex h-screen overflow-hidden">
-        <ServerSidebar
-          selectedServerId={selectedServerId}
-          onSelectServer={setSelectedServerId}
+    <div className="h-screen flex bg-background noise">
+      {/* Friends Sidebar */}
+      <FriendsSidebar
+        selectedFriend={selectedFriend}
+        onSelectFriend={setSelectedFriend}
+        onStartCall={handleStartCall}
+      />
+
+      {/* Main Content */}
+      {selectedFriend ? (
+        <PrivateChatPanel
+          friend={selectedFriend}
+          onClose={() => setSelectedFriend(null)}
+          onStartCall={() => handleStartCall(selectedFriend)}
         />
-        <ChannelSidebar
-          serverId={selectedServerId}
-          selectedChannelId={selectedChannelId}
-          onSelectChannel={setSelectedChannelId}
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-20" />
+            <h2 className="text-xl font-semibold mb-2">Bienvenue !</h2>
+            <p className="text-sm">
+              Sélectionne un ami pour commencer une conversation
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Active Call */}
+      {activeCall && (
+        <PrivateCallPanel
+          friend={activeCall.friend}
+          onEnd={() => setActiveCall(null)}
+          isIncoming={activeCall.isIncoming}
+          callId={activeCall.callId}
         />
-        <ChatArea channelId={selectedChannelId} />
-      </div>
-    </>
+      )}
+
+      {/* Incoming Call Notification */}
+      {incomingCall && !activeCall && (
+        <div className="fixed bottom-4 right-4 z-50 animate-fade-in-up">
+          <div className="glass rounded-2xl p-4 shadow-2xl border border-border/50 w-80">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="relative">
+                <img
+                  src={incomingCall.friend.avatar_url || ""}
+                  alt=""
+                  className="h-12 w-12 rounded-full bg-muted"
+                />
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-success rounded-full animate-pulse" />
+              </div>
+              <div>
+                <p className="font-semibold">{incomingCall.friend.username}</p>
+                <p className="text-sm text-muted-foreground">Appel entrant...</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDeclineIncomingCall}
+                className="flex-1 py-2 px-4 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+              >
+                Refuser
+              </button>
+              <button
+                onClick={handleAcceptIncomingCall}
+                className="flex-1 py-2 px-4 rounded-xl bg-success text-success-foreground hover:bg-success/90 transition-colors"
+              >
+                Accepter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
