@@ -83,52 +83,80 @@ export const useFriends = () => {
   const sendFriendRequest = async (codeOrUsername: string) => {
     if (!user) return { error: "Non authentifié" };
 
-    // Try to find by friend_code first, then username
-    const { data: targetUser, error: findError } = await supabase
-      .from("profiles")
-      .select("id, username")
-      .or(`friend_code.eq.${codeOrUsername.toUpperCase()},username.ilike.${codeOrUsername}`)
-      .single();
-
-    if (findError || !targetUser) {
-      return { error: "Utilisateur non trouvé" };
-    }
-
-    if (targetUser.id === user.id) {
-      return { error: "Vous ne pouvez pas vous ajouter vous-même" };
-    }
-
-    // Check if friendship already exists
-    const { data: existing } = await supabase
-      .from("friendships")
-      .select("id, status")
-      .or(`and(requester_id.eq.${user.id},addressee_id.eq.${targetUser.id}),and(requester_id.eq.${targetUser.id},addressee_id.eq.${user.id})`)
-      .single();
-
-    if (existing) {
-      if (existing.status === "accepted") {
-        return { error: "Vous êtes déjà amis" };
+    try {
+      // Sanitize input
+      const sanitizedInput = codeOrUsername.trim();
+      if (sanitizedInput.length < 2 || sanitizedInput.length > 50) {
+        return { error: "Code ou pseudo invalide" };
       }
-      return { error: "Une demande est déjà en cours" };
-    }
 
-    const { error: insertError } = await supabase
-      .from("friendships")
-      .insert({
-        requester_id: user.id,
-        addressee_id: targetUser.id,
+      // Try to find by friend_code first
+      let targetUser = null;
+      
+      const { data: byCode } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .eq("friend_code", sanitizedInput.toUpperCase())
+        .maybeSingle();
+
+      if (byCode) {
+        targetUser = byCode;
+      } else {
+        // Then try by username (case insensitive)
+        const { data: byUsername } = await supabase
+          .from("profiles")
+          .select("id, username")
+          .ilike("username", sanitizedInput)
+          .maybeSingle();
+        
+        targetUser = byUsername;
+      }
+
+      if (!targetUser) {
+        return { error: "Utilisateur non trouvé" };
+      }
+
+      if (targetUser.id === user.id) {
+        return { error: "Vous ne pouvez pas vous ajouter vous-même" };
+      }
+
+      // Check if friendship already exists
+      const { data: existingList } = await supabase
+        .from("friendships")
+        .select("id, status")
+        .or(`and(requester_id.eq.${user.id},addressee_id.eq.${targetUser.id}),and(requester_id.eq.${targetUser.id},addressee_id.eq.${user.id})`);
+
+      const existing = existingList?.[0];
+
+      if (existing) {
+        if (existing.status === "accepted") {
+          return { error: "Vous êtes déjà amis" };
+        }
+        return { error: "Une demande est déjà en cours" };
+      }
+
+      const { error: insertError } = await supabase
+        .from("friendships")
+        .insert({
+          requester_id: user.id,
+          addressee_id: targetUser.id,
+        });
+
+      if (insertError) {
+        console.error("Insert error:", insertError);
+        return { error: "Erreur lors de l'envoi de la demande" };
+      }
+
+      toast({
+        title: "Demande envoyée",
+        description: `Demande d'ami envoyée à ${targetUser.username}`,
       });
 
-    if (insertError) {
-      return { error: "Erreur lors de l'envoi de la demande" };
+      return { success: true };
+    } catch (err) {
+      console.error("Friend request error:", err);
+      return { error: "Une erreur est survenue" };
     }
-
-    toast({
-      title: "Demande envoyée",
-      description: `Demande d'ami envoyée à ${targetUser.username}`,
-    });
-
-    return { success: true };
   };
 
   const acceptRequest = async (requestId: string) => {

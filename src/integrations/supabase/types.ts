@@ -178,7 +178,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      are_friends: {
+        Args: { _user_id_1: string; _user_id_2: string }
+        Returns: boolean
+      }
+      has_pending_request: {
+        Args: { _user_id_1: string; _user_id_2: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
