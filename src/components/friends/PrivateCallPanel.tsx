@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { Friend } from "@/hooks/useFriends";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useScreenShare } from "@/hooks/useScreenShare";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Phone, PhoneOff, Mic, MicOff, Loader2 } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import ScreenShareView from "@/components/voice/ScreenShareView";
 
 interface PrivateCallPanelProps {
   friend: Friend;
@@ -21,7 +23,7 @@ const PrivateCallPanel = ({
   isIncoming = false,
   callId: initialCallId,
 }: PrivateCallPanelProps) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const [callStatus, setCallStatus] = useState<
     "ringing" | "connecting" | "active" | "ended"
@@ -35,6 +37,21 @@ const PrivateCallPanel = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
+
+  const {
+    isSharing,
+    stream: screenStream,
+    startScreenShare,
+    stopScreenShare,
+  } = useScreenShare({
+    onError: (error) => {
+      toast({
+        title: "Erreur de partage",
+        description: error,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Start outgoing call
   useEffect(() => {
@@ -145,6 +162,9 @@ const PrivateCallPanel = ({
     if (audioContextRef.current) {
       audioContextRef.current.close();
     }
+    if (isSharing) {
+      stopScreenShare();
+    }
   };
 
   const acceptCall = async () => {
@@ -190,6 +210,20 @@ const PrivateCallPanel = ({
     }
   };
 
+  const handleToggleScreenShare = async () => {
+    if (isSharing) {
+      stopScreenShare();
+    } else {
+      const stream = await startScreenShare();
+      if (stream) {
+        toast({
+          title: "Partage d'écran",
+          description: "Tu partages ton écran en 1080p 60fps",
+        });
+      }
+    }
+  };
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -197,71 +231,109 @@ const PrivateCallPanel = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex items-center justify-center">
-      <div className="text-center space-y-8">
-        {/* Avatar with speaking indicator */}
-        <div className="relative inline-block">
-          <div
-            className={cn(
-              "absolute inset-0 rounded-full transition-all duration-300",
-              callStatus === "active" && isSpeaking && "animate-speaking-ring"
-            )}
-            style={{
-              background: isSpeaking
-                ? "radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)"
-                : "transparent",
-              transform: isSpeaking ? "scale(1.3)" : "scale(1)",
-            }}
+    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex">
+      {/* Screen Share Area */}
+      {isSharing && screenStream && (
+        <div className="flex-1 p-4">
+          <ScreenShareView
+            stream={screenStream}
+            username={profile?.username || "Toi"}
+            isLocal
+            onStop={stopScreenShare}
           />
-          <Avatar className="h-32 w-32 ring-4 ring-primary/20">
-            <AvatarImage src={friend.avatar_url || ""} />
-            <AvatarFallback className="text-4xl bg-muted">
-              {friend.username[0]?.toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
         </div>
+      )}
 
-        {/* Name and Status */}
-        <div>
-          <h2 className="text-2xl font-bold">{friend.username}</h2>
-          <p className="text-muted-foreground mt-1">
-            {callStatus === "ringing" && (isIncoming ? "Appel entrant..." : "Appel en cours...")}
-            {callStatus === "connecting" && "Connexion..."}
-            {callStatus === "active" && formatDuration(duration)}
-            {callStatus === "ended" && "Appel terminé"}
-          </p>
-        </div>
+      {/* Call UI */}
+      <div className={cn(
+        "flex flex-col items-center justify-center",
+        isSharing ? "w-96 border-l border-border/50 p-8" : "flex-1"
+      )}>
+        <div className="text-center space-y-8">
+          {/* Avatar with speaking indicator */}
+          <div className="relative inline-block">
+            <div
+              className={cn(
+                "absolute inset-0 rounded-full transition-all duration-300",
+                callStatus === "active" && isSpeaking && "animate-speaking-ring"
+              )}
+              style={{
+                background: isSpeaking
+                  ? "radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)"
+                  : "transparent",
+                transform: isSpeaking ? "scale(1.3)" : "scale(1)",
+              }}
+            />
+            <Avatar className="h-32 w-32 ring-4 ring-primary/20">
+              <AvatarImage src={friend.avatar_url || ""} />
+              <AvatarFallback className="text-4xl bg-muted">
+                {friend.username[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          </div>
 
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-4">
-          {callStatus === "ringing" && isIncoming ? (
-            <>
-              <Button
-                size="lg"
-                variant="destructive"
-                className="h-16 w-16 rounded-full"
-                onClick={declineCall}
-              >
-                <PhoneOff className="h-6 w-6" />
-              </Button>
-              <Button
-                size="lg"
-                className="h-16 w-16 rounded-full bg-success hover:bg-success/90"
-                onClick={acceptCall}
-              >
-                <Phone className="h-6 w-6" />
-              </Button>
-            </>
-          ) : callStatus === "active" ? (
-            <>
-              <Button
-                size="lg"
-                variant={isMuted ? "destructive" : "secondary"}
-                className="h-14 w-14 rounded-full"
-                onClick={toggleMute}
-              >
-                {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-              </Button>
+          {/* Name and Status */}
+          <div>
+            <h2 className="text-2xl font-bold">{friend.username}</h2>
+            <p className="text-muted-foreground mt-1">
+              {callStatus === "ringing" && (isIncoming ? "Appel entrant..." : "Appel en cours...")}
+              {callStatus === "connecting" && "Connexion..."}
+              {callStatus === "active" && formatDuration(duration)}
+              {callStatus === "ended" && "Appel terminé"}
+            </p>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center justify-center gap-4">
+            {callStatus === "ringing" && isIncoming ? (
+              <>
+                <Button
+                  size="lg"
+                  variant="destructive"
+                  className="h-16 w-16 rounded-full"
+                  onClick={declineCall}
+                >
+                  <PhoneOff className="h-6 w-6" />
+                </Button>
+                <Button
+                  size="lg"
+                  className="h-16 w-16 rounded-full bg-success hover:bg-success/90"
+                  onClick={acceptCall}
+                >
+                  <Phone className="h-6 w-6" />
+                </Button>
+              </>
+            ) : callStatus === "active" ? (
+              <>
+                <Button
+                  size="lg"
+                  variant={isMuted ? "destructive" : "secondary"}
+                  className="h-14 w-14 rounded-full"
+                  onClick={toggleMute}
+                >
+                  {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                </Button>
+                <Button
+                  size="lg"
+                  variant={isSharing ? "default" : "secondary"}
+                  className={cn(
+                    "h-14 w-14 rounded-full",
+                    isSharing && "bg-primary text-primary-foreground"
+                  )}
+                  onClick={handleToggleScreenShare}
+                >
+                  {isSharing ? <MonitorOff className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
+                </Button>
+                <Button
+                  size="lg"
+                  variant="destructive"
+                  className="h-16 w-16 rounded-full"
+                  onClick={endCall}
+                >
+                  <PhoneOff className="h-6 w-6" />
+                </Button>
+              </>
+            ) : callStatus === "connecting" || (callStatus === "ringing" && !isIncoming) ? (
               <Button
                 size="lg"
                 variant="destructive"
@@ -270,23 +342,14 @@ const PrivateCallPanel = ({
               >
                 <PhoneOff className="h-6 w-6" />
               </Button>
-            </>
-          ) : callStatus === "connecting" || (callStatus === "ringing" && !isIncoming) ? (
-            <Button
-              size="lg"
-              variant="destructive"
-              className="h-16 w-16 rounded-full"
-              onClick={endCall}
-            >
-              <PhoneOff className="h-6 w-6" />
-            </Button>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
 
-        {/* Loading indicator for connecting */}
-        {(callStatus === "connecting" || (callStatus === "ringing" && !isIncoming)) && (
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-        )}
+          {/* Loading indicator for connecting */}
+          {(callStatus === "connecting" || (callStatus === "ringing" && !isIncoming)) && (
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          )}
+        </div>
       </div>
     </div>
   );
