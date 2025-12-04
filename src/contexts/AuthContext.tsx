@@ -57,15 +57,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    // Set up auth state listener FIRST (synchronous updates only)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        // Only synchronous state updates here
         setSession(session);
         setUser(session?.user ?? null);
-
+        
+        // Defer async operations with setTimeout to avoid deadlock
         if (session?.user) {
-          const profile = await fetchProfile(session.user.id);
-          setProfile(profile);
-          await updateStatus(session.user.id, "online");
+          setTimeout(async () => {
+            const userProfile = await fetchProfile(session.user.id);
+            setProfile(userProfile);
+            await updateStatus(session.user.id, "online");
+          }, 0);
         } else {
           setProfile(null);
         }
@@ -73,19 +78,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        setProfile(profile);
-        await updateStatus(session.user.id, "online");
+        setTimeout(async () => {
+          const userProfile = await fetchProfile(session.user.id);
+          setProfile(userProfile);
+          await updateStatus(session.user.id, "online");
+        }, 0);
       }
       setLoading(false);
     });
 
-    // Set offline on window close
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Handle offline status on window close (separate effect to access current user)
+  useEffect(() => {
     const handleBeforeUnload = () => {
       if (user) {
         navigator.sendBeacon(
@@ -95,12 +109,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      subscription.unsubscribe();
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, []);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [user]);
 
   const signOut = async () => {
     if (user) {
