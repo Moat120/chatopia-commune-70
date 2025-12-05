@@ -25,25 +25,43 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    console.log("[CreateGroupDialog] Submit clicked, name:", name);
+    
+    if (!name.trim()) {
+      console.log("[CreateGroupDialog] Name is empty, returning");
+      return;
+    }
 
     setLoading(true);
-    const group = await createGroup(name.trim());
-    setLoading(false);
-
-    if (group) {
-      toast({
-        title: "Groupe créé !",
-        description: `Le groupe "${name}" a été créé avec succès`,
-      });
-      setName("");
-      onOpenChange(false);
-    } else {
+    console.log("[CreateGroupDialog] Calling createGroup...");
+    
+    try {
+      const group = await createGroup(name.trim());
+      console.log("[CreateGroupDialog] Result:", group);
+      
+      if (group) {
+        toast({
+          title: "Groupe créé !",
+          description: `Le groupe "${name}" a été créé avec succès`,
+        });
+        setName("");
+        onOpenChange(false);
+      } else {
+        toast({
+          title: "Erreur",
+          description: "Impossible de créer le groupe. Vérifie que tu es bien connecté.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("[CreateGroupDialog] Error:", error);
       toast({
         title: "Erreur",
-        description: "Impossible de créer le groupe",
+        description: "Une erreur s'est produite lors de la création du groupe",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -65,6 +83,7 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={50}
+              autoFocus
             />
             <p className="text-xs text-muted-foreground">
               Maximum 10 membres par groupe
@@ -75,12 +94,16 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={loading}
             >
               Annuler
             </Button>
             <Button type="submit" disabled={!name.trim() || loading}>
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Création...
+                </>
               ) : (
                 "Créer"
               )}
