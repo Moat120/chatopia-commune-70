@@ -25,7 +25,13 @@ export const useGroups = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchGroups = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      console.log("[useGroups] No user, skipping fetch");
+      setLoading(false);
+      return;
+    }
+
+    console.log("[useGroups] Fetching groups for user:", user.id);
 
     try {
       const { data, error } = await supabase
@@ -42,14 +48,21 @@ export const useGroups = () => {
         `)
         .eq("user_id", user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("[useGroups] Fetch error:", error);
+        throw error;
+      }
+
+      console.log("[useGroups] Raw data:", data);
 
       const groupsList = data
         ?.map((item: any) => item.groups)
         .filter(Boolean) as Group[];
+      
+      console.log("[useGroups] Groups list:", groupsList);
       setGroups(groupsList || []);
     } catch (error) {
-      console.error("Error fetching groups:", error);
+      console.error("[useGroups] Error fetching groups:", error);
     } finally {
       setLoading(false);
     }
@@ -57,9 +70,17 @@ export const useGroups = () => {
 
   const createGroup = useCallback(
     async (name: string, avatarUrl?: string) => {
-      if (!user) return null;
+      console.log("[useGroups] Creating group:", name);
+      console.log("[useGroups] User:", user);
+
+      if (!user) {
+        console.error("[useGroups] Cannot create group: no user logged in");
+        return null;
+      }
 
       try {
+        console.log("[useGroups] Inserting group...");
+        
         // Create the group
         const { data: group, error: groupError } = await supabase
           .from("groups")
@@ -71,9 +92,15 @@ export const useGroups = () => {
           .select()
           .single();
 
-        if (groupError) throw groupError;
+        if (groupError) {
+          console.error("[useGroups] Group insert error:", groupError);
+          throw groupError;
+        }
+
+        console.log("[useGroups] Group created:", group);
 
         // Add owner as member with 'owner' role
+        console.log("[useGroups] Adding owner as member...");
         const { error: memberError } = await supabase
           .from("group_members")
           .insert({
@@ -82,12 +109,16 @@ export const useGroups = () => {
             role: "owner",
           });
 
-        if (memberError) throw memberError;
+        if (memberError) {
+          console.error("[useGroups] Member insert error:", memberError);
+          throw memberError;
+        }
 
+        console.log("[useGroups] Owner added as member, refreshing groups...");
         await fetchGroups();
         return group;
       } catch (error) {
-        console.error("Error creating group:", error);
+        console.error("[useGroups] Error creating group:", error);
         return null;
       }
     },
