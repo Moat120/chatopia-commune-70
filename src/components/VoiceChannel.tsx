@@ -1,6 +1,6 @@
 import { Volume2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useVoiceChannel } from "@/hooks/useVoiceChannel";
+import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
 import VoiceUserCard from "./voice/VoiceUserCard";
 import VoiceControls from "./voice/VoiceControls";
 import ConnectionQualityIndicator from "./voice/ConnectionQualityIndicator";
@@ -25,7 +25,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     join,
     leave,
     toggleMute
-  } = useVoiceChannel({
+  } = useWebRTCVoice({
     channelId,
     onError: (error) => {
       toast({
@@ -51,8 +51,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
       description: "Vous avez quitté le canal vocal",
     });
   };
-
-  const currentUserData = connectedUsers.find(u => u.odId === currentUserId);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 noise">

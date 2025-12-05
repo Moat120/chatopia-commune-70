@@ -1,14 +1,13 @@
-import { useState, useEffect } from "react";
-import { Volume2, Users, Monitor } from "lucide-react";
+import { useMemo } from "react";
+import { Volume2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useVoiceChannel } from "@/hooks/useVoiceChannel";
-import { useScreenShare } from "@/hooks/useScreenShare";
-import { supabase } from "@/integrations/supabase/client";
+import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
+import { useWebRTCScreenShare } from "@/hooks/useWebRTCScreenShare";
 import { getCurrentUser } from "@/lib/localStorage";
 import VoiceUserCard from "@/components/voice/VoiceUserCard";
 import VoiceControlsWithScreenShare from "@/components/voice/VoiceControlsWithScreenShare";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
-import ScreenShareView from "@/components/voice/ScreenShareView";
+import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 import { Group } from "@/hooks/useGroups";
 import { cn } from "@/lib/utils";
 
@@ -17,16 +16,9 @@ interface GroupVoiceChannelProps {
   onEnd: () => void;
 }
 
-interface ScreenShareInfo {
-  odId: string;
-  username: string;
-  isSharing: boolean;
-}
-
 const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   const { toast } = useToast();
   const currentUser = getCurrentUser();
-  const [screenSharers, setScreenSharers] = useState<ScreenShareInfo[]>([]);
 
   const {
     isConnected,
@@ -39,7 +31,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     join,
     leave,
     toggleMute,
-  } = useVoiceChannel({
+  } = useWebRTCVoice({
     channelId: `group-${group.id}`,
     onError: (error) => {
       toast({
@@ -52,10 +44,14 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
 
   const {
     isSharing,
-    stream: localScreenStream,
+    localStream,
+    screenSharers,
+    remoteStreams,
     startScreenShare,
     stopScreenShare,
-  } = useScreenShare({
+    cleanup: cleanupScreenShare,
+  } = useWebRTCScreenShare({
+    channelId: `group-${group.id}`,
     onError: (error) => {
       toast({
         title: "Erreur de partage",
@@ -65,59 +61,33 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     },
   });
 
-  // Broadcast screen share status
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const channel = supabase.channel(`screen-share-${group.id}`, {
-      config: { presence: { key: currentUser.id } },
-    });
-
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
-        const sharers: ScreenShareInfo[] = [];
-
-        Object.values(state).forEach((presences: any[]) => {
-          presences.forEach((presence) => {
-            if (presence.isSharing) {
-              sharers.push({
-                odId: presence.odId,
-                username: presence.username,
-                isSharing: true,
-              });
-            }
-          });
-        });
-
-        setScreenSharers(sharers);
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({
-            odId: currentUser.id,
-            username: currentUser.username,
-            isSharing: isSharing,
-          });
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [isConnected, group.id, currentUser, isSharing]);
-
-  // Update screen share presence
-  useEffect(() => {
-    const channel = supabase.channel(`screen-share-${group.id}`);
-    if (isConnected) {
-      channel.track({
+  // Build screens array for multi-view
+  const activeScreens = useMemo(() => {
+    const screens = [];
+    
+    // Add local screen if sharing
+    if (isSharing && localStream) {
+      screens.push({
         odId: currentUser.id,
         username: currentUser.username,
-        isSharing: isSharing,
+        stream: localStream,
+        isLocal: true,
       });
     }
-  }, [isSharing, isConnected, group.id, currentUser]);
+    
+    // Add remote screens
+    remoteStreams.forEach((stream, odId) => {
+      const sharer = screenSharers.find(s => s.odId === odId);
+      screens.push({
+        odId,
+        username: sharer?.username || "Utilisateur",
+        stream,
+        isLocal: false,
+      });
+    });
+    
+    return screens;
+  }, [isSharing, localStream, remoteStreams, screenSharers, currentUser]);
 
   const handleJoin = async () => {
     await join();
@@ -128,14 +98,15 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   };
 
   const handleLeave = async () => {
-    if (isSharing) stopScreenShare();
+    if (isSharing) await stopScreenShare();
+    await cleanupScreenShare();
     await leave();
     onEnd();
   };
 
   const handleToggleScreenShare = async () => {
     if (isSharing) {
-      stopScreenShare();
+      await stopScreenShare();
     } else {
       const stream = await startScreenShare();
       if (stream) {
@@ -147,12 +118,12 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     }
   };
 
-  const hasActiveScreenShare = screenSharers.length > 0 || isSharing;
+  const hasActiveScreenShare = activeScreens.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border/50 flex items-center justify-between">
+      <div className="p-4 border-b border-border/50 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div
             className={cn(
@@ -176,41 +147,24 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Screen Share Area */}
         {hasActiveScreenShare && (
-          <div className="flex-1 p-4">
-            {isSharing ? (
-              <ScreenShareView
-                stream={localScreenStream}
-                username={currentUser.username}
-                isLocal
-                onStop={stopScreenShare}
-              />
-            ) : screenSharers.length > 0 ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center space-y-4">
-                  <Monitor className="h-16 w-16 mx-auto text-primary" />
-                  <p className="text-lg font-medium">
-                    {screenSharers[0].username} partage son écran
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Le partage d'écran P2P sera bientôt disponible
-                  </p>
-                </div>
-              </div>
-            ) : null}
+          <div className="flex-1 min-w-0">
+            <MultiScreenShareView 
+              screens={activeScreens}
+              onStopLocal={stopScreenShare}
+            />
           </div>
         )}
 
         {/* Users Panel */}
         <div
           className={cn(
-            "flex flex-col",
-            hasActiveScreenShare ? "w-80 border-l border-border/50" : "flex-1"
+            "flex flex-col shrink-0",
+            hasActiveScreenShare ? "w-72 border-l border-border/50" : "flex-1"
           )}
         >
-          {/* Connected Users */}
           <div className="flex-1 p-4 overflow-auto">
             {isConnected ? (
               <div className="space-y-4">
@@ -224,7 +178,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
 
                 <div
                   className={cn(
-                    "flex flex-wrap gap-4",
+                    "flex flex-wrap gap-3",
                     hasActiveScreenShare ? "flex-col" : "justify-center"
                   )}
                 >
@@ -261,7 +215,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
       </div>
 
       {/* Controls */}
-      <div className="p-6 border-t border-border/50 flex justify-center">
+      <div className="p-6 border-t border-border/50 flex justify-center shrink-0">
         <VoiceControlsWithScreenShare
           isConnected={isConnected}
           isConnecting={isConnecting}

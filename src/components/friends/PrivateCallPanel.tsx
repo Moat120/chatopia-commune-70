@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Friend } from "@/hooks/useFriends";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useScreenShare } from "@/hooks/useScreenShare";
+import { useWebRTCScreenShare } from "@/hooks/useWebRTCScreenShare";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import ScreenShareView from "@/components/voice/ScreenShareView";
+import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 
 interface PrivateCallPanelProps {
   friend: Friend;
@@ -16,6 +16,11 @@ interface PrivateCallPanelProps {
   isIncoming?: boolean;
   callId?: string;
 }
+
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
 
 const PrivateCallPanel = ({
   friend,
@@ -32,18 +37,29 @@ const PrivateCallPanel = ({
   const [duration, setDuration] = useState(0);
   const [callId, setCallId] = useState(initialCallId);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [friendSpeaking, setFriendSpeaking] = useState(false);
   
-  const streamRef = useRef<MediaStream | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationRef = useRef<number | null>(null);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
+
+  const channelId = useMemo(() => `private-call-${[user?.id, friend.id].sort().join('-')}`, [user?.id, friend.id]);
 
   const {
     isSharing,
-    stream: screenStream,
+    localStream: screenStream,
+    screenSharers,
+    remoteStreams,
     startScreenShare,
     stopScreenShare,
-  } = useScreenShare({
+    cleanup: cleanupScreenShare,
+  } = useWebRTCScreenShare({
+    channelId,
     onError: (error) => {
       toast({
         title: "Erreur de partage",
@@ -52,6 +68,131 @@ const PrivateCallPanel = ({
       });
     },
   });
+
+  // Build screens array
+  const activeScreens = useMemo(() => {
+    const screens = [];
+    
+    if (isSharing && screenStream) {
+      screens.push({
+        odId: user?.id || '',
+        username: profile?.username || "Toi",
+        stream: screenStream,
+        isLocal: true,
+      });
+    }
+    
+    remoteStreams.forEach((stream, odId) => {
+      screens.push({
+        odId,
+        username: friend.username,
+        stream,
+        isLocal: false,
+      });
+    });
+    
+    return screens;
+  }, [isSharing, screenStream, remoteStreams, user?.id, profile?.username, friend.username]);
+
+  // Setup WebRTC peer connection
+  const setupPeerConnection = () => {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    peerConnectionRef.current = pc;
+
+    // Handle incoming audio
+    pc.ontrack = (event) => {
+      console.log('[PrivateCall] Received remote track');
+      const [remoteStream] = event.streams;
+      
+      if (!remoteAudioRef.current) {
+        remoteAudioRef.current = new Audio();
+        remoteAudioRef.current.autoplay = true;
+      }
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch(console.error);
+
+      // Monitor friend's speaking
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(remoteStream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const detectFriendSpeaking = () => {
+        if (callStatus !== "active") return;
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        setFriendSpeaking(avg > 15);
+        requestAnimationFrame(detectFriendSpeaking);
+      };
+      detectFriendSpeaking();
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && signalingChannelRef.current) {
+        signalingChannelRef.current.send({
+          type: 'broadcast',
+          event: 'webrtc-signal',
+          payload: {
+            type: 'ice-candidate',
+            from: user?.id,
+            to: friend.id,
+            data: event.candidate
+          }
+        });
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log('[PrivateCall] Connection state:', pc.connectionState);
+    };
+
+    return pc;
+  };
+
+  // Handle signaling messages
+  const handleSignal = async (payload: any) => {
+    if (payload.to !== user?.id) return;
+    
+    console.log('[PrivateCall] Signal received:', payload.type);
+    
+    let pc = peerConnectionRef.current;
+    if (!pc) pc = setupPeerConnection();
+
+    if (payload.type === 'offer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
+      
+      // Add local audio
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => {
+          pc!.addTrack(track, localStreamRef.current!);
+        });
+      }
+      
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      
+      signalingChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'webrtc-signal',
+        payload: {
+          type: 'answer',
+          from: user?.id,
+          to: friend.id,
+          data: answer
+        }
+      });
+    } else if (payload.type === 'answer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
+    } else if (payload.type === 'ice-candidate') {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(payload.data));
+      } catch (error) {
+        console.error('[PrivateCall] ICE error:', error);
+      }
+    }
+  };
 
   // Start outgoing call
   useEffect(() => {
@@ -80,6 +221,24 @@ const PrivateCallPanel = ({
     }
   }, [isIncoming, user, friend.id, callId]);
 
+  // Setup signaling channel
+  useEffect(() => {
+    if (!user) return;
+
+    const signalingChannel = supabase.channel(`private-signaling-${channelId}`);
+    signalingChannelRef.current = signalingChannel;
+
+    signalingChannel.on('broadcast', { event: 'webrtc-signal' }, ({ payload }) => {
+      handleSignal(payload);
+    });
+
+    signalingChannel.subscribe();
+
+    return () => {
+      supabase.removeChannel(signalingChannel);
+    };
+  }, [user, channelId]);
+
   // Subscribe to call status changes
   useEffect(() => {
     if (!callId) return;
@@ -98,7 +257,7 @@ const PrivateCallPanel = ({
           const newStatus = payload.new.status as string;
           if (newStatus === "active") {
             setCallStatus("active");
-            startAudio();
+            startAudioAndConnect();
           } else if (newStatus === "ended" || newStatus === "declined" || newStatus === "missed") {
             setCallStatus("ended");
             cleanup();
@@ -128,43 +287,84 @@ const PrivateCallPanel = ({
     };
   }, [callStatus]);
 
-  const startAudio = async () => {
+  const startAudioAndConnect = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+      localStreamRef.current = stream;
 
+      // Voice detection
       audioContextRef.current = new AudioContext();
       analyserRef.current = audioContextRef.current.createAnalyser();
       const source = audioContextRef.current.createMediaStreamSource(stream);
       source.connect(analyserRef.current);
       analyserRef.current.fftSize = 256;
 
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
       const detectVoice = () => {
-        if (!analyserRef.current) return;
-        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        if (!analyserRef.current || callStatus === "ended") return;
         analyserRef.current.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        setIsSpeaking(average > 30);
-        if (callStatus === "active") {
-          requestAnimationFrame(detectVoice);
-        }
+        setIsSpeaking(average > 15 && !isMuted);
+        animationRef.current = requestAnimationFrame(detectVoice);
       };
       detectVoice();
+
+      // Setup peer connection and create offer (caller initiates)
+      const pc = setupPeerConnection();
+      stream.getTracks().forEach(track => {
+        pc.addTrack(track, stream);
+      });
+
+      // Only caller creates offer
+      if (!isIncoming) {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        
+        signalingChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'webrtc-signal',
+          payload: {
+            type: 'offer',
+            from: user?.id,
+            to: friend.id,
+            data: offer
+          }
+        });
+      }
     } catch (error) {
       console.error("Error accessing microphone:", error);
+      toast({ title: "Erreur", description: "Impossible d'accéder au microphone", variant: "destructive" });
     }
   };
 
   const cleanup = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
     }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+    }
+    if (audioContextRef.current?.state !== 'closed') {
+      audioContextRef.current?.close();
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
     }
     if (isSharing) {
       stopScreenShare();
     }
+    cleanupScreenShare();
   };
 
   const acceptCall = async () => {
@@ -202,8 +402,8 @@ const PrivateCallPanel = ({
   };
 
   const toggleMute = () => {
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach((track) => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((track) => {
         track.enabled = isMuted;
       });
       setIsMuted(!isMuted);
@@ -212,7 +412,7 @@ const PrivateCallPanel = ({
 
   const handleToggleScreenShare = async () => {
     if (isSharing) {
-      stopScreenShare();
+      await stopScreenShare();
     } else {
       const stream = await startScreenShare();
       if (stream) {
@@ -230,16 +430,16 @@ const PrivateCallPanel = ({
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const hasScreenShare = activeScreens.length > 0;
+
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex">
       {/* Screen Share Area */}
-      {isSharing && screenStream && (
-        <div className="flex-1 p-4">
-          <ScreenShareView
-            stream={screenStream}
-            username={profile?.username || "Toi"}
-            isLocal
-            onStop={stopScreenShare}
+      {hasScreenShare && (
+        <div className="flex-1 min-w-0">
+          <MultiScreenShareView
+            screens={activeScreens}
+            onStopLocal={stopScreenShare}
           />
         </div>
       )}
@@ -247,7 +447,7 @@ const PrivateCallPanel = ({
       {/* Call UI */}
       <div className={cn(
         "flex flex-col items-center justify-center",
-        isSharing ? "w-96 border-l border-border/50 p-8" : "flex-1"
+        hasScreenShare ? "w-96 border-l border-border/50 p-8 shrink-0" : "flex-1"
       )}>
         <div className="text-center space-y-8">
           {/* Avatar with speaking indicator */}
@@ -255,13 +455,13 @@ const PrivateCallPanel = ({
             <div
               className={cn(
                 "absolute inset-0 rounded-full transition-all duration-300",
-                callStatus === "active" && isSpeaking && "animate-speaking-ring"
+                callStatus === "active" && friendSpeaking && "animate-speaking-ring"
               )}
               style={{
-                background: isSpeaking
+                background: friendSpeaking
                   ? "radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)"
                   : "transparent",
-                transform: isSpeaking ? "scale(1.3)" : "scale(1)",
+                transform: friendSpeaking ? "scale(1.3)" : "scale(1)",
               }}
             />
             <Avatar className="h-32 w-32 ring-4 ring-primary/20">
@@ -282,6 +482,20 @@ const PrivateCallPanel = ({
               {callStatus === "ended" && "Appel terminé"}
             </p>
           </div>
+
+          {/* My speaking indicator */}
+          {callStatus === "active" && (
+            <div className={cn(
+              "flex items-center justify-center gap-2 text-sm transition-colors",
+              isSpeaking ? "text-success" : "text-muted-foreground"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full",
+                isSpeaking ? "bg-success animate-pulse" : "bg-muted-foreground/50"
+              )} />
+              {isSpeaking ? "Tu parles..." : isMuted ? "Micro coupé" : "En attente..."}
+            </div>
+          )}
 
           {/* Controls */}
           <div className="flex items-center justify-center gap-4">
