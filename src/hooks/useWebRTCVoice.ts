@@ -10,10 +10,10 @@ export interface VoiceUser {
   isMuted: boolean;
 }
 
-export type ConnectionQuality = 'excellent' | 'good' | 'poor' | 'connecting';
+export type ConnectionQuality = "excellent" | "good" | "poor" | "connecting";
 
 interface SignalMessage {
-  type: 'offer' | 'answer' | 'ice-candidate';
+  type: "voice-offer" | "voice-answer" | "voice-ice";
   from: string;
   to: string;
   data: any;
@@ -25,9 +25,9 @@ interface UseWebRTCVoiceProps {
 }
 
 const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
 ];
 
 export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
@@ -35,39 +35,49 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<VoiceUser[]>([]);
-  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>('connecting');
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>("connecting");
   const [audioLevel, setAudioLevel] = useState(0);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const isSpeakingRef = useRef(false);
+  const isMutedRef = useRef(false);
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const isConnectedRef = useRef(false);
 
   const currentUser = getCurrentUser();
 
   // Create peer connection for a remote user
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
-    console.log(`[WebRTC] Creating peer connection for ${remoteUserId}`);
-    
+    console.log(`[Voice] Creating peer connection for ${remoteUserId}`);
+
+    // Close existing connection if any
+    const existing = peerConnectionsRef.current.get(remoteUserId);
+    if (existing) {
+      existing.close();
+    }
+
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-    // Add local audio track
+    // Add local audio tracks
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
+      localStreamRef.current.getTracks().forEach((track) => {
+        console.log(`[Voice] Adding local track: ${track.kind}`);
         pc.addTrack(track, localStreamRef.current!);
       });
     }
 
-    // Handle incoming audio
+    // Handle incoming audio tracks
     pc.ontrack = (event) => {
-      console.log(`[WebRTC] Received remote track from ${remoteUserId}`);
+      console.log(`[Voice] Received remote track from ${remoteUserId}`);
       const [remoteStream] = event.streams;
-      
+
       let audio = remoteAudiosRef.current.get(remoteUserId);
       if (!audio) {
         audio = new Audio();
@@ -76,32 +86,39 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         remoteAudiosRef.current.set(remoteUserId, audio);
       }
       audio.srcObject = remoteStream;
-      audio.play().catch(console.error);
+      audio.play().catch((e) => console.error("[Voice] Audio play error:", e));
     };
 
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
-        console.log(`[WebRTC] Sending ICE candidate to ${remoteUserId}`);
+        console.log(`[Voice] Sending ICE candidate to ${remoteUserId}`);
         signalingChannelRef.current.send({
-          type: 'broadcast',
-          event: 'signal',
+          type: "broadcast",
+          event: "voice-signal",
           payload: {
-            type: 'ice-candidate',
+            type: "voice-ice",
             from: currentUser.id,
             to: remoteUserId,
-            data: event.candidate
-          }
+            data: event.candidate.toJSON(),
+          },
         });
       }
     };
 
     pc.onconnectionstatechange = () => {
-      console.log(`[WebRTC] Connection state with ${remoteUserId}: ${pc.connectionState}`);
-      if (pc.connectionState === 'connected') {
-        setConnectionQuality('excellent');
-      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        setConnectionQuality('poor');
+      console.log(`[Voice] Connection state with ${remoteUserId}: ${pc.connectionState}`);
+      if (pc.connectionState === "connected") {
+        setConnectionQuality("excellent");
+      } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+        setConnectionQuality("poor");
+        // Clean up failed connection
+        const audio = remoteAudiosRef.current.get(remoteUserId);
+        if (audio) {
+          audio.srcObject = null;
+          audio.remove();
+          remoteAudiosRef.current.delete(remoteUserId);
+        }
       }
     };
 
@@ -109,38 +126,74 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     return pc;
   }, [currentUser.id]);
 
-  // Handle signaling messages
+  // Handle incoming signaling messages
   const handleSignal = useCallback(async (message: SignalMessage) => {
     if (message.to !== currentUser.id) return;
-    
-    console.log(`[WebRTC] Received signal: ${message.type} from ${message.from}`);
+    if (!isConnectedRef.current) return;
+
+    console.log(`[Voice] Received signal: ${message.type} from ${message.from}`);
 
     let pc = peerConnectionsRef.current.get(message.from);
-    
-    if (message.type === 'offer') {
+
+    if (message.type === "voice-offer") {
+      // Someone is offering to connect
       if (!pc) pc = createPeerConnection(message.from);
-      
-      await pc.setRemoteDescription(new RTCSessionDescription(message.data));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      
-      signalingChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'signal',
-        payload: {
-          type: 'answer',
-          from: currentUser.id,
-          to: message.from,
-          data: answer
-        }
-      });
-    } else if (message.type === 'answer' && pc) {
-      await pc.setRemoteDescription(new RTCSessionDescription(message.data));
-    } else if (message.type === 'ice-candidate' && pc) {
+
       try {
-        await pc.addIceCandidate(new RTCIceCandidate(message.data));
+        await pc.setRemoteDescription(new RTCSessionDescription(message.data));
+
+        // Apply any pending ICE candidates
+        const pending = pendingCandidatesRef.current.get(message.from) || [];
+        for (const candidate of pending) {
+          await pc.addIceCandidate(candidate);
+        }
+        pendingCandidatesRef.current.delete(message.from);
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        signalingChannelRef.current?.send({
+          type: "broadcast",
+          event: "voice-signal",
+          payload: {
+            type: "voice-answer",
+            from: currentUser.id,
+            to: message.from,
+            data: answer,
+          },
+        });
       } catch (error) {
-        console.error('[WebRTC] ICE candidate error:', error);
+        console.error("[Voice] Error handling offer:", error);
+      }
+    } else if (message.type === "voice-answer" && pc) {
+      try {
+        if (pc.signalingState === "have-local-offer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(message.data));
+
+          // Apply any pending ICE candidates
+          const pending = pendingCandidatesRef.current.get(message.from) || [];
+          for (const candidate of pending) {
+            await pc.addIceCandidate(candidate);
+          }
+          pendingCandidatesRef.current.delete(message.from);
+        }
+      } catch (error) {
+        console.error("[Voice] Error setting answer:", error);
+      }
+    } else if (message.type === "voice-ice") {
+      if (pc) {
+        if (pc.remoteDescription) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(message.data));
+          } catch (error) {
+            console.error("[Voice] ICE candidate error:", error);
+          }
+        } else {
+          // Queue the candidate for later
+          const pending = pendingCandidatesRef.current.get(message.from) || [];
+          pending.push(new RTCIceCandidate(message.data));
+          pendingCandidatesRef.current.set(message.from, pending);
+        }
       }
     }
   }, [currentUser.id, createPeerConnection]);
@@ -151,40 +204,42 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
-      
+
       analyserRef.current.fftSize = 256;
       analyserRef.current.smoothingTimeConstant = 0.4;
       source.connect(analyserRef.current);
 
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
       let lastBroadcast = 0;
-      const BROADCAST_INTERVAL = 100;
+      const BROADCAST_INTERVAL = 150;
 
       const detectSpeaking = () => {
-        if (!analyserRef.current || !presenceChannelRef.current) {
-          animationRef.current = requestAnimationFrame(detectSpeaking);
+        if (!analyserRef.current || !presenceChannelRef.current || !isConnectedRef.current) {
+          if (isConnectedRef.current) {
+            animationRef.current = requestAnimationFrame(detectSpeaking);
+          }
           return;
         }
 
         analyserRef.current.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
         const normalizedLevel = Math.min(average / 50, 1);
-        
+
         setAudioLevel(normalizedLevel);
-        
-        const speaking = average > 15 && !isMuted;
+
+        const speaking = average > 15 && !isMutedRef.current;
         const now = Date.now();
 
-        if ((speaking !== isSpeakingRef.current) || (now - lastBroadcast > BROADCAST_INTERVAL)) {
+        if (speaking !== isSpeakingRef.current || now - lastBroadcast > BROADCAST_INTERVAL) {
           isSpeakingRef.current = speaking;
           lastBroadcast = now;
-          
+
           presenceChannelRef.current.track({
             odId: currentUser.id,
             username: currentUser.username,
             avatarUrl: currentUser.avatar_url,
             isSpeaking: speaking,
-            isMuted: isMuted
+            isMuted: isMutedRef.current,
           });
         }
 
@@ -193,61 +248,67 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       detectSpeaking();
     } catch (error) {
-      console.error('[WebRTC] Voice detection error:', error);
+      console.error("[Voice] Voice detection error:", error);
     }
-  }, [currentUser, isMuted]);
+  }, [currentUser]);
 
-  // Initiate connection to a new user
+  // Initiate connection to a user
   const initiateConnection = useCallback(async (remoteUserId: string) => {
     if (remoteUserId === currentUser.id) return;
-    if (peerConnectionsRef.current.has(remoteUserId)) return;
+    if (peerConnectionsRef.current.has(remoteUserId)) {
+      console.log(`[Voice] Already have connection to ${remoteUserId}`);
+      return;
+    }
 
-    console.log(`[WebRTC] Initiating connection to ${remoteUserId}`);
+    console.log(`[Voice] Initiating connection to ${remoteUserId}`);
     const pc = createPeerConnection(remoteUserId);
-    
+
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      
+
       signalingChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'signal',
+        type: "broadcast",
+        event: "voice-signal",
         payload: {
-          type: 'offer',
+          type: "voice-offer",
           from: currentUser.id,
           to: remoteUserId,
-          data: offer
-        }
+          data: offer,
+        },
       });
     } catch (error) {
-      console.error('[WebRTC] Offer creation error:', error);
+      console.error("[Voice] Offer creation error:", error);
     }
   }, [currentUser.id, createPeerConnection]);
 
-  // Cleanup
+  // Cleanup all resources
   const cleanup = useCallback(async () => {
-    console.log('[WebRTC] Cleaning up');
-    
+    console.log("[Voice] Cleaning up");
+
+    isConnectedRef.current = false;
+
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
 
-    peerConnectionsRef.current.forEach(pc => pc.close());
+    peerConnectionsRef.current.forEach((pc) => pc.close());
     peerConnectionsRef.current.clear();
+    pendingCandidatesRef.current.clear();
 
-    remoteAudiosRef.current.forEach(audio => {
+    remoteAudiosRef.current.forEach((audio) => {
       audio.srcObject = null;
       audio.remove();
     });
     remoteAudiosRef.current.clear();
 
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
     }
 
-    if (audioContextRef.current?.state !== 'closed') {
+    if (audioContextRef.current?.state !== "closed") {
       await audioContextRef.current?.close();
       audioContextRef.current = null;
     }
@@ -266,17 +327,17 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setIsConnecting(false);
     setIsMuted(false);
     setConnectedUsers([]);
-    setConnectionQuality('connecting');
+    setConnectionQuality("connecting");
     setAudioLevel(0);
   }, []);
 
   // Join voice channel
   const join = useCallback(async () => {
-    if (isConnected || isConnecting) return;
-    
-    console.log('[WebRTC] Joining channel:', channelId);
+    if (isConnectedRef.current || isConnecting) return;
+
+    console.log("[Voice] Joining channel:", channelId);
     setIsConnecting(true);
-    setConnectionQuality('connecting');
+    setConnectionQuality("connecting");
 
     try {
       // Get microphone access
@@ -285,32 +346,33 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 48000
-        }
+          sampleRate: 48000,
+        },
       });
-      
+
       localStreamRef.current = stream;
 
-      // Setup signaling channel
-      const signalingChannel = supabase.channel(`signaling-${channelId}`);
+      // Setup signaling channel first
+      const signalingChannel = supabase.channel(`voice-sig-${channelId}`);
       signalingChannelRef.current = signalingChannel;
 
-      signalingChannel.on('broadcast', { event: 'signal' }, ({ payload }) => {
+      signalingChannel.on("broadcast", { event: "voice-signal" }, ({ payload }) => {
         handleSignal(payload as SignalMessage);
       });
 
       await signalingChannel.subscribe();
+      console.log("[Voice] Signaling channel subscribed");
 
       // Setup presence channel
-      const presenceChannel = supabase.channel(`voice-presence-${channelId}`, {
-        config: { presence: { key: currentUser.id } }
+      const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
+        config: { presence: { key: currentUser.id } },
       });
       presenceChannelRef.current = presenceChannel;
 
-      presenceChannel.on('presence', { event: 'sync' }, () => {
+      presenceChannel.on("presence", { event: "sync" }, () => {
         const state = presenceChannel.presenceState();
         const users: VoiceUser[] = [];
-        
+
         Object.values(state).forEach((presences: any[]) => {
           presences.forEach((presence) => {
             users.push({
@@ -318,23 +380,32 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
               username: presence.username,
               avatarUrl: presence.avatarUrl,
               isSpeaking: presence.isSpeaking || false,
-              isMuted: presence.isMuted || false
+              isMuted: presence.isMuted || false,
             });
           });
         });
-        
+
         setConnectedUsers(users);
 
-        // Initiate connections to new users (only if we have lower ID to avoid duplicates)
-        users.forEach(user => {
+        // Initiate connections to users with higher IDs (to avoid duplicate connections)
+        users.forEach((user) => {
           if (user.odId !== currentUser.id && currentUser.id < user.odId) {
             initiateConnection(user.odId);
           }
         });
       });
 
-      presenceChannel.on('presence', { event: 'leave' }, ({ key }) => {
-        // Clean up peer connection when user leaves
+      presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
+        console.log(`[Voice] User joined: ${key}`);
+        // If new user has higher ID, we initiate the connection
+        if (key !== currentUser.id && currentUser.id < key) {
+          initiateConnection(key);
+        }
+      });
+
+      presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
+        console.log(`[Voice] User left: ${key}`);
+        // Clean up peer connection
         const pc = peerConnectionsRef.current.get(key);
         if (pc) {
           pc.close();
@@ -346,30 +417,33 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           audio.remove();
           remoteAudiosRef.current.delete(key);
         }
+        pendingCandidatesRef.current.delete(key);
       });
 
       await presenceChannel.subscribe();
+      console.log("[Voice] Presence channel subscribed");
 
+      // Track our presence
       await presenceChannel.track({
         odId: currentUser.id,
         username: currentUser.username,
         avatarUrl: currentUser.avatar_url,
         isSpeaking: false,
-        isMuted: false
+        isMuted: false,
       });
 
+      isConnectedRef.current = true;
       setIsConnected(true);
       setIsConnecting(false);
-      setConnectionQuality('excellent');
-      
-      startVoiceDetection(stream);
+      setConnectionQuality("excellent");
 
+      startVoiceDetection(stream);
     } catch (error: any) {
-      console.error('[WebRTC] Join error:', error);
+      console.error("[Voice] Join error:", error);
       await cleanup();
       onError?.(error.message || "Impossible d'accéder au microphone");
     }
-  }, [channelId, currentUser, isConnected, isConnecting, cleanup, handleSignal, initiateConnection, startVoiceDetection, onError]);
+  }, [channelId, currentUser, isConnecting, cleanup, handleSignal, initiateConnection, startVoiceDetection, onError]);
 
   // Leave voice channel
   const leave = useCallback(async () => {
@@ -379,23 +453,25 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   // Toggle mute
   const toggleMute = useCallback(() => {
     if (!localStreamRef.current) return;
-    
+
     const audioTrack = localStreamRef.current.getAudioTracks()[0];
     if (audioTrack) {
       const newMuted = audioTrack.enabled;
       audioTrack.enabled = !newMuted;
+      isMutedRef.current = newMuted;
       setIsMuted(newMuted);
-      
+
       presenceChannelRef.current?.track({
         odId: currentUser.id,
         username: currentUser.username,
         avatarUrl: currentUser.avatar_url,
         isSpeaking: false,
-        isMuted: newMuted
+        isMuted: newMuted,
       });
     }
   }, [currentUser]);
 
+  // Cleanup on unmount or channel change
   useEffect(() => {
     return () => {
       cleanup();
@@ -412,6 +488,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     audioLevel,
     join,
     leave,
-    toggleMute
+    toggleMute,
   };
 };

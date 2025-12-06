@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { Friend } from "@/hooks/useFriends";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useWebRTCScreenShare } from "@/hooks/useWebRTCScreenShare";
+import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
+import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
 
 interface PrivateCallPanelProps {
   friend: Friend;
@@ -38,6 +39,7 @@ const PrivateCallPanel = ({
   const [callId, setCallId] = useState(initialCallId);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [friendSpeaking, setFriendSpeaking] = useState(false);
+  const [qualityDialogOpen, setQualityDialogOpen] = useState(false);
   
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -447,17 +449,22 @@ const PrivateCallPanel = ({
     }
   };
 
-  const handleToggleScreenShare = async () => {
+  const handleToggleScreenShare = () => {
     if (isSharing) {
-      await stopScreenShare();
+      stopScreenShare();
     } else {
-      const stream = await startScreenShare();
-      if (stream) {
-        toast({
-          title: "Partage d'écran",
-          description: "Tu partages ton écran en 1080p 60fps",
-        });
-      }
+      setQualityDialogOpen(true);
+    }
+  };
+
+  const handleSelectQuality = async (quality: ScreenQuality) => {
+    const preset = QUALITY_PRESETS[quality];
+    const stream = await startScreenShare(quality);
+    if (stream) {
+      toast({
+        title: "Partage d'écran",
+        description: `Tu partages ton écran en ${preset.height}p ${preset.frameRate}fps`,
+      });
     }
   };
 
@@ -627,6 +634,13 @@ const PrivateCallPanel = ({
           )}
         </div>
       </div>
+
+      {/* Quality Selection Dialog */}
+      <ScreenShareQualityDialog
+        open={qualityDialogOpen}
+        onOpenChange={setQualityDialogOpen}
+        onSelectQuality={handleSelectQuality}
+      />
     </div>
   );
 };
