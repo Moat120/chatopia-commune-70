@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { Group } from "@/hooks/useGroups";
+import { Group, useGroups } from "@/hooks/useGroups";
 import { useGroupChat } from "@/hooks/useGroupChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X, Send, Phone, Users } from "lucide-react";
+import { X, Send, Phone, Users, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import AddMemberDialog from "./AddMemberDialog";
 
 interface GroupChatPanelProps {
   group: Group;
@@ -20,7 +21,10 @@ interface GroupChatPanelProps {
 const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) => {
   const { user } = useAuth();
   const { messages, loading, sendMessage } = useGroupChat(group.id);
+  const { getGroupMembers } = useGroups();
   const [input, setInput] = useState("");
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [members, setMembers] = useState<{ user_id: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,6 +32,14 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    const loadMembers = async () => {
+      const membersList = await getGroupMembers(group.id);
+      setMembers(membersList);
+    };
+    loadMembers();
+  }, [group.id, getGroupMembers]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -41,6 +53,8 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
       handleSend();
     }
   };
+
+  const isOwnerOrAdmin = group.owner_id === user?.id;
 
   return (
     <div className="flex-1 flex flex-col h-full">
@@ -57,11 +71,16 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
             <h3 className="font-semibold">{group.name}</h3>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Users className="h-3 w-3" />
-              Groupe
+              {members.length} membre{members.length > 1 ? "s" : ""}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isOwnerOrAdmin && (
+            <Button variant="ghost" size="icon" onClick={() => setAddMemberOpen(true)} title="Inviter">
+              <UserPlus className="h-5 w-5" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={onStartCall}>
             <Phone className="h-5 w-5" />
           </Button>
@@ -70,6 +89,13 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           </Button>
         </div>
       </div>
+
+      <AddMemberDialog
+        open={addMemberOpen}
+        onOpenChange={setAddMemberOpen}
+        groupId={group.id}
+        existingMemberIds={members.map(m => m.user_id)}
+      />
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
