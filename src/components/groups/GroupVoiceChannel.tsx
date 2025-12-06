@@ -1,13 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Volume2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
-import { useWebRTCScreenShare } from "@/hooks/useWebRTCScreenShare";
+import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
 import { getCurrentUser } from "@/lib/localStorage";
 import VoiceUserCard from "@/components/voice/VoiceUserCard";
 import VoiceControlsWithScreenShare from "@/components/voice/VoiceControlsWithScreenShare";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
+import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
 import { Group } from "@/hooks/useGroups";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ interface GroupVoiceChannelProps {
 const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   const { toast } = useToast();
   const currentUser = getCurrentUser();
+  const [qualityDialogOpen, setQualityDialogOpen] = useState(false);
 
   const {
     isConnected,
@@ -104,17 +106,22 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     onEnd();
   };
 
-  const handleToggleScreenShare = async () => {
+  const handleToggleScreenShare = () => {
     if (isSharing) {
-      await stopScreenShare();
+      stopScreenShare();
     } else {
-      const stream = await startScreenShare();
-      if (stream) {
-        toast({
-          title: "Partage d'écran",
-          description: "Tu partages ton écran en 1080p 60fps",
-        });
-      }
+      setQualityDialogOpen(true);
+    }
+  };
+
+  const handleSelectQuality = async (quality: ScreenQuality) => {
+    const preset = QUALITY_PRESETS[quality];
+    const stream = await startScreenShare(quality);
+    if (stream) {
+      toast({
+        title: "Partage d'écran",
+        description: `Tu partages ton écran en ${preset.height}p ${preset.frameRate}fps`,
+      });
     }
   };
 
@@ -227,6 +234,13 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
           onToggleScreenShare={handleToggleScreenShare}
         />
       </div>
+
+      {/* Quality Selection Dialog */}
+      <ScreenShareQualityDialog
+        open={qualityDialogOpen}
+        onOpenChange={setQualityDialogOpen}
+        onSelectQuality={handleSelectQuality}
+      />
     </div>
   );
 };
