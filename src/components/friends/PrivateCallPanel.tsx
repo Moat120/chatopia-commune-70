@@ -158,38 +158,75 @@ const PrivateCallPanel = ({
     console.log('[PrivateCall] Signal received:', payload.type);
     
     let pc = peerConnectionRef.current;
-    if (!pc) pc = setupPeerConnection();
 
     if (payload.type === 'offer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
-      
-      // Add local audio
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => {
-          pc!.addTrack(track, localStreamRef.current!);
-        });
-      }
-      
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      
-      signalingChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'webrtc-signal',
-        payload: {
-          type: 'answer',
-          from: user?.id,
-          to: friend.id,
-          data: answer
-        }
-      });
-    } else if (payload.type === 'answer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
-    } else if (payload.type === 'ice-candidate') {
+      // When receiving offer, we need to get microphone first
       try {
-        await pc.addIceCandidate(new RTCIceCandidate(payload.data));
+        if (!localStreamRef.current) {
+          console.log('[PrivateCall] Getting microphone for callee...');
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          });
+          localStreamRef.current = stream;
+          
+          // Start voice detection for callee
+          audioContextRef.current = new AudioContext();
+          analyserRef.current = audioContextRef.current.createAnalyser();
+          const source = audioContextRef.current.createMediaStreamSource(stream);
+          source.connect(analyserRef.current);
+          analyserRef.current.fftSize = 256;
+
+          const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+          const detectVoice = () => {
+            if (!analyserRef.current || callStatus === "ended") return;
+            analyserRef.current.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            setIsSpeaking(average > 15 && !isMuted);
+            animationRef.current = requestAnimationFrame(detectVoice);
+          };
+          detectVoice();
+        }
+
+        if (!pc) pc = setupPeerConnection();
+        
+        // Add local tracks BEFORE setting remote description
+        localStreamRef.current.getTracks().forEach(track => {
+          if (!pc!.getSenders().find(s => s.track === track)) {
+            pc!.addTrack(track, localStreamRef.current!);
+          }
+        });
+
+        await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
+        
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        
+        signalingChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'webrtc-signal',
+          payload: {
+            type: 'answer',
+            from: user?.id,
+            to: friend.id,
+            data: answer
+          }
+        });
       } catch (error) {
-        console.error('[PrivateCall] ICE error:', error);
+        console.error('[PrivateCall] Error handling offer:', error);
+      }
+    } else if (payload.type === 'answer') {
+      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
+    } else if (payload.type === 'ice-candidate') {
+      if (pc) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(payload.data));
+        } catch (error) {
+          console.error('[PrivateCall] ICE error:', error);
+        }
       }
     }
   };
@@ -450,52 +487,77 @@ const PrivateCallPanel = ({
         hasScreenShare ? "w-96 border-l border-border/50 p-8 shrink-0" : "flex-1"
       )}>
         <div className="text-center space-y-8">
-          {/* Avatar with speaking indicator */}
-          <div className="relative inline-block">
-            <div
-              className={cn(
-                "absolute inset-0 rounded-full transition-all duration-300",
-                callStatus === "active" && friendSpeaking && "animate-speaking-ring"
+          {/* Both Avatars - side by side */}
+          <div className="flex items-center justify-center gap-8">
+            {/* My Avatar */}
+            <div className="relative">
+              <div
+                className={cn(
+                  "absolute inset-0 rounded-full transition-all duration-300",
+                  callStatus === "active" && isSpeaking && "animate-speaking-ring"
+                )}
+                style={{
+                  background: isSpeaking
+                    ? "radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)"
+                    : "transparent",
+                  transform: isSpeaking ? "scale(1.3)" : "scale(1)",
+                }}
+              />
+              <Avatar className={cn(
+                "ring-4",
+                isSpeaking ? "ring-success/50" : "ring-primary/20",
+                hasScreenShare ? "h-20 w-20" : "h-28 w-28"
+              )}>
+                <AvatarImage src={profile?.avatar_url || ""} />
+                <AvatarFallback className={cn("bg-muted", hasScreenShare ? "text-2xl" : "text-3xl")}>
+                  {profile?.username?.[0]?.toUpperCase() || "?"}
+                </AvatarFallback>
+              </Avatar>
+              <p className="text-xs text-muted-foreground mt-2 text-center">Toi</p>
+              {isMuted && (
+                <div className="absolute -bottom-1 -right-1 bg-destructive rounded-full p-1">
+                  <MicOff className="h-3 w-3 text-destructive-foreground" />
+                </div>
               )}
-              style={{
-                background: friendSpeaking
-                  ? "radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)"
-                  : "transparent",
-                transform: friendSpeaking ? "scale(1.3)" : "scale(1)",
-              }}
-            />
-            <Avatar className="h-32 w-32 ring-4 ring-primary/20">
-              <AvatarImage src={friend.avatar_url || ""} />
-              <AvatarFallback className="text-4xl bg-muted">
-                {friend.username[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            </div>
+
+            {/* Friend's Avatar */}
+            <div className="relative">
+              <div
+                className={cn(
+                  "absolute inset-0 rounded-full transition-all duration-300",
+                  callStatus === "active" && friendSpeaking && "animate-speaking-ring"
+                )}
+                style={{
+                  background: friendSpeaking
+                    ? "radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)"
+                    : "transparent",
+                  transform: friendSpeaking ? "scale(1.3)" : "scale(1)",
+                }}
+              />
+              <Avatar className={cn(
+                "ring-4",
+                friendSpeaking ? "ring-success/50" : "ring-primary/20",
+                hasScreenShare ? "h-20 w-20" : "h-28 w-28"
+              )}>
+                <AvatarImage src={friend.avatar_url || ""} />
+                <AvatarFallback className={cn("bg-muted", hasScreenShare ? "text-2xl" : "text-3xl")}>
+                  {friend.username[0]?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <p className="text-xs text-muted-foreground mt-2 text-center">{friend.username}</p>
+            </div>
           </div>
 
-          {/* Name and Status */}
+          {/* Status */}
           <div>
-            <h2 className="text-2xl font-bold">{friend.username}</h2>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground">
               {callStatus === "ringing" && (isIncoming ? "Appel entrant..." : "Appel en cours...")}
               {callStatus === "connecting" && "Connexion..."}
               {callStatus === "active" && formatDuration(duration)}
               {callStatus === "ended" && "Appel terminé"}
             </p>
           </div>
-
-          {/* My speaking indicator */}
-          {callStatus === "active" && (
-            <div className={cn(
-              "flex items-center justify-center gap-2 text-sm transition-colors",
-              isSpeaking ? "text-success" : "text-muted-foreground"
-            )}>
-              <div className={cn(
-                "w-2 h-2 rounded-full",
-                isSpeaking ? "bg-success animate-pulse" : "bg-muted-foreground/50"
-              )} />
-              {isSpeaking ? "Tu parles..." : isMuted ? "Micro coupé" : "En attente..."}
-            </div>
-          )}
 
           {/* Controls */}
           <div className="flex items-center justify-center gap-4">
