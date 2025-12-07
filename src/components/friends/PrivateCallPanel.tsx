@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { playNotificationSound } from "@/hooks/useSound";
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
 
@@ -49,6 +50,27 @@ const PrivateCallPanel = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
+  const ringtoneInterval = useRef<NodeJS.Timeout | null>(null);
+
+  // Play ringtone for incoming calls
+  useEffect(() => {
+    if (isIncoming && callStatus === "ringing") {
+      // Play notification sound immediately
+      playNotificationSound();
+      
+      // Continue playing every 3 seconds while ringing
+      ringtoneInterval.current = setInterval(() => {
+        playNotificationSound();
+      }, 3000);
+    }
+
+    return () => {
+      if (ringtoneInterval.current) {
+        clearInterval(ringtoneInterval.current);
+        ringtoneInterval.current = null;
+      }
+    };
+  }, [isIncoming, callStatus]);
 
   const channelId = useMemo(() => `private-call-${[user?.id, friend.id].sort().join('-')}`, [user?.id, friend.id]);
 

@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { playNotificationSound } from "@/hooks/useSound";
 
 export interface Friend {
   id: string;
@@ -23,6 +24,7 @@ export const useFriends = () => {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [pendingRequests, setPendingRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const previousRequestsCount = useRef(0);
 
   const fetchFriends = useCallback(async () => {
     if (!user) return;
@@ -76,6 +78,12 @@ export const useFriends = () => {
       requester: r.requester as Friend,
       created_at: r.created_at,
     })) || [];
+
+    // Play notification sound if there are new requests
+    if (requests.length > previousRequestsCount.current && previousRequestsCount.current > 0) {
+      playNotificationSound();
+    }
+    previousRequestsCount.current = requests.length;
 
     setPendingRequests(requests);
   }, [user]);
