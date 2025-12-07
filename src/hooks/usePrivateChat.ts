@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { playNotificationSound } from "@/hooks/useSound";
 
 export interface PrivateMessage {
   id: string;
@@ -15,6 +16,7 @@ export const usePrivateChat = (friendId: string | null) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<PrivateMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const isInitialLoad = useRef(true);
 
   const fetchMessages = useCallback(async () => {
     if (!user || !friendId) return;
@@ -58,7 +60,10 @@ export const usePrivateChat = (friendId: string | null) => {
 
   useEffect(() => {
     if (user && friendId) {
-      fetchMessages();
+      isInitialLoad.current = true;
+      fetchMessages().then(() => {
+        isInitialLoad.current = false;
+      });
 
       const channel = supabase
         .channel(`private-chat-${friendId}`)
@@ -76,6 +81,11 @@ export const usePrivateChat = (friendId: string | null) => {
               (msg.sender_id === friendId && msg.receiver_id === user.id)
             ) {
               setMessages((prev) => [...prev, msg]);
+              
+              // Play notification sound for incoming messages (not our own)
+              if (msg.sender_id === friendId && !isInitialLoad.current) {
+                playNotificationSound();
+              }
               
               // Mark as read if we're the receiver
               if (msg.receiver_id === user.id) {
