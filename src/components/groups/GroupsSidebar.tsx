@@ -124,7 +124,9 @@ const GroupItem = ({
       </Avatar>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{group.name}</p>
-        <p className="text-xs text-muted-foreground">Groupe</p>
+        <p className="text-xs text-muted-foreground">
+          {group.member_count || 1} membre{(group.member_count || 1) > 1 ? "s" : ""}
+        </p>
       </div>
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <Button

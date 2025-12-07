@@ -8,6 +8,7 @@ export interface Group {
   avatar_url: string | null;
   owner_id: string;
   created_at: string;
+  member_count?: number;
 }
 
 export interface GroupMember {
@@ -55,12 +56,24 @@ export const useGroups = () => {
 
       console.log("[useGroups] Raw data:", data);
 
-      const groupsList = data
-        ?.map((item: any) => item.groups)
-        .filter(Boolean) as Group[];
+      // Get member counts for each group
+      const groupsList: Group[] = [];
+      for (const item of data || []) {
+        if (item.groups) {
+          const { count } = await supabase
+            .from("group_members")
+            .select("*", { count: "exact", head: true })
+            .eq("group_id", item.groups.id);
+          
+          groupsList.push({
+            ...item.groups,
+            member_count: count || 0,
+          });
+        }
+      }
       
       console.log("[useGroups] Groups list:", groupsList);
-      setGroups(groupsList || []);
+      setGroups(groupsList);
     } catch (error) {
       console.error("[useGroups] Error fetching groups:", error);
     } finally {
