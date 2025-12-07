@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getCurrentUser } from "@/lib/localStorage";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface ScreenShareUser {
   odId: string;
@@ -36,6 +36,7 @@ const ICE_SERVERS = [
 ];
 
 export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShareProps) => {
+  const { user, profile } = useAuth();
   const [isSharing, setIsSharing] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenSharers, setScreenSharers] = useState<ScreenShareUser[]>([]);
@@ -52,7 +53,8 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
 
-  const currentUser = getCurrentUser();
+  const currentUserId = user?.id || "";
+  const currentUsername = profile?.username || "Utilisateur";
 
   // Create connection to RECEIVE screen from a sharer
   const createIncomingConnection = useCallback((sharerId: string): RTCPeerConnection => {
@@ -85,7 +87,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           event: "screen-signal",
           payload: {
             type: "screen-ice",
-            from: currentUser.id,
+            from: currentUserId,
             to: sharerId,
             data: event.candidate.toJSON(),
           },
@@ -106,7 +108,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     incomingConnectionsRef.current.set(sharerId, pc);
     return pc;
-  }, [currentUser.id]);
+  }, [currentUserId]);
 
   // Create connection to SEND our screen to a viewer
   const createOutgoingConnection = useCallback((viewerId: string): RTCPeerConnection => {
@@ -136,7 +138,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           event: "screen-signal",
           payload: {
             type: "screen-ice",
-            from: currentUser.id,
+            from: currentUserId,
             to: viewerId,
             data: event.candidate.toJSON(),
           },
@@ -150,7 +152,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     outgoingConnectionsRef.current.set(viewerId, pc);
     return pc;
-  }, [currentUser.id]);
+  }, [currentUserId]);
 
   // Send screen offer to a specific viewer
   const sendOfferToViewer = useCallback(async (viewerId: string) => {
@@ -171,7 +173,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         event: "screen-signal",
         payload: {
           type: "screen-offer",
-          from: currentUser.id,
+          from: currentUserId,
           to: viewerId,
           data: offer,
         },
@@ -179,11 +181,11 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     } catch (error) {
       console.error("[ScreenShare] Offer creation error:", error);
     }
-  }, [currentUser.id, createOutgoingConnection]);
+  }, [currentUserId, createOutgoingConnection]);
 
   // Handle incoming signals
   const handleSignal = useCallback(async (message: SignalMessage) => {
-    if (message.to !== currentUser.id) return;
+    if (message.to !== currentUserId) return;
 
     console.log(`[ScreenShare] Handling signal: ${message.type} from ${message.from}`);
 
@@ -209,7 +211,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           event: "screen-signal",
           payload: {
             type: "screen-answer",
-            from: currentUser.id,
+            from: currentUserId,
             to: message.from,
             data: answer,
           },
@@ -255,11 +257,11 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         }
       }
     }
-  }, [currentUser.id, createIncomingConnection]);
+  }, [currentUserId, createIncomingConnection]);
 
   // Initialize channels
   useEffect(() => {
-    if (!channelId) return;
+    if (!channelId || !currentUserId) return;
 
     let mounted = true;
 
@@ -276,7 +278,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
       // Handle screen share requests from new viewers
       signalingChannel.on("broadcast", { event: "request-screen" }, async ({ payload }) => {
-        if (mounted && payload.broadcasterId === currentUser.id && isSharingRef.current) {
+        if (mounted && payload.broadcasterId === currentUserId && isSharingRef.current) {
           console.log(`[ScreenShare] Received request from ${payload.viewerId}`);
           await sendOfferToViewer(payload.viewerId);
         }
@@ -286,7 +288,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
       // Presence channel for tracking sharers
       const presenceChannel = supabase.channel(`screen-pres-${channelId}`, {
-        config: { presence: { key: currentUser.id } },
+        config: { presence: { key: currentUserId } },
       });
       presenceChannelRef.current = presenceChannel;
 
@@ -312,14 +314,14 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
         // Request screen from new sharers (if we're not the one sharing)
         sharers.forEach((sharer) => {
-          if (sharer.odId !== currentUser.id && !incomingConnectionsRef.current.has(sharer.odId)) {
+          if (sharer.odId !== currentUserId && !incomingConnectionsRef.current.has(sharer.odId)) {
             console.log(`[ScreenShare] Requesting screen from ${sharer.odId}`);
             signalingChannel.send({
               type: "broadcast",
               event: "request-screen",
               payload: {
                 broadcasterId: sharer.odId,
-                viewerId: currentUser.id,
+                viewerId: currentUserId,
               },
             });
           }
@@ -355,8 +357,8 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
       // Track initial presence (not sharing)
       await presenceChannel.track({
-        odId: currentUser.id,
-        username: currentUser.username,
+        odId: currentUserId,
+        username: currentUsername,
         isSharing: false,
       });
 
@@ -368,7 +370,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     return () => {
       mounted = false;
     };
-  }, [channelId, currentUser.id, currentUser.username, handleSignal, sendOfferToViewer]);
+  }, [channelId, currentUserId, currentUsername, handleSignal, sendOfferToViewer]);
 
   // Start screen share with quality selection
   const startScreenShare = useCallback(async (quality: ScreenQuality = "1080p60") => {
@@ -407,8 +409,8 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
       // Update presence to indicate sharing
       await presenceChannelRef.current?.track({
-        odId: currentUser.id,
-        username: currentUser.username,
+        odId: currentUserId,
+        username: currentUsername,
         isSharing: true,
       });
 
@@ -417,7 +419,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         const state = presenceChannelRef.current?.presenceState() || {};
         Object.values(state).forEach((presences: any[]) => {
           presences.forEach((presence) => {
-            if (presence.odId !== currentUser.id) {
+            if (presence.odId !== currentUserId) {
               sendOfferToViewer(presence.odId);
             }
           });
@@ -432,7 +434,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       }
       return null;
     }
-  }, [isInitialized, currentUser, sendOfferToViewer, onError]);
+  }, [isInitialized, currentUserId, currentUsername, sendOfferToViewer, onError]);
 
   // Stop screen share
   const stopScreenShare = useCallback(async () => {
@@ -453,11 +455,11 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     // Update presence
     await presenceChannelRef.current?.track({
-      odId: currentUser.id,
-      username: currentUser.username,
+      odId: currentUserId,
+      username: currentUsername,
       isSharing: false,
     });
-  }, [currentUser]);
+  }, [currentUserId, currentUsername]);
 
   // Cleanup
   const cleanup = useCallback(async () => {

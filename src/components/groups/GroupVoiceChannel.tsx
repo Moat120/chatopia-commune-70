@@ -3,7 +3,7 @@ import { Volume2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
 import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
-import { getCurrentUser } from "@/lib/localStorage";
+import { useAuth } from "@/contexts/AuthContext";
 import VoiceUserCard from "@/components/voice/VoiceUserCard";
 import VoiceControlsWithScreenShare from "@/components/voice/VoiceControlsWithScreenShare";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
@@ -19,7 +19,7 @@ interface GroupVoiceChannelProps {
 
 const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   const { toast } = useToast();
-  const currentUser = getCurrentUser();
+  const { user, profile } = useAuth();
   const [qualityDialogOpen, setQualityDialogOpen] = useState(false);
 
   const {
@@ -68,10 +68,10 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     const screens = [];
     
     // Add local screen if sharing
-    if (isSharing && localStream) {
+    if (isSharing && localStream && user && profile) {
       screens.push({
-        odId: currentUser.id,
-        username: currentUser.username,
+        odId: user.id,
+        username: profile.username,
         stream: localStream,
         isLocal: true,
       });
@@ -89,7 +89,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     });
     
     return screens;
-  }, [isSharing, localStream, remoteStreams, screenSharers, currentUser]);
+  }, [isSharing, localStream, remoteStreams, screenSharers, user, profile]);
 
   const handleJoin = async () => {
     await join();

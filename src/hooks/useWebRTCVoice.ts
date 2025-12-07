@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getCurrentUser } from "@/lib/localStorage";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface VoiceUser {
   odId: string;
@@ -31,6 +31,7 @@ const ICE_SERVERS = [
 ];
 
 export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
+  const { user, profile } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -51,7 +52,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const isConnectedRef = useRef(false);
 
-  const currentUser = getCurrentUser();
+  // Use Supabase profile data
+  const currentUserId = user?.id || "";
+  const currentUsername = profile?.username || "Utilisateur";
+  const currentAvatarUrl = profile?.avatar_url || "";
 
   // Create peer connection for a remote user
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
@@ -98,7 +102,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           event: "voice-signal",
           payload: {
             type: "voice-ice",
-            from: currentUser.id,
+            from: currentUserId,
             to: remoteUserId,
             data: event.candidate.toJSON(),
           },
@@ -124,11 +128,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     peerConnectionsRef.current.set(remoteUserId, pc);
     return pc;
-  }, [currentUser.id]);
+  }, [currentUserId]);
 
   // Handle incoming signaling messages
   const handleSignal = useCallback(async (message: SignalMessage) => {
-    if (message.to !== currentUser.id) return;
+    if (message.to !== currentUserId) return;
     if (!isConnectedRef.current) return;
 
     console.log(`[Voice] Received signal: ${message.type} from ${message.from}`);
@@ -157,7 +161,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           event: "voice-signal",
           payload: {
             type: "voice-answer",
-            from: currentUser.id,
+            from: currentUserId,
             to: message.from,
             data: answer,
           },
@@ -196,7 +200,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         }
       }
     }
-  }, [currentUser.id, createPeerConnection]);
+  }, [currentUserId, createPeerConnection]);
 
   // Start voice detection
   const startVoiceDetection = useCallback((stream: MediaStream) => {
@@ -235,9 +239,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           lastBroadcast = now;
 
           presenceChannelRef.current.track({
-            odId: currentUser.id,
-            username: currentUser.username,
-            avatarUrl: currentUser.avatar_url,
+            odId: currentUserId,
+            username: currentUsername,
+            avatarUrl: currentAvatarUrl,
             isSpeaking: speaking,
             isMuted: isMutedRef.current,
           });
@@ -250,11 +254,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     } catch (error) {
       console.error("[Voice] Voice detection error:", error);
     }
-  }, [currentUser]);
+  }, [currentUserId, currentUsername, currentAvatarUrl]);
 
   // Initiate connection to a user
   const initiateConnection = useCallback(async (remoteUserId: string) => {
-    if (remoteUserId === currentUser.id) return;
+    if (remoteUserId === currentUserId) return;
     if (peerConnectionsRef.current.has(remoteUserId)) {
       console.log(`[Voice] Already have connection to ${remoteUserId}`);
       return;
@@ -272,7 +276,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         event: "voice-signal",
         payload: {
           type: "voice-offer",
-          from: currentUser.id,
+          from: currentUserId,
           to: remoteUserId,
           data: offer,
         },
@@ -280,7 +284,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     } catch (error) {
       console.error("[Voice] Offer creation error:", error);
     }
-  }, [currentUser.id, createPeerConnection]);
+  }, [currentUserId, createPeerConnection]);
 
   // Cleanup all resources
   const cleanup = useCallback(async () => {
@@ -333,7 +337,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
   // Join voice channel
   const join = useCallback(async () => {
-    if (isConnectedRef.current || isConnecting) return;
+    if (isConnectedRef.current || isConnecting || !currentUserId) return;
 
     console.log("[Voice] Joining channel:", channelId);
     setIsConnecting(true);
@@ -365,7 +369,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       // Setup presence channel
       const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
-        config: { presence: { key: currentUser.id } },
+        config: { presence: { key: currentUserId } },
       });
       presenceChannelRef.current = presenceChannel;
 
@@ -388,17 +392,17 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         setConnectedUsers(users);
 
         // Initiate connections to users with higher IDs (to avoid duplicate connections)
-        users.forEach((user) => {
-          if (user.odId !== currentUser.id && currentUser.id < user.odId) {
-            initiateConnection(user.odId);
+        users.forEach((u) => {
+          if (u.odId !== currentUserId && currentUserId < u.odId) {
+            initiateConnection(u.odId);
           }
         });
       });
 
-      presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
+      presenceChannel.on("presence", { event: "join" }, ({ key }) => {
         console.log(`[Voice] User joined: ${key}`);
         // If new user has higher ID, we initiate the connection
-        if (key !== currentUser.id && currentUser.id < key) {
+        if (key !== currentUserId && currentUserId < key) {
           initiateConnection(key);
         }
       });
@@ -425,9 +429,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       // Track our presence
       await presenceChannel.track({
-        odId: currentUser.id,
-        username: currentUser.username,
-        avatarUrl: currentUser.avatar_url,
+        odId: currentUserId,
+        username: currentUsername,
+        avatarUrl: currentAvatarUrl,
         isSpeaking: false,
         isMuted: false,
       });
@@ -443,7 +447,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       await cleanup();
       onError?.(error.message || "Impossible d'accéder au microphone");
     }
-  }, [channelId, currentUser, isConnecting, cleanup, handleSignal, initiateConnection, startVoiceDetection, onError]);
+  }, [channelId, currentUserId, currentUsername, currentAvatarUrl, isConnecting, cleanup, handleSignal, initiateConnection, startVoiceDetection, onError]);
 
   // Leave voice channel
   const leave = useCallback(async () => {
@@ -462,14 +466,14 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       setIsMuted(newMuted);
 
       presenceChannelRef.current?.track({
-        odId: currentUser.id,
-        username: currentUser.username,
-        avatarUrl: currentUser.avatar_url,
+        odId: currentUserId,
+        username: currentUsername,
+        avatarUrl: currentAvatarUrl,
         isSpeaking: false,
         isMuted: newMuted,
       });
     }
-  }, [currentUser]);
+  }, [currentUserId, currentUsername, currentAvatarUrl]);
 
   // Cleanup on unmount or channel change
   useEffect(() => {
@@ -483,7 +487,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     isConnecting,
     isMuted,
     connectedUsers,
-    currentUserId: currentUser.id,
+    currentUserId,
     connectionQuality,
     audioLevel,
     join,
