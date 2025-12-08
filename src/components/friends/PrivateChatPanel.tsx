@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Phone, X, Send, Loader2 } from "lucide-react";
+import { Phone, X, Send, Loader2, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -22,7 +22,7 @@ const PrivateChatPanel = ({
   onClose,
   onStartCall,
 }: PrivateChatPanelProps) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = usePrivateChat(friend.id);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -52,27 +52,30 @@ const PrivateChatPanel = ({
   const isOnline = friend.status === "online";
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background/50">
+    <div className="flex-1 flex flex-col h-full">
       {/* Header */}
-      <div className="h-16 px-4 flex items-center justify-between border-b border-border/50 glass">
-        <div className="flex items-center gap-3">
+      <div className="h-[72px] px-6 flex items-center justify-between glass-solid border-b border-white/[0.06]">
+        <div className="flex items-center gap-4">
           <div className="relative">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={friend.avatar_url || ""} />
-              <AvatarFallback className="bg-muted">
+            <Avatar className="h-11 w-11 ring-2 ring-white/10">
+              <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
+              <AvatarFallback className="bg-muted font-medium">
                 {friend.username[0]?.toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <span
               className={cn(
-                "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-card",
-                isOnline ? "bg-success" : "bg-muted-foreground"
+                "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-card",
+                isOnline ? "bg-success" : "bg-muted-foreground/50"
               )}
             />
           </div>
           <div>
-            <h3 className="font-semibold">{friend.username}</h3>
-            <p className="text-xs text-muted-foreground">
+            <h3 className="font-semibold text-lg">{friend.username}</h3>
+            <p className={cn(
+              "text-sm",
+              isOnline ? "text-success" : "text-muted-foreground"
+            )}>
               {isOnline ? "En ligne" : "Hors ligne"}
             </p>
           </div>
@@ -83,35 +86,51 @@ const PrivateChatPanel = ({
             size="icon"
             onClick={onStartCall}
             disabled={!isOnline}
-            className="hover:bg-success/10 hover:text-success"
+            className={cn(
+              "h-10 w-10 rounded-xl transition-all",
+              isOnline && "hover:bg-success/20 hover:text-success"
+            )}
           >
             <Phone className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-10 w-10 rounded-xl hover:bg-white/[0.08]"
+          >
+            <MoreHorizontal className="h-5 w-5" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={onClose}
+            className="h-10 w-10 rounded-xl hover:bg-white/[0.08]"
+          >
             <X className="h-5 w-5" />
           </Button>
         </div>
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 p-6" ref={scrollRef}>
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-            <Avatar className="h-20 w-20 mb-4">
-              <AvatarImage src={friend.avatar_url || ""} />
-              <AvatarFallback className="text-2xl bg-muted">
-                {friend.username[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <h4 className="font-semibold text-foreground mb-1">
-              {friend.username}
-            </h4>
-            <p className="text-sm">
-              C'est le début de votre conversation privée.
+          <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in-up">
+            <div className="relative mb-6">
+              <Avatar className="h-24 w-24 ring-4 ring-white/10">
+                <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
+                <AvatarFallback className="text-3xl bg-muted font-medium">
+                  {friend.username[0]?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="absolute -inset-4 bg-primary/10 rounded-full blur-2xl -z-10" />
+            </div>
+            <h4 className="font-semibold text-xl mb-2">{friend.username}</h4>
+            <p className="text-muted-foreground max-w-xs">
+              C'est le début de votre conversation privée. Dites bonjour !
             </p>
           </div>
         ) : (
@@ -127,41 +146,42 @@ const PrivateChatPanel = ({
                   300000;
 
               return (
-                <div key={msg.id}>
+                <div key={msg.id} className="animate-fade-in">
                   {showTime && (
-                    <p className="text-xs text-center text-muted-foreground mb-2">
+                    <p className="text-xs text-center text-muted-foreground mb-4 mt-6">
                       {format(new Date(msg.created_at), "PPp", { locale: fr })}
                     </p>
                   )}
                   <div
                     className={cn(
-                      "flex items-end gap-2",
+                      "flex items-end gap-3",
                       isMe && "flex-row-reverse"
                     )}
                   >
                     {showAvatar ? (
-                      <Avatar className="h-8 w-8">
+                      <Avatar className="h-9 w-9 ring-2 ring-white/5">
                         <AvatarImage
-                          src={isMe ? "" : friend.avatar_url || ""}
+                          src={isMe ? profile?.avatar_url || "" : friend.avatar_url || ""}
+                          className="object-cover"
                         />
-                        <AvatarFallback className="text-xs bg-muted">
+                        <AvatarFallback className="text-xs bg-muted font-medium">
                           {isMe
-                            ? user?.email?.[0]?.toUpperCase()
+                            ? profile?.username?.[0]?.toUpperCase()
                             : friend.username[0]?.toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                     ) : (
-                      <div className="w-8" />
+                      <div className="w-9" />
                     )}
                     <div
                       className={cn(
-                        "max-w-[70%] px-4 py-2 rounded-2xl",
+                        "max-w-[70%] px-4 py-3 rounded-2xl transition-all",
                         isMe
-                          ? "bg-primary text-primary-foreground rounded-br-md"
-                          : "bg-secondary rounded-bl-md"
+                          ? "bg-primary text-primary-foreground rounded-br-lg"
+                          : "bg-secondary/80 rounded-bl-lg"
                       )}
                     >
-                      <p className="text-sm break-words">{msg.content}</p>
+                      <p className="text-sm leading-relaxed break-words">{msg.content}</p>
                     </div>
                   </div>
                 </div>
@@ -172,21 +192,26 @@ const PrivateChatPanel = ({
       </ScrollArea>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="p-4 border-t border-border/50">
-        <div className="flex gap-2">
+      <form onSubmit={handleSend} className="p-5 glass-solid border-t border-white/[0.06]">
+        <div className="flex gap-3">
           <Input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Message @${friend.username}`}
-            className="flex-1 bg-secondary/30 border-border/50"
+            className="flex-1 h-12 input-modern text-base"
             disabled={sending}
           />
-          <Button type="submit" size="icon" disabled={!input.trim() || sending}>
+          <Button 
+            type="submit" 
+            size="icon" 
+            disabled={!input.trim() || sending}
+            className="h-12 w-12 rounded-xl bg-primary hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+          >
             {sending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send className="h-5 w-5" />
             )}
           </Button>
         </div>

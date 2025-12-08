@@ -54,27 +54,38 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 noise">
-      <div className="w-full max-w-sm animate-fade-in-up">
+    <div className="min-h-screen flex items-center justify-center mesh-gradient p-4 noise overflow-hidden">
+      {/* Background decorations */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-primary/10 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-primary/5 rounded-full blur-[120px]" />
+      </div>
+
+      <div className="w-full max-w-md relative z-10 animate-fade-in-up">
         {/* Logo/Brand */}
-        <div className="text-center mb-10 space-y-4">
-          <div className="mx-auto w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 flex items-center justify-center shadow-2xl shadow-primary/20">
-            <span className="text-4xl font-bold gradient-text">V</span>
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center justify-center mb-6">
+            <div className="relative">
+              <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary/40 via-primary/20 to-transparent border border-white/10 flex items-center justify-center shadow-2xl glow-primary float-subtle">
+                <span className="text-5xl font-bold gradient-text">V</span>
+              </div>
+              <div className="absolute -inset-4 bg-primary/20 rounded-[2rem] blur-2xl -z-10" />
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Bienvenue</h1>
-            <p className="text-muted-foreground mt-2">
-              Connecte-toi pour retrouver tes amis
-            </p>
-          </div>
+          <h1 className="text-4xl font-bold tracking-tight mb-3">
+            Bienvenue
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Connecte-toi pour retrouver tes amis
+          </p>
         </div>
 
         {/* Auth Card */}
-        <div className="glass rounded-3xl p-8">
+        <div className="card-modern p-8 border-gradient">
           <Button
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
-            className="w-full py-6 rounded-2xl font-medium text-base bg-foreground text-background hover:bg-foreground/90 transition-all duration-300 hover:shadow-xl hover:scale-[1.02]"
+            className="w-full h-14 rounded-xl font-medium text-base bg-foreground text-background hover:bg-foreground/90 transition-all duration-300 hover:shadow-[0_8px_30px_rgba(255,255,255,0.1)] hover:scale-[1.02] active:scale-[0.98] btn-modern"
           >
             {googleLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -103,9 +114,18 @@ const Auth = () => {
             )}
           </Button>
 
-          <p className="text-center text-xs text-muted-foreground/60 mt-6">
-            En continuant, tu acceptes nos conditions d'utilisation
-          </p>
+          <div className="mt-8 pt-6 border-t border-white/[0.08]">
+            <p className="text-center text-sm text-muted-foreground/60">
+              En continuant, tu acceptes nos conditions d'utilisation
+            </p>
+          </div>
+        </div>
+
+        {/* Bottom decoration */}
+        <div className="mt-8 flex justify-center gap-1">
+          <div className="w-8 h-1 rounded-full bg-primary/40" />
+          <div className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+          <div className="w-1 h-1 rounded-full bg-muted-foreground/30" />
         </div>
       </div>
     </div>
