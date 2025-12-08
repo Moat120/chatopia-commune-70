@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { playJoinSound, playLeaveSound } from "@/hooks/useSound";
-import { getNoiseSuppression } from "@/components/SettingsDialog";
+import { getAudioConstraints } from "@/components/SettingsDialog";
 
 export interface VoiceUser {
   odId: string;
@@ -32,6 +32,17 @@ const ICE_SERVERS = [
   { urls: "stun:stun2.l.google.com:19302" },
   { urls: "stun:stun3.l.google.com:19302" },
   { urls: "stun:stun4.l.google.com:19302" },
+  // Add TURN servers for better connectivity
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
 
 export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
@@ -348,18 +359,13 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setConnectionQuality("connecting");
 
     try {
-      // Get noise suppression setting
-      const noiseSuppressionEnabled = getNoiseSuppression();
-      console.log("[Voice] Noise suppression:", noiseSuppressionEnabled);
+      // Get audio constraints from settings
+      const audioConstraints = getAudioConstraints();
+      console.log("[Voice] Audio constraints:", audioConstraints);
 
-      // Get microphone access with configurable noise suppression
+      // Get microphone access with configured settings
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: noiseSuppressionEnabled,
-          autoGainControl: true,
-          sampleRate: 48000,
-        },
+        audio: audioConstraints,
       });
 
       localStreamRef.current = stream;
