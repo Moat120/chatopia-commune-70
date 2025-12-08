@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Users, Phone } from "lucide-react";
 import { RingtoneManager } from "@/hooks/useSound";
+import { cn } from "@/lib/utils";
 
 type ViewMode = "friends" | "groups";
 
@@ -122,31 +123,27 @@ const Index = () => {
   };
 
   return (
-    <div className="h-screen flex bg-background noise">
-      {/* View Toggle */}
-      <div className="w-16 h-full flex flex-col items-center py-4 gap-2 bg-card/30 border-r border-border/50">
-        <Button
-          variant={viewMode === "friends" ? "secondary" : "ghost"}
-          size="icon"
-          className="h-12 w-12 rounded-xl"
+    <div className="h-screen flex mesh-gradient noise overflow-hidden">
+      {/* Navigation Rail */}
+      <div className="w-[72px] h-full flex flex-col items-center py-4 gap-3 glass-solid border-r border-white/[0.06]">
+        <NavButton
+          active={viewMode === "friends"}
           onClick={() => {
             setViewMode("friends");
             setSelectedGroup(null);
           }}
-        >
-          <MessageCircle className="h-5 w-5" />
-        </Button>
-        <Button
-          variant={viewMode === "groups" ? "secondary" : "ghost"}
-          size="icon"
-          className="h-12 w-12 rounded-xl"
+          icon={<MessageCircle className="h-5 w-5" />}
+          label="Messages"
+        />
+        <NavButton
+          active={viewMode === "groups"}
           onClick={() => {
             setViewMode("groups");
             setSelectedFriend(null);
           }}
-        >
-          <Users className="h-5 w-5" />
-        </Button>
+          icon={<Users className="h-5 w-5" />}
+          label="Groupes"
+        />
       </div>
 
       {/* Sidebar */}
@@ -180,10 +177,12 @@ const Index = () => {
         />
       ) : (
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-20" />
-            <h2 className="text-xl font-semibold mb-2">Bienvenue !</h2>
-            <p className="text-sm">
+          <div className="text-center animate-fade-in-up">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary/20 to-transparent border border-white/[0.08] flex items-center justify-center">
+              <MessageCircle className="h-10 w-10 text-muted-foreground/40" />
+            </div>
+            <h2 className="text-2xl font-semibold mb-2">Bienvenue !</h2>
+            <p className="text-muted-foreground max-w-sm">
               {viewMode === "friends"
                 ? "Sélectionne un ami pour commencer une conversation"
                 : "Sélectionne un groupe ou crée-en un nouveau"}
@@ -210,37 +209,38 @@ const Index = () => {
         />
       )}
 
-      {/* Incoming Call Notification - Centered */}
+      {/* Incoming Call Modal */}
       {incomingCall && !activeCall && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
-          <div className="glass rounded-3xl p-8 shadow-2xl border border-border/50 w-96">
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className="relative mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xl animate-fade-in">
+          <div className="card-modern p-8 w-[380px] animate-scale-in">
+            <div className="flex flex-col items-center text-center mb-8">
+              <div className="relative mb-5">
+                <div className="absolute inset-0 bg-success/20 rounded-full animate-ping" />
                 <img
                   src={incomingCall.friend.avatar_url || ""}
                   alt=""
-                  className="h-24 w-24 rounded-full bg-muted ring-4 ring-success/30"
+                  className="h-28 w-28 rounded-full bg-muted ring-4 ring-success/30 relative z-10 object-cover"
                 />
-                <span className="absolute -top-2 -right-2 w-6 h-6 bg-success rounded-full animate-pulse flex items-center justify-center">
-                  <Phone className="h-3 w-3 text-success-foreground" />
+                <span className="absolute -top-1 -right-1 w-8 h-8 bg-success rounded-full flex items-center justify-center z-20 shadow-lg glow-success">
+                  <Phone className="h-4 w-4 text-success-foreground" />
                 </span>
               </div>
-              <p className="text-xl font-semibold">{incomingCall.friend.username}</p>
+              <p className="text-2xl font-semibold mb-1">{incomingCall.friend.username}</p>
               <p className="text-muted-foreground">Appel entrant...</p>
             </div>
-            <div className="flex gap-4">
-              <button
+            <div className="flex gap-3">
+              <Button
                 onClick={handleDeclineIncomingCall}
-                className="flex-1 py-3 px-6 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors font-medium"
+                className="flex-1 h-12 rounded-xl bg-destructive/90 hover:bg-destructive text-destructive-foreground font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 Refuser
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleAcceptIncomingCall}
-                className="flex-1 py-3 px-6 rounded-2xl bg-success text-success-foreground hover:bg-success/90 transition-colors font-medium"
+                className="flex-1 h-12 rounded-xl bg-success hover:bg-success/90 text-success-foreground font-medium transition-all hover:scale-[1.02] active:scale-[0.98] glow-success"
               >
                 Accepter
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -248,5 +248,30 @@ const Index = () => {
     </div>
   );
 };
+
+interface NavButtonProps {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}
+
+const NavButton = ({ active, onClick, icon, label }: NavButtonProps) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      "relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 group",
+      active
+        ? "bg-primary text-primary-foreground shadow-lg glow-primary"
+        : "text-muted-foreground hover:text-foreground hover:bg-white/[0.08]"
+    )}
+    title={label}
+  >
+    {icon}
+    {active && (
+      <span className="absolute -left-3 w-1 h-6 bg-primary rounded-r-full" />
+    )}
+  </button>
+);
 
 export default Index;
