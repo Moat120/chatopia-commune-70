@@ -153,13 +153,36 @@ const PrivateCallPanel = ({
     return screens;
   }, [isSharing, screenStream, remoteStreams, user?.id, profile?.username, friend.username]);
 
-  // Optimized WebRTC peer connection for low latency
-  const setupPeerConnection = () => {
+  // Optimized WebRTC peer connection for low latency - BIDIRECTIONAL audio
+  const setupPeerConnection = (stream: MediaStream) => {
+    // Close existing connection if any
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+    
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnectionRef.current = pc;
 
+    // CRITICAL: Add local tracks FIRST before any negotiation
+    stream.getTracks().forEach(track => {
+      console.log('[PrivateCall] Adding local track:', track.kind);
+      const sender = pc.addTrack(track, stream);
+      
+      // Optimize audio for low latency
+      if (track.kind === 'audio') {
+        const params = sender.getParameters();
+        if (params.encodings && params.encodings.length > 0) {
+          params.encodings[0].maxBitrate = 128000;
+          params.encodings[0].priority = "high";
+          params.encodings[0].networkPriority = "high";
+          sender.setParameters(params).catch(() => {});
+        }
+      }
+    });
+
     // Handle incoming audio with immediate playback
     pc.ontrack = (event) => {
+      console.log('[PrivateCall] Received remote track:', event.track.kind);
       const [remoteStream] = event.streams;
       
       if (!remoteAudioRef.current) {
@@ -168,29 +191,37 @@ const PrivateCallPanel = ({
         (remoteAudioRef.current as any).playsInline = true;
       }
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.play().catch(() => {});
+      remoteAudioRef.current.play().catch(console.error);
 
       // Optimized friend speaking detection
-      const audioContext = new AudioContext({ sampleRate: 48000 });
-      const source = audioContext.createMediaStreamSource(remoteStream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 128;
-      analyser.smoothingTimeConstant = 0.3;
-      source.connect(analyser);
-      
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const detectFriendSpeaking = () => {
-        if (callStatus !== "active") return;
-        analyser.getByteFrequencyData(dataArray);
-        const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        setFriendSpeaking(avg > 15);
-        requestAnimationFrame(detectFriendSpeaking);
-      };
-      detectFriendSpeaking();
+      try {
+        const audioContext = new AudioContext({ sampleRate: 48000 });
+        const source = audioContext.createMediaStreamSource(remoteStream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 128;
+        analyser.smoothingTimeConstant = 0.3;
+        source.connect(analyser);
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const detectFriendSpeaking = () => {
+          if (callStatus === "ended") {
+            audioContext.close();
+            return;
+          }
+          analyser.getByteFrequencyData(dataArray);
+          const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          setFriendSpeaking(avg > 15);
+          requestAnimationFrame(detectFriendSpeaking);
+        };
+        detectFriendSpeaking();
+      } catch (e) {
+        console.error('[PrivateCall] Error setting up friend speaking detection:', e);
+      }
     };
 
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
+        console.log('[PrivateCall] Sending ICE candidate');
         signalingChannelRef.current.send({
           type: 'broadcast',
           event: 'webrtc-signal',
@@ -202,6 +233,14 @@ const PrivateCallPanel = ({
           }
         });
       }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log('[PrivateCall] Connection state:', pc.connectionState);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('[PrivateCall] ICE state:', pc.iceConnectionState);
     };
 
     return pc;
@@ -244,14 +283,8 @@ const PrivateCallPanel = ({
           detectVoice();
         }
 
-        if (!pc) pc = setupPeerConnection();
-        
-        // Add local tracks BEFORE setting remote description
-        localStreamRef.current.getTracks().forEach(track => {
-          if (!pc!.getSenders().find(s => s.track === track)) {
-            pc!.addTrack(track, localStreamRef.current!);
-          }
-        });
+        // Setup peer connection with stream - tracks already added in setupPeerConnection
+        if (!pc) pc = setupPeerConnection(localStreamRef.current);
 
         await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
         
@@ -403,21 +436,8 @@ const PrivateCallPanel = ({
       };
       detectVoice();
 
-      // Setup peer connection with optimized settings
-      const pc = setupPeerConnection();
-      stream.getTracks().forEach(track => {
-        const sender = pc.addTrack(track, stream);
-        // Optimize audio for low latency
-        if (track.kind === 'audio') {
-          const params = sender.getParameters();
-          if (params.encodings && params.encodings.length > 0) {
-            params.encodings[0].maxBitrate = 128000;
-            params.encodings[0].priority = "high";
-            params.encodings[0].networkPriority = "high";
-            sender.setParameters(params).catch(() => {});
-          }
-        }
-      });
+      // Setup peer connection with stream - tracks already added with optimized settings
+      const pc = setupPeerConnection(stream);
 
       // Only caller creates offer
       if (!isIncoming) {
