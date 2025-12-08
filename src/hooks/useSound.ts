@@ -19,14 +19,36 @@ export const useSound = () => {
     try {
       const audio = new Audio(NOTIFICATION_SOUND);
       audio.volume = 0.3;
-      audio.playbackRate = 1.5; // Slightly faster for clicks
+      audio.playbackRate = 1.5;
       audio.play().catch((e) => console.log("[Sound] Play error:", e));
     } catch (error) {
       console.log("[Sound] Error:", error);
     }
   }, []);
 
-  return { playNotification, playClick };
+  const playJoin = useCallback(() => {
+    try {
+      const audio = new Audio(NOTIFICATION_SOUND);
+      audio.volume = 0.4;
+      audio.playbackRate = 1.2;
+      audio.play().catch((e) => console.log("[Sound] Play error:", e));
+    } catch (error) {
+      console.log("[Sound] Error:", error);
+    }
+  }, []);
+
+  const playLeave = useCallback(() => {
+    try {
+      const audio = new Audio(NOTIFICATION_SOUND);
+      audio.volume = 0.4;
+      audio.playbackRate = 0.8;
+      audio.play().catch((e) => console.log("[Sound] Play error:", e));
+    } catch (error) {
+      console.log("[Sound] Error:", error);
+    }
+  }, []);
+
+  return { playNotification, playClick, playJoin, playLeave };
 };
 
 // Standalone functions for use outside of React components
@@ -45,6 +67,28 @@ export const playClickSound = () => {
     const audio = new Audio(NOTIFICATION_SOUND);
     audio.volume = 0.3;
     audio.playbackRate = 1.5;
+    audio.play().catch((e) => console.log("[Sound] Play error:", e));
+  } catch (error) {
+    console.log("[Sound] Error:", error);
+  }
+};
+
+export const playJoinSound = () => {
+  try {
+    const audio = new Audio(NOTIFICATION_SOUND);
+    audio.volume = 0.4;
+    audio.playbackRate = 1.2;
+    audio.play().catch((e) => console.log("[Sound] Play error:", e));
+  } catch (error) {
+    console.log("[Sound] Error:", error);
+  }
+};
+
+export const playLeaveSound = () => {
+  try {
+    const audio = new Audio(NOTIFICATION_SOUND);
+    audio.volume = 0.4;
+    audio.playbackRate = 0.8;
     audio.play().catch((e) => console.log("[Sound] Play error:", e));
   } catch (error) {
     console.log("[Sound] Error:", error);

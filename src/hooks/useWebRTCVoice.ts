@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { playJoinSound, playLeaveSound } from "@/hooks/useSound";
+import { getNoiseSuppression } from "@/components/SettingsDialog";
 
 export interface VoiceUser {
   odId: string;
@@ -28,6 +30,8 @@ const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun3.l.google.com:19302" },
+  { urls: "stun:stun4.l.google.com:19302" },
 ];
 
 export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
@@ -344,11 +348,15 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setConnectionQuality("connecting");
 
     try {
-      // Get microphone access
+      // Get noise suppression setting
+      const noiseSuppressionEnabled = getNoiseSuppression();
+      console.log("[Voice] Noise suppression:", noiseSuppressionEnabled);
+
+      // Get microphone access with configurable noise suppression
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
+          noiseSuppression: noiseSuppressionEnabled,
           autoGainControl: true,
           sampleRate: 48000,
         },
@@ -399,8 +407,12 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         });
       });
 
-      presenceChannel.on("presence", { event: "join" }, ({ key }) => {
+      presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
         console.log(`[Voice] User joined: ${key}`);
+        // Play join sound for other users joining
+        if (key !== currentUserId) {
+          playJoinSound();
+        }
         // If new user has higher ID, we initiate the connection
         if (key !== currentUserId && currentUserId < key) {
           initiateConnection(key);
@@ -409,6 +421,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
         console.log(`[Voice] User left: ${key}`);
+        // Play leave sound for other users leaving
+        if (key !== currentUserId) {
+          playLeaveSound();
+        }
         // Clean up peer connection
         const pc = peerConnectionsRef.current.get(key);
         if (pc) {

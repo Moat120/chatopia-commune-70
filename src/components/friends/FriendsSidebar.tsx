@@ -13,12 +13,12 @@ import {
   Copy,
   Check,
   Bell,
-  Settings,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AddFriendDialog from "./AddFriendDialog";
 import FriendRequestsDialog from "./FriendRequestsDialog";
+import SettingsDialog from "@/components/SettingsDialog";
 import { useToast } from "@/hooks/use-toast";
 
 interface FriendsSidebarProps {
@@ -173,7 +173,7 @@ const FriendsSidebar = ({
       <div className="p-3 border-t border-border/50 glass">
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9 ring-2 ring-primary/20">
-            <AvatarImage src={profile?.avatar_url || ""} />
+            <AvatarImage src={profile?.avatar_url || ""} className="object-cover" />
             <AvatarFallback className="bg-primary/10 text-primary text-sm">
               {profile?.username?.[0]?.toUpperCase()}
             </AvatarFallback>
@@ -185,6 +185,7 @@ const FriendsSidebar = ({
               En ligne
             </p>
           </div>
+          <SettingsDialog />
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={signOut}>
             <LogOut className="h-4 w-4" />
           </Button>

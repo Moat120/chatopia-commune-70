@@ -11,7 +11,7 @@ import { Friend } from "@/hooks/useFriends";
 import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Users } from "lucide-react";
+import { MessageCircle, Users, Phone } from "lucide-react";
 
 type ViewMode = "friends" | "groups";
 
@@ -194,34 +194,34 @@ const Index = () => {
         />
       )}
 
-      {/* Incoming Call Notification */}
+      {/* Incoming Call Notification - Centered */}
       {incomingCall && !activeCall && (
-        <div className="fixed bottom-4 right-4 z-50 animate-fade-in-up">
-          <div className="glass rounded-2xl p-4 shadow-2xl border border-border/50 w-80">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
+          <div className="glass rounded-3xl p-8 shadow-2xl border border-border/50 w-96">
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="relative mb-4">
                 <img
                   src={incomingCall.friend.avatar_url || ""}
                   alt=""
-                  className="h-12 w-12 rounded-full bg-muted"
+                  className="h-24 w-24 rounded-full bg-muted ring-4 ring-success/30"
                 />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-success rounded-full animate-pulse" />
+                <span className="absolute -top-2 -right-2 w-6 h-6 bg-success rounded-full animate-pulse flex items-center justify-center">
+                  <Phone className="h-3 w-3 text-success-foreground" />
+                </span>
               </div>
-              <div>
-                <p className="font-semibold">{incomingCall.friend.username}</p>
-                <p className="text-sm text-muted-foreground">Appel entrant...</p>
-              </div>
+              <p className="text-xl font-semibold">{incomingCall.friend.username}</p>
+              <p className="text-muted-foreground">Appel entrant...</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-4">
               <button
                 onClick={handleDeclineIncomingCall}
-                className="flex-1 py-2 px-4 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                className="flex-1 py-3 px-6 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors font-medium"
               >
                 Refuser
               </button>
               <button
                 onClick={handleAcceptIncomingCall}
-                className="flex-1 py-2 px-4 rounded-xl bg-success text-success-foreground hover:bg-success/90 transition-colors"
+                className="flex-1 py-3 px-6 rounded-2xl bg-success text-success-foreground hover:bg-success/90 transition-colors font-medium"
               >
                 Accepter
               </button>

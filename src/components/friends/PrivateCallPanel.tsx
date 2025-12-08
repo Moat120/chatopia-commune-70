@@ -9,6 +9,7 @@ import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff } from "luci
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { playNotificationSound } from "@/hooks/useSound";
+import { getNoiseSuppression } from "@/components/SettingsDialog";
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
 
@@ -188,10 +189,11 @@ const PrivateCallPanel = ({
       try {
         if (!localStreamRef.current) {
           console.log('[PrivateCall] Getting microphone for callee...');
+          const noiseSuppressionEnabled = getNoiseSuppression();
           const stream = await navigator.mediaDevices.getUserMedia({ 
             audio: {
               echoCancellation: true,
-              noiseSuppression: true,
+              noiseSuppression: noiseSuppressionEnabled,
               autoGainControl: true,
             }
           });
@@ -350,10 +352,11 @@ const PrivateCallPanel = ({
 
   const startAudioAndConnect = async () => {
     try {
+      const noiseSuppressionEnabled = getNoiseSuppression();
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
+          noiseSuppression: noiseSuppressionEnabled,
           autoGainControl: true,
         }
       });
