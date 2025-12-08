@@ -105,6 +105,7 @@ const SettingsDialog = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
+  const isTestingRef = useRef(false);
   const { toast } = useToast();
 
   // Load microphones
@@ -220,6 +221,8 @@ const SettingsDialog = () => {
 
   const startTest = async () => {
     try {
+      stopTest(); // Clean up any existing test first
+      
       const constraints: MediaStreamConstraints = {
         audio: {
           deviceId: selectedMic ? { exact: selectedMic } : undefined,
@@ -241,6 +244,7 @@ const SettingsDialog = () => {
       analyserRef.current.smoothingTimeConstant = 0.5;
       source.connect(analyserRef.current);
 
+      isTestingRef.current = true;
       setIsTesting(true);
 
       // Start level monitoring
@@ -250,7 +254,7 @@ const SettingsDialog = () => {
       let sampleCount = 0;
 
       const monitor = () => {
-        if (!analyserRef.current || !isTesting) return;
+        if (!analyserRef.current || !isTestingRef.current) return;
 
         analyserRef.current.getByteFrequencyData(dataArray);
         
@@ -298,10 +302,14 @@ const SettingsDialog = () => {
         description: "Impossible d'accéder au microphone",
         variant: "destructive",
       });
+      isTestingRef.current = false;
+      setIsTesting(false);
     }
   };
 
   const stopTest = () => {
+    isTestingRef.current = false;
+    
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
@@ -312,11 +320,12 @@ const SettingsDialog = () => {
       testStreamRef.current = null;
     }
 
-    if (audioContextRef.current?.state !== "closed") {
-      audioContextRef.current?.close();
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
 
+    analyserRef.current = null;
     setIsTesting(false);
     setAudioLevel(0);
   };
