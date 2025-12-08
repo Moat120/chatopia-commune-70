@@ -20,10 +20,29 @@ interface PrivateCallPanelProps {
   callId?: string;
 }
 
+// Optimized ICE servers for low latency
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
+
+// Optimized RTC config
+const RTC_CONFIG: RTCConfiguration = {
+  iceServers: ICE_SERVERS,
+  iceCandidatePoolSize: 10,
+  bundlePolicy: "max-bundle",
+  rtcpMuxPolicy: "require",
+};
 
 const PrivateCallPanel = ({
   friend,
@@ -112,28 +131,29 @@ const PrivateCallPanel = ({
     return screens;
   }, [isSharing, screenStream, remoteStreams, user?.id, profile?.username, friend.username]);
 
-  // Setup WebRTC peer connection
+  // Optimized WebRTC peer connection for low latency
   const setupPeerConnection = () => {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnectionRef.current = pc;
 
-    // Handle incoming audio
+    // Handle incoming audio with immediate playback
     pc.ontrack = (event) => {
-      console.log('[PrivateCall] Received remote track');
       const [remoteStream] = event.streams;
       
       if (!remoteAudioRef.current) {
         remoteAudioRef.current = new Audio();
         remoteAudioRef.current.autoplay = true;
+        (remoteAudioRef.current as any).playsInline = true;
       }
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.play().catch(console.error);
+      remoteAudioRef.current.play().catch(() => {});
 
-      // Monitor friend's speaking
-      const audioContext = new AudioContext();
+      // Optimized friend speaking detection
+      const audioContext = new AudioContext({ sampleRate: 48000 });
       const source = audioContext.createMediaStreamSource(remoteStream);
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.3;
       source.connect(analyser);
       
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -160,10 +180,6 @@ const PrivateCallPanel = ({
           }
         });
       }
-    };
-
-    pc.onconnectionstatechange = () => {
-      console.log('[PrivateCall] Connection state:', pc.connectionState);
     };
 
     return pc;
@@ -343,16 +359,20 @@ const PrivateCallPanel = ({
     try {
       const audioConstraints = getAudioConstraints();
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: audioConstraints,
+        audio: {
+          ...audioConstraints,
+          channelCount: 1,
+        },
       });
       localStreamRef.current = stream;
 
-      // Voice detection
-      audioContextRef.current = new AudioContext();
+      // Optimized voice detection
+      audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       analyserRef.current = audioContextRef.current.createAnalyser();
       const source = audioContextRef.current.createMediaStreamSource(stream);
       source.connect(analyserRef.current);
-      analyserRef.current.fftSize = 256;
+      analyserRef.current.fftSize = 128;
+      analyserRef.current.smoothingTimeConstant = 0.3;
 
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
       const detectVoice = () => {
@@ -364,15 +384,27 @@ const PrivateCallPanel = ({
       };
       detectVoice();
 
-      // Setup peer connection and create offer (caller initiates)
+      // Setup peer connection with optimized settings
       const pc = setupPeerConnection();
       stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
+        const sender = pc.addTrack(track, stream);
+        // Optimize audio for low latency
+        if (track.kind === 'audio') {
+          const params = sender.getParameters();
+          if (params.encodings && params.encodings.length > 0) {
+            params.encodings[0].maxBitrate = 128000;
+            params.encodings[0].priority = "high";
+            params.encodings[0].networkPriority = "high";
+            sender.setParameters(params).catch(() => {});
+          }
+        }
       });
 
       // Only caller creates offer
       if (!isIncoming) {
-        const offer = await pc.createOffer();
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+        });
         await pc.setLocalDescription(offer);
         
         signalingChannelRef.current?.send({
@@ -387,7 +419,6 @@ const PrivateCallPanel = ({
         });
       }
     } catch (error) {
-      console.error("Error accessing microphone:", error);
       toast({ title: "Erreur", description: "Impossible d'accéder au microphone", variant: "destructive" });
     }
   };
