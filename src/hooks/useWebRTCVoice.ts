@@ -2,7 +2,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { playJoinSound, playLeaveSound } from "@/hooks/useSound";
-import { getAudioConstraints } from "@/components/SettingsDialog";
+import { 
+  getSelectedMicrophone, 
+  getNoiseSuppression, 
+  getEchoCancellation, 
+  getAutoGain 
+} from "@/components/SettingsDialog";
 
 export interface VoiceUser {
   odId: string;
@@ -30,6 +35,7 @@ interface UseWebRTCVoiceProps {
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
   {
     urls: "turn:openrelay.metered.ca:80",
     username: "openrelayproject",
@@ -53,6 +59,25 @@ const RTC_CONFIG: RTCConfiguration = {
   iceCandidatePoolSize: 10,
   bundlePolicy: "max-bundle",
   rtcpMuxPolicy: "require",
+};
+
+// Build audio constraints from settings
+const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
+  const selectedMic = getSelectedMicrophone();
+  const noiseSuppression = getNoiseSuppression();
+  const echoCancellation = getEchoCancellation();
+  const autoGain = getAutoGain();
+
+  return {
+    deviceId: selectedMic ? { exact: selectedMic } : undefined,
+    // Force these settings for real noise suppression
+    echoCancellation: echoCancellation,
+    noiseSuppression: noiseSuppression,
+    autoGainControl: autoGain,
+    // Optimal audio settings
+    sampleRate: { ideal: 48000 },
+    channelCount: { exact: 1 },
+  };
 };
 
 export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
@@ -339,13 +364,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setConnectionQuality("connecting");
 
     try {
-      const audioConstraints = getAudioConstraints();
+      const audioConstraints = getOptimizedAudioConstraints();
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          ...audioConstraints,
-          channelCount: 1,
-        },
+        audio: audioConstraints,
       });
 
       localStreamRef.current = stream;

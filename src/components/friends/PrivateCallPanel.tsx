@@ -9,7 +9,12 @@ import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff } from "luci
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { RingtoneManager } from "@/hooks/useSound";
-import { getAudioConstraints } from "@/components/SettingsDialog";
+import { 
+  getSelectedMicrophone, 
+  getNoiseSuppression, 
+  getEchoCancellation, 
+  getAutoGain 
+} from "@/components/SettingsDialog";
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
 
@@ -42,6 +47,23 @@ const RTC_CONFIG: RTCConfiguration = {
   iceCandidatePoolSize: 10,
   bundlePolicy: "max-bundle",
   rtcpMuxPolicy: "require",
+};
+
+// Build audio constraints from settings
+const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
+  const selectedMic = getSelectedMicrophone();
+  const noiseSuppression = getNoiseSuppression();
+  const echoCancellation = getEchoCancellation();
+  const autoGain = getAutoGain();
+
+  return {
+    deviceId: selectedMic ? { exact: selectedMic } : undefined,
+    echoCancellation: echoCancellation,
+    noiseSuppression: noiseSuppression,
+    autoGainControl: autoGain,
+    sampleRate: { ideal: 48000 },
+    channelCount: { exact: 1 },
+  };
 };
 
 const PrivateCallPanel = ({
@@ -198,7 +220,7 @@ const PrivateCallPanel = ({
       try {
         if (!localStreamRef.current) {
           console.log('[PrivateCall] Getting microphone for callee...');
-          const audioConstraints = getAudioConstraints();
+          const audioConstraints = getOptimizedAudioConstraints();
           const stream = await navigator.mediaDevices.getUserMedia({ 
             audio: audioConstraints,
           });
@@ -357,12 +379,9 @@ const PrivateCallPanel = ({
 
   const startAudioAndConnect = async () => {
     try {
-      const audioConstraints = getAudioConstraints();
+      const audioConstraints = getOptimizedAudioConstraints();
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          ...audioConstraints,
-          channelCount: 1,
-        },
+        audio: audioConstraints,
       });
       localStreamRef.current = stream;
 
