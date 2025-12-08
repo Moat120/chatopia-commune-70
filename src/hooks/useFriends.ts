@@ -223,14 +223,14 @@ export const useFriends = () => {
       setLoading(false);
       setFriends([]);
       setPendingRequests([]);
+      hasFetched.current = false;
       return;
     }
 
-    // Prevent double fetch
-    if (hasFetched.current) return;
-    hasFetched.current = true;
-
     const loadData = async () => {
+      if (hasFetched.current) return;
+      hasFetched.current = true;
+      
       setLoading(true);
       try {
         await Promise.all([fetchFriends(), fetchPendingRequests()]);
@@ -264,10 +264,9 @@ export const useFriends = () => {
       .subscribe();
 
     return () => {
-      hasFetched.current = false;
       supabase.removeChannel(channel);
     };
-  }, [user?.id]); // Use user.id instead of user object
+  }, [user?.id, fetchFriends, fetchPendingRequests]);
 
   return {
     friends,

@@ -68,58 +68,57 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
-    const initAuth = async () => {
-      try {
-        // Get initial session
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
-        if (!mounted) return;
-
-        setSession(initialSession);
-        setUser(initialSession?.user ?? null);
-
-        if (initialSession?.user) {
-          const userProfile = await fetchProfile(initialSession.user.id);
-          if (mounted) {
-            setProfile(userProfile);
-            if (userProfile) {
-              updateStatus(initialSession.user.id, "online");
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Auth init error:", err);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    initAuth();
-
-    // Set up auth state listener
+    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      (event, newSession) => {
         if (!mounted) return;
 
+        // Synchronous state updates only
         setSession(newSession);
         setUser(newSession?.user ?? null);
         
-        if (newSession?.user) {
+        if (!newSession?.user) {
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
+        // Defer profile fetch to avoid deadlock
+        setTimeout(async () => {
+          if (!mounted) return;
           const userProfile = await fetchProfile(newSession.user.id);
           if (mounted) {
             setProfile(userProfile);
             if (userProfile) {
               updateStatus(newSession.user.id, "online");
             }
+            setLoading(false);
           }
-        } else {
-          setProfile(null);
-        }
-        setLoading(false);
+        }, 0);
       }
     );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
+      if (!mounted) return;
+
+      setSession(initialSession);
+      setUser(initialSession?.user ?? null);
+
+      if (initialSession?.user) {
+        const userProfile = await fetchProfile(initialSession.user.id);
+        if (mounted) {
+          setProfile(userProfile);
+          if (userProfile) {
+            updateStatus(initialSession.user.id, "online");
+          }
+        }
+      }
+      
+      if (mounted) {
+        setLoading(false);
+      }
+    });
 
     return () => {
       mounted = false;
