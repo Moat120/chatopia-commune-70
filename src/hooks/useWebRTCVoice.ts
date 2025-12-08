@@ -106,21 +106,18 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const currentUsername = profile?.username || "Utilisateur";
   const currentAvatarUrl = profile?.avatar_url || "";
 
-  // Optimized peer connection with low latency settings - BIDIRECTIONAL
+  // Optimized peer connection with low latency settings
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
     const existing = peerConnectionsRef.current.get(remoteUserId);
     if (existing) {
-      console.log('[Voice] Closing existing connection for:', remoteUserId);
       existing.close();
     }
 
-    console.log('[Voice] Creating peer connection for:', remoteUserId);
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
-    // CRITICAL: Add local audio tracks with optimized sender parameters
+    // Add local audio tracks with optimized sender parameters
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
-        console.log('[Voice] Adding local track:', track.kind, 'to peer:', remoteUserId);
         const sender = pc.addTrack(track, localStreamRef.current!);
         
         // Optimize audio sender for low latency
@@ -134,13 +131,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           }
         }
       });
-    } else {
-      console.warn('[Voice] No local stream when creating peer connection!');
     }
 
     // Handle incoming audio with immediate playback
     pc.ontrack = (event) => {
-      console.log('[Voice] Received remote track from:', remoteUserId, 'kind:', event.track.kind);
       const [remoteStream] = event.streams;
 
       let audio = remoteAudiosRef.current.get(remoteUserId);
@@ -153,7 +147,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         remoteAudiosRef.current.set(remoteUserId, audio);
       }
       audio.srcObject = remoteStream;
-      audio.play().catch(console.error);
+      audio.play().catch(() => {});
     };
 
     // Immediate ICE candidate sending
@@ -174,7 +168,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      console.log('[Voice] Connection state for', remoteUserId, ':', state);
       if (state === "connected") {
         setConnectionQuality("excellent");
       } else if (state === "failed" || state === "disconnected") {
@@ -185,10 +178,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           remoteAudiosRef.current.delete(remoteUserId);
         }
       }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log('[Voice] ICE state for', remoteUserId, ':', pc.iceConnectionState);
     };
 
     peerConnectionsRef.current.set(remoteUserId, pc);
