@@ -25,80 +25,97 @@ export const useFriends = () => {
   const [pendingRequests, setPendingRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const previousRequestsCount = useRef(0);
+  const hasFetched = useRef(false);
 
   const fetchFriends = useCallback(async () => {
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from("friendships")
-      .select(`
-        id,
-        requester_id,
-        addressee_id,
-        status,
-        requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code),
-        addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url, status, friend_code)
-      `)
-      .eq("status", "accepted")
-      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
-
-    if (error) {
-      console.error("Error fetching friends:", error);
+    if (!user) {
+      setFriends([]);
       return;
     }
 
-    const friendsList = data?.map((f: any) => {
-      const friend = f.requester_id === user.id ? f.addressee : f.requester;
-      return friend as Friend;
-    }) || [];
+    try {
+      const { data, error } = await supabase
+        .from("friendships")
+        .select(`
+          id,
+          requester_id,
+          addressee_id,
+          status,
+          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code),
+          addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url, status, friend_code)
+        `)
+        .eq("status", "accepted")
+        .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
 
-    setFriends(friendsList);
+      if (error) {
+        console.error("Error fetching friends:", error);
+        setFriends([]);
+        return;
+      }
+
+      const friendsList = data?.map((f: any) => {
+        const friend = f.requester_id === user.id ? f.addressee : f.requester;
+        return friend as Friend;
+      }).filter(Boolean) || [];
+
+      setFriends(friendsList);
+    } catch (err) {
+      console.error("Fetch friends error:", err);
+      setFriends([]);
+    }
   }, [user]);
 
   const fetchPendingRequests = useCallback(async () => {
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from("friendships")
-      .select(`
-        id,
-        created_at,
-        requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code)
-      `)
-      .eq("addressee_id", user.id)
-      .eq("status", "pending");
-
-    if (error) {
-      console.error("Error fetching requests:", error);
+    if (!user) {
+      setPendingRequests([]);
       return;
     }
 
-    const requests = data?.map((r: any) => ({
-      id: r.id,
-      requester: r.requester as Friend,
-      created_at: r.created_at,
-    })) || [];
+    try {
+      const { data, error } = await supabase
+        .from("friendships")
+        .select(`
+          id,
+          created_at,
+          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code)
+        `)
+        .eq("addressee_id", user.id)
+        .eq("status", "pending");
 
-    // Play notification sound if there are new requests
-    if (requests.length > previousRequestsCount.current && previousRequestsCount.current > 0) {
-      playNotificationSound();
+      if (error) {
+        console.error("Error fetching requests:", error);
+        setPendingRequests([]);
+        return;
+      }
+
+      const requests = data?.map((r: any) => ({
+        id: r.id,
+        requester: r.requester as Friend,
+        created_at: r.created_at,
+      })).filter(r => r.requester) || [];
+
+      // Play notification sound if there are new requests
+      if (requests.length > previousRequestsCount.current && previousRequestsCount.current > 0) {
+        playNotificationSound();
+      }
+      previousRequestsCount.current = requests.length;
+
+      setPendingRequests(requests);
+    } catch (err) {
+      console.error("Fetch requests error:", err);
+      setPendingRequests([]);
     }
-    previousRequestsCount.current = requests.length;
-
-    setPendingRequests(requests);
   }, [user]);
 
   const sendFriendRequest = async (codeOrUsername: string) => {
     if (!user) return { error: "Non authentifié" };
 
     try {
-      // Sanitize input
       const sanitizedInput = codeOrUsername.trim();
       if (sanitizedInput.length < 2 || sanitizedInput.length > 50) {
         return { error: "Code ou pseudo invalide" };
       }
 
-      // Try to find by friend_code first
       let targetUser = null;
       
       const { data: byCode } = await supabase
@@ -110,7 +127,6 @@ export const useFriends = () => {
       if (byCode) {
         targetUser = byCode;
       } else {
-        // Then try by username (case insensitive)
         const { data: byUsername } = await supabase
           .from("profiles")
           .select("id, username")
@@ -128,7 +144,6 @@ export const useFriends = () => {
         return { error: "Vous ne pouvez pas vous ajouter vous-même" };
       }
 
-      // Check if friendship already exists
       const { data: existingList } = await supabase
         .from("friendships")
         .select("id, status")
@@ -204,37 +219,55 @@ export const useFriends = () => {
   };
 
   useEffect(() => {
-    if (user) {
-      setLoading(true);
-      Promise.all([fetchFriends(), fetchPendingRequests()]).finally(() => {
-        setLoading(false);
-      });
-
-      // Subscribe to realtime updates
-      const channel = supabase
-        .channel("friendships-changes")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "friendships" },
-          () => {
-            fetchFriends();
-            fetchPendingRequests();
-          }
-        )
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "profiles" },
-          () => {
-            fetchFriends();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+    if (!user) {
+      setLoading(false);
+      setFriends([]);
+      setPendingRequests([]);
+      return;
     }
-  }, [user, fetchFriends, fetchPendingRequests]);
+
+    // Prevent double fetch
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchFriends(), fetchPendingRequests()]);
+      } catch (err) {
+        console.error("Load error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel("friendships-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friendships" },
+        () => {
+          fetchFriends();
+          fetchPendingRequests();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        () => {
+          fetchFriends();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      hasFetched.current = false;
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]); // Use user.id instead of user object
 
   return {
     friends,
