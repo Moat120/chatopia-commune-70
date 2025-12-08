@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import FriendsSidebar from "@/components/friends/FriendsSidebar";
@@ -12,6 +12,7 @@ import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Users, Phone } from "lucide-react";
+import { RingtoneManager } from "@/hooks/useSound";
 
 type ViewMode = "friends" | "groups";
 
@@ -31,6 +32,21 @@ const Index = () => {
     friend: Friend;
     callId: string;
   } | null>(null);
+  
+  const ringtoneManager = useRef<RingtoneManager>(new RingtoneManager());
+
+  // Play ringtone for incoming calls
+  useEffect(() => {
+    if (incomingCall && !activeCall) {
+      ringtoneManager.current.start(2000);
+    } else {
+      ringtoneManager.current.stop();
+    }
+
+    return () => {
+      ringtoneManager.current.stop();
+    };
+  }, [incomingCall, activeCall]);
 
   // Listen for incoming calls
   useEffect(() => {
