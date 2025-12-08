@@ -35,42 +35,85 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+  const fetchProfile = async (userId: string): Promise<Profile | null> => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
 
-    if (error) {
-      console.error("Error fetching profile:", error);
+      if (error) {
+        console.error("Error fetching profile:", error);
+        return null;
+      }
+      return data as Profile;
+    } catch (err) {
+      console.error("Profile fetch error:", err);
       return null;
     }
-    return data as Profile;
   };
 
   const updateStatus = async (userId: string, status: string) => {
-    await supabase
-      .from("profiles")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", userId);
+    try {
+      await supabase
+        .from("profiles")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+    } catch (err) {
+      console.error("Status update error:", err);
+    }
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST (synchronous updates only)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Only synchronous state updates here
-        setSession(session);
-        setUser(session?.user ?? null);
+    let mounted = true;
+
+    const initAuth = async () => {
+      try {
+        // Get initial session
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         
-        // Defer async operations with setTimeout to avoid deadlock
-        if (session?.user) {
-          setTimeout(async () => {
-            const userProfile = await fetchProfile(session.user.id);
+        if (!mounted) return;
+
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+
+        if (initialSession?.user) {
+          const userProfile = await fetchProfile(initialSession.user.id);
+          if (mounted) {
             setProfile(userProfile);
-            await updateStatus(session.user.id, "online");
-          }, 0);
+            if (userProfile) {
+              updateStatus(initialSession.user.id, "online");
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Auth init error:", err);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initAuth();
+
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        if (!mounted) return;
+
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        
+        if (newSession?.user) {
+          const userProfile = await fetchProfile(newSession.user.id);
+          if (mounted) {
+            setProfile(userProfile);
+            if (userProfile) {
+              updateStatus(newSession.user.id, "online");
+            }
+          }
         } else {
           setProfile(null);
         }
@@ -78,27 +121,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        setTimeout(async () => {
-          const userProfile = await fetchProfile(session.user.id);
-          setProfile(userProfile);
-          await updateStatus(session.user.id, "online");
-        }, 0);
-      }
-      setLoading(false);
-    });
-
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  // Handle offline status on window close (separate effect to access current user)
+  // Handle offline status on window close
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (user) {
