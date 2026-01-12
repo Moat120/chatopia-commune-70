@@ -54,8 +54,8 @@ const FriendsSidebar = ({
   const filteredFriends = friends.filter((f) =>
     f.username.toLowerCase().includes(search.toLowerCase())
   );
-  const onlineFriends = filteredFriends.filter((f) => f.status === "online");
-  const offlineFriends = filteredFriends.filter((f) => f.status !== "online");
+  const onlineFriends = filteredFriends.filter((f) => f.status === "online" || f.status === "away");
+  const offlineFriends = filteredFriends.filter((f) => f.status !== "online" && f.status !== "away");
 
   return (
     <div className="w-80 h-full flex flex-col glass-subtle border-r border-white/[0.06]">
@@ -248,6 +248,20 @@ const FriendItem = ({
   onCall,
 }: FriendItemProps) => {
   const isOnline = friend.status === "online";
+  const isAway = friend.status === "away";
+  const isActive = isOnline || isAway;
+
+  const getStatusColor = () => {
+    if (isOnline) return "bg-success";
+    if (isAway) return "bg-warning";
+    return "bg-muted-foreground/50";
+  };
+
+  const getStatusText = () => {
+    if (isOnline) return "En ligne";
+    if (isAway) return "Absent";
+    return "Hors ligne";
+  };
 
   return (
     <div
@@ -268,18 +282,18 @@ const FriendItem = ({
         </Avatar>
         <span
           className={cn(
-            "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-card transition-colors",
-            isOnline ? "bg-success" : "bg-muted-foreground/50"
+            "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-card transition-all duration-300",
+            getStatusColor()
           )}
         />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{friend.username}</p>
         <p className={cn(
-          "text-xs",
-          isOnline ? "text-success" : "text-muted-foreground"
+          "text-xs transition-colors duration-300",
+          isOnline ? "text-success" : isAway ? "text-warning" : "text-muted-foreground"
         )}>
-          {isOnline ? "En ligne" : "Hors ligne"}
+          {getStatusText()}
         </p>
       </div>
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
@@ -298,14 +312,14 @@ const FriendItem = ({
           variant="ghost"
           size="icon"
           className={cn(
-            "h-8 w-8 rounded-lg",
-            isOnline ? "hover:bg-success/20 hover:text-success" : "opacity-50"
+            "h-8 w-8 rounded-lg transition-all duration-200",
+            isActive ? "hover:bg-success/20 hover:text-success" : "opacity-50"
           )}
           onClick={(e) => {
             e.stopPropagation();
             onCall();
           }}
-          disabled={!isOnline}
+          disabled={!isActive}
         >
           <Phone className="h-4 w-4" />
         </Button>

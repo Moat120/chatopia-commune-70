@@ -126,19 +126,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Handle offline status on window close
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (user) {
-        navigator.sendBeacon(
-          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}`,
-          JSON.stringify({ status: "offline" })
-        );
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [user]);
+  // Presence is now handled by usePresence hook
 
   const signOut = async () => {
     if (user) {

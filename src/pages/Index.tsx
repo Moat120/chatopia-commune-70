@@ -14,12 +14,20 @@ import { Button } from "@/components/ui/button";
 import { MessageCircle, Users, Phone } from "lucide-react";
 import { RingtoneManager } from "@/hooks/useSound";
 import { cn } from "@/lib/utils";
+import { usePresence } from "@/hooks/usePresence";
+import { useCallCleanup } from "@/hooks/useCallCleanup";
 
 type ViewMode = "friends" | "groups";
 
 const Index = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Initialize presence system for automatic online/offline tracking
+  usePresence();
+  
+  // Initialize call cleanup for abandoned calls
+  useCallCleanup();
   const [viewMode, setViewMode] = useState<ViewMode>("friends");
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
