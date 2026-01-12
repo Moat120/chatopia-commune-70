@@ -8,6 +8,7 @@ import {
   getEchoCancellation, 
   getAutoGain 
 } from "@/components/SettingsDialog";
+import { usePushToTalk, getPushToTalkEnabled } from "@/hooks/usePushToTalk";
 
 export interface VoiceUser {
   odId: string;
@@ -88,6 +89,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const [connectedUsers, setConnectedUsers] = useState<VoiceUser[]>([]);
   const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>("connecting");
   const [audioLevel, setAudioLevel] = useState(0);
+  const [isPttActive, setIsPttActive] = useState(false);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -101,10 +103,48 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const isMutedRef = useRef(false);
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const isConnectedRef = useRef(false);
+  const pttEnabledRef = useRef(getPushToTalkEnabled());
 
   const currentUserId = user?.id || "";
   const currentUsername = profile?.username || "Utilisateur";
   const currentAvatarUrl = profile?.avatar_url || "";
+
+  // Push-to-Talk handlers
+  const handlePttPush = useCallback(() => {
+    if (!localStreamRef.current || !pttEnabledRef.current) return;
+    
+    const audioTrack = localStreamRef.current.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = true;
+      setIsPttActive(true);
+      isMutedRef.current = false;
+      setIsMuted(false);
+    }
+  }, []);
+
+  const handlePttRelease = useCallback(() => {
+    if (!localStreamRef.current || !pttEnabledRef.current) return;
+    
+    const audioTrack = localStreamRef.current.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = false;
+      setIsPttActive(false);
+      isMutedRef.current = true;
+      setIsMuted(true);
+    }
+  }, []);
+
+  // Use Push-to-Talk hook
+  const { isPushing, pttEnabled } = usePushToTalk({
+    onPush: handlePttPush,
+    onRelease: handlePttRelease,
+    isEnabled: isConnectedRef.current,
+  });
+
+  // Update PTT enabled ref
+  useEffect(() => {
+    pttEnabledRef.current = pttEnabled;
+  }, [pttEnabled]);
 
   // Optimized peer connection with low latency settings - BIDIRECTIONAL
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
@@ -458,7 +498,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         username: currentUsername,
         avatarUrl: currentAvatarUrl,
         isSpeaking: false,
-        isMuted: false,
+        isMuted: pttEnabled,
       });
 
       isConnectedRef.current = true;
@@ -466,13 +506,23 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       setIsConnecting(false);
       setConnectionQuality("excellent");
 
+      // If PTT is enabled, start muted
+      if (pttEnabled) {
+        const audioTrack = stream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = false;
+          isMutedRef.current = true;
+          setIsMuted(true);
+        }
+      }
+
       startVoiceDetection(stream);
     } catch (error: any) {
       console.error("[Voice] Join error:", error);
       await cleanup();
       onError?.(error.message || "Impossible d'accéder au microphone");
     }
-  }, [channelId, currentUserId, currentUsername, currentAvatarUrl, isConnecting, cleanup, handleSignal, initiateConnection, startVoiceDetection, onError]);
+  }, [channelId, currentUserId, currentUsername, currentAvatarUrl, isConnecting, cleanup, handleSignal, initiateConnection, startVoiceDetection, onError, pttEnabled]);
 
   const leave = useCallback(async () => {
     await cleanup();
@@ -512,6 +562,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     currentUserId,
     connectionQuality,
     audioLevel,
+    isPttActive,
+    pttEnabled,
     join,
     leave,
     toggleMute,

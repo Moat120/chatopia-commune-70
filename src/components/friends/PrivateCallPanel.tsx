@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Friend } from "@/hooks/useFriends";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { RingtoneManager } from "@/hooks/useSound";
@@ -15,6 +15,7 @@ import {
   getEchoCancellation, 
   getAutoGain 
 } from "@/components/SettingsDialog";
+import { usePushToTalk, getPushToTalkEnabled, getKeyDisplayName, getPushToTalkKey } from "@/hooks/usePushToTalk";
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
 
@@ -83,6 +84,7 @@ const PrivateCallPanel = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [friendSpeaking, setFriendSpeaking] = useState(false);
   const [qualityDialogOpen, setQualityDialogOpen] = useState(false);
+  const [isPttActive, setIsPttActive] = useState(false);
   
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -93,6 +95,42 @@ const PrivateCallPanel = ({
   const animationRef = useRef<number | null>(null);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
   const ringtoneManager = useRef<RingtoneManager>(new RingtoneManager());
+  const pttEnabledRef = useRef(getPushToTalkEnabled());
+
+  // PTT handlers
+  const handlePttPush = useCallback(() => {
+    if (!localStreamRef.current || !pttEnabledRef.current) return;
+    
+    const audioTrack = localStreamRef.current.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = true;
+      setIsPttActive(true);
+      setIsMuted(false);
+    }
+  }, []);
+
+  const handlePttRelease = useCallback(() => {
+    if (!localStreamRef.current || !pttEnabledRef.current) return;
+    
+    const audioTrack = localStreamRef.current.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = false;
+      setIsPttActive(false);
+      setIsMuted(true);
+    }
+  }, []);
+
+  // Use Push-to-Talk hook
+  const { isPushing, pttEnabled } = usePushToTalk({
+    onPush: handlePttPush,
+    onRelease: handlePttRelease,
+    isEnabled: callStatus === "active",
+  });
+
+  // Update PTT enabled ref
+  useEffect(() => {
+    pttEnabledRef.current = pttEnabled;
+  }, [pttEnabled]);
 
   // Play ringtone for incoming calls
   useEffect(() => {
@@ -439,6 +477,15 @@ const PrivateCallPanel = ({
       // Setup peer connection with stream - tracks already added with optimized settings
       const pc = setupPeerConnection(stream);
 
+      // If PTT is enabled, start muted
+      if (pttEnabled) {
+        const audioTrack = stream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = false;
+          setIsMuted(true);
+        }
+      }
+
       // Only caller creates offer
       if (!isIncoming) {
         const offer = await pc.createOffer({
@@ -637,13 +684,28 @@ const PrivateCallPanel = ({
           </div>
 
           {/* Status */}
-          <div>
+          <div className="space-y-2">
             <p className="text-muted-foreground">
               {callStatus === "ringing" && (isIncoming ? "Appel entrant..." : "Appel en cours...")}
               {callStatus === "connecting" && "Connexion..."}
               {callStatus === "active" && formatDuration(duration)}
               {callStatus === "ended" && "Appel terminé"}
             </p>
+            
+            {/* PTT Indicator */}
+            {callStatus === "active" && pttEnabled && (
+              <div className={cn(
+                "flex items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200",
+                isPttActive 
+                  ? "bg-success/20 text-success border border-success/30" 
+                  : "bg-secondary/50 text-muted-foreground border border-border/50"
+              )}>
+                <Radio className={cn("h-4 w-4", isPttActive && "animate-pulse")} />
+                <span>
+                  {isPttActive ? "Vous parlez..." : `Appuyez sur ${getKeyDisplayName(getPushToTalkKey())} pour parler`}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Controls */}
