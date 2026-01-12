@@ -243,8 +243,8 @@ export const useFriends = () => {
 
     loadData();
 
-    // Subscribe to realtime updates
-    const channel = supabase
+    // Subscribe to realtime updates for friendships
+    const friendshipsChannel = supabase
       .channel("friendships-changes")
       .on(
         "postgres_changes",
@@ -254,17 +254,29 @@ export const useFriends = () => {
           fetchPendingRequests();
         }
       )
+      .subscribe();
+
+    // Subscribe to profile status changes for real-time online/offline updates
+    const profilesChannel = supabase
+      .channel("profiles-status-changes")
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles" },
-        () => {
-          fetchFriends();
+        (payload) => {
+          // Update friend status in real-time without full refetch
+          const updatedProfile = payload.new as any;
+          setFriends(prev => prev.map(friend => 
+            friend.id === updatedProfile.id 
+              ? { ...friend, status: updatedProfile.status, avatar_url: updatedProfile.avatar_url, username: updatedProfile.username }
+              : friend
+          ));
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(friendshipsChannel);
+      supabase.removeChannel(profilesChannel);
     };
   }, [user?.id, fetchFriends, fetchPendingRequests]);
 

@@ -80,7 +80,11 @@ export const usePrivateChat = (friendId: string | null) => {
               (msg.sender_id === user.id && msg.receiver_id === friendId) ||
               (msg.sender_id === friendId && msg.receiver_id === user.id)
             ) {
-              setMessages((prev) => [...prev, msg]);
+              setMessages((prev) => {
+                // Avoid duplicates
+                if (prev.some(m => m.id === msg.id)) return prev;
+                return [...prev, msg];
+              });
               
               // Play notification sound for incoming messages (not our own)
               if (msg.sender_id === friendId && !isInitialLoad.current) {
@@ -95,6 +99,18 @@ export const usePrivateChat = (friendId: string | null) => {
                   .eq("id", msg.id);
               }
             }
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "private_messages",
+          },
+          (payload) => {
+            const deletedId = (payload.old as any).id;
+            setMessages(prev => prev.filter(m => m.id !== deletedId));
           }
         )
         .subscribe();

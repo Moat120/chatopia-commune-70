@@ -252,12 +252,13 @@ export const useGroups = () => {
     fetchGroups();
   }, [fetchGroups]);
 
-  // Realtime subscription
+  // Realtime subscription for group changes
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel("groups-changes")
+    // Subscribe to group membership changes
+    const membershipChannel = supabase
+      .channel("groups-membership-changes")
       .on(
         "postgres_changes",
         {
@@ -272,8 +273,42 @@ export const useGroups = () => {
       )
       .subscribe();
 
+    // Subscribe to group updates (name, avatar changes)
+    const groupsChannel = supabase
+      .channel("groups-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "groups",
+        },
+        (payload) => {
+          const updatedGroup = payload.new as Group;
+          setGroups(prev => prev.map(g => 
+            g.id === updatedGroup.id 
+              ? { ...g, name: updatedGroup.name, avatar_url: updatedGroup.avatar_url }
+              : g
+          ));
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "groups",
+        },
+        (payload) => {
+          const deletedGroupId = (payload.old as any).id;
+          setGroups(prev => prev.filter(g => g.id !== deletedGroupId));
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(membershipChannel);
+      supabase.removeChannel(groupsChannel);
     };
   }, [user, fetchGroups]);
 

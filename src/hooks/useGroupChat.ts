@@ -75,7 +75,7 @@ export const useGroupChat = (groupId: string | null) => {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription
+  // Realtime subscription for messages
   useEffect(() => {
     if (!groupId) return;
 
@@ -99,10 +99,27 @@ export const useGroupChat = (groupId: string | null) => {
             .eq("id", newMessage.sender_id)
             .single();
 
-          setMessages((prev) => [
-            ...prev,
-            { ...newMessage, sender: profile || undefined },
-          ]);
+          setMessages((prev) => {
+            // Avoid duplicates
+            if (prev.some(m => m.id === newMessage.id)) return prev;
+            return [
+              ...prev,
+              { ...newMessage, sender: profile || undefined },
+            ];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "group_messages",
+          filter: `group_id=eq.${groupId}`,
+        },
+        (payload) => {
+          const deletedId = (payload.old as any).id;
+          setMessages(prev => prev.filter(m => m.id !== deletedId));
         }
       )
       .subscribe();
