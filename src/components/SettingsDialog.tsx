@@ -1,5 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square } from "lucide-react";
+import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard } from "lucide-react";
+import { 
+  getPushToTalkEnabled, 
+  getPushToTalkKey, 
+  setPushToTalkEnabled, 
+  setPushToTalkKey,
+  getKeyDisplayName,
+  usePushToTalkKeyCapture
+} from "@/hooks/usePushToTalk";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -99,6 +107,10 @@ const SettingsDialog = () => {
   const [isTesting, setIsTesting] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioQuality, setAudioQuality] = useState<"excellent" | "good" | "poor">("excellent");
+  const [pttEnabled, setPttEnabledState] = useState(getPushToTalkEnabled());
+  const [pttKey, setPttKeyState] = useState(getPushToTalkKey());
+  
+  const { isCapturing, startCapture, cancelCapture } = usePushToTalkKeyCapture();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const testStreamRef = useRef<MediaStream | null>(null);
@@ -207,6 +219,18 @@ const SettingsDialog = () => {
     setAutoGainState(enabled);
     setAutoGain(enabled);
   };
+
+  const handlePttToggle = (enabled: boolean) => {
+    setPttEnabledState(enabled);
+    setPushToTalkEnabled(enabled);
+  };
+
+  // Update PTT key when captured
+  useEffect(() => {
+    if (!isCapturing) {
+      setPttKeyState(getPushToTalkKey());
+    }
+  }, [isCapturing]);
 
   const handleMicChange = (deviceId: string) => {
     setSelectedMic(deviceId);
@@ -577,6 +601,57 @@ const SettingsDialog = () => {
                   onCheckedChange={handleAutoGainToggle}
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Push-to-Talk Section */}
+          <div className="space-y-4">
+            <Label className="text-base font-semibold">Push-to-Talk</Label>
+            
+            <div className="space-y-3">
+              {/* PTT Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
+                <div className="flex items-center gap-3">
+                  <Radio className={`w-5 h-5 ${pttEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <div>
+                    <p className="text-sm font-medium">Activer Push-to-Talk</p>
+                    <p className="text-xs text-muted-foreground">
+                      Maintenez une touche pour parler
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={pttEnabled}
+                  onCheckedChange={handlePttToggle}
+                />
+              </div>
+
+              {/* PTT Key Selection */}
+              {pttEnabled && (
+                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 animate-fade-in">
+                  <div className="flex items-center gap-3">
+                    <Keyboard className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Touche Push-to-Talk</p>
+                      <p className="text-xs text-muted-foreground">
+                        Appuyez sur la touche souhaitée
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant={isCapturing ? "default" : "outline"}
+                    size="sm"
+                    onClick={isCapturing ? cancelCapture : startCapture}
+                    className="min-w-[100px]"
+                  >
+                    {isCapturing ? (
+                      <span className="animate-pulse">Appuyez...</span>
+                    ) : (
+                      getKeyDisplayName(pttKey)
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
