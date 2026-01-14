@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Friend } from "@/hooks/useFriends";
 import { usePrivateChat } from "@/hooks/usePrivateChat";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTypingIndicator } from "@/hooks/useTypingIndicator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,8 @@ const PrivateChatPanel = ({
 }: PrivateChatPanelProps) => {
   const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = usePrivateChat(friend.id);
+  const channelId = `private-${[user?.id, friend.id].sort().join("-")}`;
+  const { typingUsers, isTyping, startTyping, stopTyping } = useTypingIndicator(channelId);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -33,16 +36,24 @@ const PrivateChatPanel = ({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isTyping]);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, [friend.id]);
 
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+    if (e.target.value.trim()) {
+      startTyping();
+    }
+  }, [startTyping]);
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || sending) return;
 
+    stopTyping();
     setSending(true);
     await sendMessage(input);
     setInput("");
@@ -50,6 +61,8 @@ const PrivateChatPanel = ({
   };
 
   const isOnline = friend.status === "online";
+  const isAway = friend.status === "away";
+  const isActive = isOnline || isAway;
 
   return (
     <div className="flex-1 flex flex-col h-full">
@@ -65,19 +78,32 @@ const PrivateChatPanel = ({
             </Avatar>
             <span
               className={cn(
-                "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-card",
-                isOnline ? "bg-success" : "bg-muted-foreground/50"
+                "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-card transition-colors duration-300",
+                isOnline ? "bg-success" : isAway ? "bg-warning" : "bg-muted-foreground/50"
               )}
             />
           </div>
           <div>
             <h3 className="font-semibold text-lg">{friend.username}</h3>
-            <p className={cn(
-              "text-sm",
-              isOnline ? "text-success" : "text-muted-foreground"
-            )}>
-              {isOnline ? "En ligne" : "Hors ligne"}
-            </p>
+            <div className="h-5">
+              {isTyping ? (
+                <p className="text-sm text-primary animate-pulse flex items-center gap-1.5">
+                  <span className="flex gap-0.5">
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </span>
+                  est en train d'écrire...
+                </p>
+              ) : (
+                <p className={cn(
+                  "text-sm transition-colors duration-300",
+                  isOnline ? "text-success" : isAway ? "text-warning" : "text-muted-foreground"
+                )}>
+                  {isOnline ? "En ligne" : isAway ? "Absent" : "Hors ligne"}
+                </p>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -85,10 +111,10 @@ const PrivateChatPanel = ({
             variant="ghost"
             size="icon"
             onClick={onStartCall}
-            disabled={!isOnline}
+            disabled={!isActive}
             className={cn(
               "h-10 w-10 rounded-xl transition-all",
-              isOnline && "hover:bg-success/20 hover:text-success"
+              isActive && "hover:bg-success/20 hover:text-success"
             )}
           >
             <Phone className="h-5 w-5" />
@@ -191,13 +217,28 @@ const PrivateChatPanel = ({
         )}
       </ScrollArea>
 
+      {/* Typing indicator */}
+      {isTyping && (
+        <div className="px-6 py-2 border-t border-white/[0.04] glass-subtle">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex gap-0.5">
+              <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+            <span className="animate-fade-in">{friend.username} est en train d'écrire...</span>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <form onSubmit={handleSend} className="p-5 glass-solid border-t border-white/[0.06]">
         <div className="flex gap-3">
           <Input
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
+            onBlur={stopTyping}
             placeholder={`Message @${friend.username}`}
             className="flex-1 h-12 input-modern text-base"
             disabled={sending}
