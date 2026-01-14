@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFriends, Friend } from "@/hooks/useFriends";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -36,11 +37,19 @@ const FriendsSidebar = ({
 }: FriendsSidebarProps) => {
   const { profile, signOut } = useAuth();
   const { friends, pendingRequests, loading } = useFriends();
+  const { getUnreadCount, markAsRead, totalUnread } = useUnreadMessages();
   const { toast } = useToast();
   const [addFriendOpen, setAddFriendOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Mark messages as read when selecting a friend
+  useEffect(() => {
+    if (selectedFriend) {
+      markAsRead(selectedFriend.id);
+    }
+  }, [selectedFriend, markAsRead]);
 
   const copyFriendCode = () => {
     if (profile?.friend_code) {
@@ -166,6 +175,7 @@ const FriendsSidebar = ({
                       key={friend.id}
                       friend={friend}
                       isSelected={selectedFriend?.id === friend.id}
+                      unreadCount={getUnreadCount(friend.id)}
                       onSelect={() => onSelectFriend(friend)}
                       onMessage={() => onSelectFriend(friend)}
                       onCall={() => onStartCall(friend)}
@@ -186,6 +196,7 @@ const FriendsSidebar = ({
                       key={friend.id}
                       friend={friend}
                       isSelected={selectedFriend?.id === friend.id}
+                      unreadCount={getUnreadCount(friend.id)}
                       onSelect={() => onSelectFriend(friend)}
                       onMessage={() => onSelectFriend(friend)}
                       onCall={() => onStartCall(friend)}
@@ -235,6 +246,7 @@ const FriendsSidebar = ({
 interface FriendItemProps {
   friend: Friend;
   isSelected: boolean;
+  unreadCount?: number;
   onSelect: () => void;
   onMessage: () => void;
   onCall: () => void;
@@ -243,6 +255,7 @@ interface FriendItemProps {
 const FriendItem = ({
   friend,
   isSelected,
+  unreadCount = 0,
   onSelect,
   onMessage,
   onCall,
@@ -269,7 +282,8 @@ const FriendItem = ({
         "group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-200",
         isSelected
           ? "bg-primary/15 border border-primary/20"
-          : "hover:bg-white/[0.06] border border-transparent"
+          : "hover:bg-white/[0.06] border border-transparent",
+        unreadCount > 0 && !isSelected && "bg-primary/5"
       )}
       onClick={onSelect}
     >
@@ -288,7 +302,21 @@ const FriendItem = ({
         />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{friend.username}</p>
+        <div className="flex items-center gap-2">
+          <p className={cn(
+            "text-sm font-medium truncate",
+            unreadCount > 0 && "font-semibold"
+          )}>
+            {friend.username}
+          </p>
+          {unreadCount > 0 && (
+            <Badge 
+              className="h-5 min-w-5 px-1.5 text-xs font-semibold bg-primary text-primary-foreground animate-scale-in"
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </Badge>
+          )}
+        </div>
         <p className={cn(
           "text-xs transition-colors duration-300",
           isOnline ? "text-success" : isAway ? "text-warning" : "text-muted-foreground"
