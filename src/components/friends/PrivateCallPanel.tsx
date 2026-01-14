@@ -3,9 +3,10 @@ import { Friend } from "@/hooks/useFriends";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
+import { useSimpleLatency } from "@/hooks/useConnectionLatency";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff, Radio } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff, Radio, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { RingtoneManager } from "@/hooks/useSound";
@@ -18,6 +19,7 @@ import {
 import { usePushToTalk, getPushToTalkEnabled, getKeyDisplayName, getPushToTalkKey } from "@/hooks/usePushToTalk";
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
+import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
 
 interface PrivateCallPanelProps {
   friend: Friend;
@@ -602,12 +604,18 @@ const PrivateCallPanel = ({
   };
 
   const hasScreenShare = activeScreens.length > 0;
+  const { ping, quality: latencyQuality } = useSimpleLatency();
+  
+  // Map latency quality to connection quality type
+  const connectionQuality = callStatus === 'active' 
+    ? (latencyQuality === 'fair' ? 'good' : latencyQuality === 'excellent' ? 'excellent' : latencyQuality === 'good' ? 'good' : 'poor') as 'excellent' | 'good' | 'poor' | 'connecting'
+    : 'connecting' as const;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex">
+    <div className="fixed inset-0 z-50 bg-background/98 backdrop-blur-2xl flex">
       {/* Screen Share Area */}
       {hasScreenShare && (
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 bg-black/20">
           <MultiScreenShareView
             screens={activeScreens}
             onStopLocal={stopScreenShare}
@@ -617,69 +625,86 @@ const PrivateCallPanel = ({
 
       {/* Call UI */}
       <div className={cn(
-        "flex flex-col items-center justify-center",
-        hasScreenShare ? "w-96 border-l border-border/50 p-8 shrink-0" : "flex-1"
+        "flex flex-col items-center justify-center relative",
+        hasScreenShare ? "w-[420px] border-l border-white/[0.05] p-8 shrink-0" : "flex-1"
       )}>
-        <div className="text-center space-y-8">
-          {/* Both Avatars - side by side */}
-          <div className="flex items-center justify-center gap-8">
-            {/* My Avatar */}
-            <div className="relative">
-              <div
-                className={cn(
-                  "absolute inset-0 rounded-full transition-all duration-300",
-                  callStatus === "active" && isSpeaking && "animate-speaking-ring"
-                )}
-                style={{
-                  background: isSpeaking
-                    ? "radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)"
-                    : "transparent",
-                  transform: isSpeaking ? "scale(1.3)" : "scale(1)",
-                }}
+        {/* Background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] via-transparent to-transparent pointer-events-none" />
+        <div className="relative text-center space-y-8">
+          {/* Connection quality indicator */}
+          {callStatus === "active" && (
+            <div className="flex justify-center animate-fade-in">
+              <ConnectionQualityIndicator 
+                quality={connectionQuality} 
+                ping={ping}
+                showPing={true}
               />
+            </div>
+          )}
+
+          {/* Both Avatars - side by side */}
+          <div className="flex items-center justify-center gap-10">
+            {/* My Avatar */}
+            <div className="relative flex flex-col items-center">
+              {/* Speaking glow */}
+              {callStatus === "active" && isSpeaking && (
+                <>
+                  <div className="absolute inset-0 rounded-full animate-[speaking-ring_1.5s_ease-out_infinite]"
+                    style={{ background: 'radial-gradient(circle, hsl(var(--success) / 0.3), transparent 70%)', transform: 'scale(1.5)' }} />
+                  <div className="absolute inset-0 rounded-full animate-[speaking-ring_1.5s_ease-out_infinite_0.5s]"
+                    style={{ background: 'radial-gradient(circle, hsl(var(--success) / 0.15), transparent 70%)', transform: 'scale(1.8)' }} />
+                </>
+              )}
               <Avatar className={cn(
-                "ring-4",
-                isSpeaking ? "ring-success/50" : "ring-primary/20",
+                "transition-all duration-300 ring-[3px] ring-offset-2 ring-offset-background shadow-2xl",
+                isSpeaking ? "ring-emerald-500 shadow-emerald-500/20" : "ring-white/10",
                 hasScreenShare ? "h-20 w-20" : "h-28 w-28"
               )}>
                 <AvatarImage src={profile?.avatar_url || ""} />
-                <AvatarFallback className={cn("bg-muted", hasScreenShare ? "text-2xl" : "text-3xl")}>
+                <AvatarFallback className={cn("bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold", hasScreenShare ? "text-2xl" : "text-3xl")}>
                   {profile?.username?.[0]?.toUpperCase() || "?"}
                 </AvatarFallback>
               </Avatar>
-              <p className="text-xs text-muted-foreground mt-2 text-center">Toi</p>
+              <p className="text-xs text-muted-foreground/60 mt-3 font-medium">Vous</p>
               {isMuted && (
-                <div className="absolute -bottom-1 -right-1 bg-destructive rounded-full p-1">
-                  <MicOff className="h-3 w-3 text-destructive-foreground" />
+                <div className="absolute -bottom-1 -right-1 bg-gradient-to-br from-rose-500 to-rose-600 rounded-full p-1.5 ring-2 ring-background shadow-lg">
+                  <MicOff className="h-3 w-3 text-white" />
+                </div>
+              )}
+              {isSpeaking && !isMuted && (
+                <div className="absolute -bottom-1 -right-1 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full p-1.5 ring-2 ring-background shadow-lg animate-pulse">
+                  <Volume2 className="h-3 w-3 text-white" />
                 </div>
               )}
             </div>
 
             {/* Friend's Avatar */}
-            <div className="relative">
-              <div
-                className={cn(
-                  "absolute inset-0 rounded-full transition-all duration-300",
-                  callStatus === "active" && friendSpeaking && "animate-speaking-ring"
-                )}
-                style={{
-                  background: friendSpeaking
-                    ? "radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)"
-                    : "transparent",
-                  transform: friendSpeaking ? "scale(1.3)" : "scale(1)",
-                }}
-              />
+            <div className="relative flex flex-col items-center">
+              {/* Speaking glow */}
+              {callStatus === "active" && friendSpeaking && (
+                <>
+                  <div className="absolute inset-0 rounded-full animate-[speaking-ring_1.5s_ease-out_infinite]"
+                    style={{ background: 'radial-gradient(circle, hsl(var(--success) / 0.3), transparent 70%)', transform: 'scale(1.5)' }} />
+                  <div className="absolute inset-0 rounded-full animate-[speaking-ring_1.5s_ease-out_infinite_0.5s]"
+                    style={{ background: 'radial-gradient(circle, hsl(var(--success) / 0.15), transparent 70%)', transform: 'scale(1.8)' }} />
+                </>
+              )}
               <Avatar className={cn(
-                "ring-4",
-                friendSpeaking ? "ring-success/50" : "ring-primary/20",
+                "transition-all duration-300 ring-[3px] ring-offset-2 ring-offset-background shadow-2xl",
+                friendSpeaking ? "ring-emerald-500 shadow-emerald-500/20" : "ring-white/10",
                 hasScreenShare ? "h-20 w-20" : "h-28 w-28"
               )}>
                 <AvatarImage src={friend.avatar_url || ""} />
-                <AvatarFallback className={cn("bg-muted", hasScreenShare ? "text-2xl" : "text-3xl")}>
+                <AvatarFallback className={cn("bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold", hasScreenShare ? "text-2xl" : "text-3xl")}>
                   {friend.username[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <p className="text-xs text-muted-foreground mt-2 text-center">{friend.username}</p>
+              <p className="text-xs text-muted-foreground/60 mt-3 font-medium">{friend.username}</p>
+              {friendSpeaking && (
+                <div className="absolute -bottom-1 -right-1 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full p-1.5 ring-2 ring-background shadow-lg animate-pulse">
+                  <Volume2 className="h-3 w-3 text-white" />
+                </div>
+              )}
             </div>
           </div>
 

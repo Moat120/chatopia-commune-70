@@ -1,5 +1,5 @@
+import { Phone, PhoneOff, Mic, MicOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, PhoneOff, Phone, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface VoiceControlsProps {
@@ -26,13 +26,21 @@ const VoiceControls = ({
         disabled={isConnecting}
         size="lg"
         className={cn(
-          "gap-3 px-8 py-6 rounded-2xl font-medium",
-          "bg-success hover:bg-success/90 text-success-foreground",
-          "transition-all duration-300",
-          "hover:shadow-lg hover:shadow-success/20",
-          isConnecting && "opacity-70"
+          "relative overflow-hidden group",
+          "gap-3 px-8 py-7 rounded-2xl font-semibold text-base",
+          "bg-gradient-to-r from-emerald-500 to-emerald-600",
+          "hover:from-emerald-400 hover:to-emerald-500",
+          "text-white shadow-xl shadow-emerald-500/25",
+          "transition-all duration-500",
+          "hover:shadow-2xl hover:shadow-emerald-500/40 hover:-translate-y-0.5",
+          "disabled:opacity-60 disabled:hover:translate-y-0"
         )}
       >
+        {/* Shimmer effect */}
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+        </div>
+        
         {isConnecting ? (
           <>
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -40,7 +48,12 @@ const VoiceControls = ({
           </>
         ) : (
           <>
-            <Phone className="h-5 w-5" />
+            <div className="relative">
+              <Phone className="h-5 w-5" />
+              <div className="absolute inset-0 animate-ping opacity-30">
+                <Phone className="h-5 w-5" />
+              </div>
+            </div>
             <span>Rejoindre le vocal</span>
           </>
         )}
@@ -49,42 +62,78 @@ const VoiceControls = ({
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-4">
+      {/* Mute button */}
       <Button
         onClick={onToggleMute}
         size="lg"
         className={cn(
-          "gap-2 px-6 py-6 rounded-2xl font-medium transition-all duration-300",
+          "relative group h-16 w-16 rounded-2xl p-0",
+          "transition-all duration-300 ease-out",
+          "hover:-translate-y-0.5 hover:shadow-xl",
           isMuted 
-            ? "bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20" 
-            : "bg-secondary hover:bg-secondary/80 text-foreground border border-border/50"
+            ? cn(
+                "bg-gradient-to-br from-rose-500/20 to-rose-600/10",
+                "border-2 border-rose-500/30",
+                "text-rose-400 hover:text-rose-300",
+                "hover:from-rose-500/30 hover:to-rose-600/20",
+                "hover:shadow-rose-500/20"
+              )
+            : cn(
+                "bg-gradient-to-br from-secondary/80 to-secondary/40",
+                "border-2 border-white/[0.08]",
+                "text-foreground hover:text-foreground",
+                "hover:from-secondary hover:to-secondary/60",
+                "hover:border-white/[0.15]"
+              )
         )}
       >
-        {isMuted ? (
-          <>
-            <MicOff className="h-5 w-5" />
-            <span>Réactiver</span>
-          </>
-        ) : (
-          <>
-            <Mic className="h-5 w-5" />
-            <span>Couper</span>
-          </>
-        )}
+        <div className="relative">
+          {isMuted ? (
+            <MicOff className="h-6 w-6" />
+          ) : (
+            <Mic className="h-6 w-6" />
+          )}
+        </div>
+        
+        {/* Tooltip */}
+        <span className={cn(
+          "absolute -bottom-10 left-1/2 -translate-x-1/2",
+          "px-3 py-1.5 rounded-lg text-xs font-medium",
+          "bg-popover/95 backdrop-blur-xl border border-border/50",
+          "opacity-0 group-hover:opacity-100 transition-all duration-200",
+          "pointer-events-none whitespace-nowrap shadow-xl"
+        )}>
+          {isMuted ? "Réactiver le micro" : "Couper le micro"}
+        </span>
       </Button>
 
+      {/* Leave button */}
       <Button
         onClick={onLeave}
         size="lg"
         className={cn(
-          "gap-2 px-6 py-6 rounded-2xl font-medium",
-          "bg-destructive hover:bg-destructive/90",
-          "transition-all duration-300",
-          "hover:shadow-lg hover:shadow-destructive/20"
+          "relative group h-16 w-16 rounded-2xl p-0",
+          "bg-gradient-to-br from-rose-500 to-rose-600",
+          "hover:from-rose-400 hover:to-rose-500",
+          "text-white",
+          "shadow-xl shadow-rose-500/25",
+          "transition-all duration-300 ease-out",
+          "hover:shadow-2xl hover:shadow-rose-500/40 hover:-translate-y-0.5"
         )}
       >
-        <PhoneOff className="h-5 w-5" />
-        <span>Quitter</span>
+        <PhoneOff className="h-6 w-6" />
+        
+        {/* Tooltip */}
+        <span className={cn(
+          "absolute -bottom-10 left-1/2 -translate-x-1/2",
+          "px-3 py-1.5 rounded-lg text-xs font-medium",
+          "bg-popover/95 backdrop-blur-xl border border-border/50",
+          "opacity-0 group-hover:opacity-100 transition-all duration-200",
+          "pointer-events-none whitespace-nowrap shadow-xl"
+        )}>
+          Quitter l'appel
+        </span>
       </Button>
     </div>
   );

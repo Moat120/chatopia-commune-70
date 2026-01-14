@@ -1,10 +1,11 @@
-import { Volume2, Users } from "lucide-react";
+import { Volume2, Users, Zap } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
-import VoiceUserCard from "./voice/VoiceUserCard";
-import VoiceControls from "./voice/VoiceControls";
-import ConnectionQualityIndicator from "./voice/ConnectionQualityIndicator";
-import { cn } from "@/lib/utils";
+import { useSimpleLatency } from "@/hooks/useConnectionLatency";
+import VoiceUserCard from "@/components/voice/VoiceUserCard";
+import VoiceControls from "@/components/voice/VoiceControls";
+import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
 
 interface VoiceChannelProps {
   channelId: string;
@@ -13,6 +14,7 @@ interface VoiceChannelProps {
 
 const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   const { toast } = useToast();
+  const { ping } = useSimpleLatency();
 
   const {
     isConnected,
@@ -53,55 +55,89 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 noise">
-      <div className="w-full max-w-2xl space-y-8 animate-fade-in-up">
+    <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden">
+      {/* Subtle background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] via-transparent to-transparent pointer-events-none" />
+      
+      {/* Mesh pattern overlay */}
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
+        <div 
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.03) 0%, transparent 50%)`,
+          }}
+        />
+      </div>
+
+      <div className="relative w-full max-w-3xl space-y-10 animate-fade-in-up">
         {/* Header */}
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-6">
+          {/* Icon with glow */}
           <div className={cn(
-            "mx-auto w-20 h-20 rounded-3xl flex items-center justify-center",
-            "bg-gradient-to-br from-primary/20 to-primary/5",
-            "border border-primary/20 transition-all duration-500",
-            isConnected && "glow-primary"
+            "mx-auto w-24 h-24 rounded-[2rem] flex items-center justify-center",
+            "bg-gradient-to-br from-primary/20 via-primary/10 to-transparent",
+            "border border-primary/20 backdrop-blur-xl",
+            "transition-all duration-700 ease-out",
+            "shadow-xl shadow-primary/10",
+            isConnected && "shadow-2xl shadow-primary/20 scale-105"
           )}>
             <Volume2 className={cn(
-              "h-10 w-10 text-primary transition-all duration-300",
-              isConnected && "float"
+              "h-12 w-12 text-primary transition-all duration-500",
+              isConnected && "animate-pulse"
             )} />
+            
+            {/* Decorative rings */}
+            {isConnected && (
+              <>
+                <div className="absolute inset-0 rounded-[2rem] border border-primary/10 animate-ping opacity-30" />
+                <div className="absolute inset-2 rounded-[1.5rem] border border-primary/5 animate-ping opacity-20" style={{ animationDelay: '0.5s' }} />
+              </>
+            )}
           </div>
           
-          <div className="space-y-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{channelName}</h2>
-            <p className="text-sm text-muted-foreground">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              {channelName}
+            </h2>
+            <p className="text-sm text-muted-foreground/70">
               {isConnected 
-                ? "Connecté au canal vocal" 
-                : "Cliquez pour rejoindre"}
+                ? "Vous êtes connecté au canal vocal" 
+                : "Cliquez pour rejoindre la conversation"}
             </p>
           </div>
 
-          {/* Connection quality */}
+          {/* Connection quality & ping */}
           {isConnected && (
-            <div className="flex justify-center animate-scale-in">
-              <ConnectionQualityIndicator quality={connectionQuality} />
+            <div className="flex justify-center gap-4 animate-scale-in">
+              <ConnectionQualityIndicator 
+                quality={connectionQuality} 
+                ping={ping}
+                showPing={true}
+              />
             </div>
           )}
         </div>
 
         {/* Connected Users */}
         {isConnected && (
-          <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Users className="h-4 w-4" />
-              <span>
-                {connectedUsers.length} {connectedUsers.length === 1 ? 'participant' : 'participants'}
-              </span>
+          <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
+            {/* Participants count */}
+            <div className="flex items-center justify-center gap-3">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/30 backdrop-blur-xl border border-white/[0.05]">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  {connectedUsers.length} {connectedUsers.length === 1 ? 'participant' : 'participants'}
+                </span>
+              </div>
             </div>
             
+            {/* User cards grid */}
             <div className="flex flex-wrap justify-center gap-4">
               {connectedUsers.map((user, index) => (
                 <div 
                   key={user.odId}
                   className="animate-scale-in"
-                  style={{ animationDelay: `${index * 0.05}s` }}
+                  style={{ animationDelay: `${index * 0.08}s` }}
                 >
                   <VoiceUserCard
                     username={user.username}
@@ -118,7 +154,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
         )}
 
         {/* Controls */}
-        <div className="flex justify-center pt-4">
+        <div className="flex justify-center pt-6">
           <VoiceControls
             isConnected={isConnected}
             isConnecting={isConnecting}
@@ -129,12 +165,15 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
           />
         </div>
 
-        {/* Info */}
-        <p className="text-xs text-muted-foreground/60 text-center">
-          {isConnected 
-            ? "Votre avatar s'anime lorsque vous parlez" 
-            : "Détection vocale automatique activée"}
-        </p>
+        {/* Info text */}
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/40">
+          <Zap className="h-3 w-3" />
+          <span>
+            {isConnected 
+              ? "Votre avatar s'anime quand vous parlez" 
+              : "Détection vocale automatique • Push-to-Talk disponible"}
+          </span>
+        </div>
       </div>
     </div>
   );
