@@ -4,13 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Session } from "@supabase/supabase-js";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
+import { playClickSound } from "@/hooks/useSound";
 
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [googleLoading, setGoogleLoading] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -33,6 +39,7 @@ const Auth = () => {
   }, [navigate]);
 
   const handleGoogleSignIn = async () => {
+    playClickSound();
     setGoogleLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -54,44 +61,95 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center mesh-gradient p-4 noise overflow-hidden">
-      {/* Background decorations */}
+    <div className="min-h-screen flex items-center justify-center aurora-bg p-4 overflow-hidden relative">
+      {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-primary/10 rounded-full blur-[120px]" />
-        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-primary/5 rounded-full blur-[120px]" />
+        {/* Primary glow */}
+        <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-primary/15 rounded-full blur-[150px] animate-float-slow" />
+        
+        {/* Cyan accent */}
+        <div 
+          className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[130px]"
+          style={{ background: 'hsl(var(--accent-cyan) / 0.1)' }}
+        />
+        
+        {/* Rose accent */}
+        <div 
+          className="absolute top-1/2 right-1/3 w-[400px] h-[400px] rounded-full blur-[120px] float-subtle"
+          style={{ background: 'hsl(var(--accent-rose) / 0.08)', animationDelay: '2s' }}
+        />
+
+        {/* Floating particles */}
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-2 h-2 rounded-full bg-primary/30 float-subtle"
+            style={{
+              left: `${15 + i * 15}%`,
+              top: `${20 + (i % 3) * 25}%`,
+              animationDelay: `${i * 0.8}s`,
+              animationDuration: `${5 + i}s`,
+            }}
+          />
+        ))}
       </div>
 
-      <div className="w-full max-w-md relative z-10 animate-fade-in-up">
-        {/* Logo/Brand */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center mb-6">
-            <div className="relative">
-              <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary/40 via-primary/20 to-transparent border border-white/10 flex items-center justify-center shadow-2xl glow-primary float-subtle">
-                <span className="text-5xl font-bold gradient-text">V</span>
+      {/* Noise texture */}
+      <div className="absolute inset-0 noise" />
+
+      {/* Main content */}
+      <div 
+        className={`w-full max-w-[420px] relative z-10 transition-all duration-1000 ${
+          mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+        }`}
+      >
+        {/* Logo & Brand */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center mb-8">
+            <div className="relative group">
+              {/* Outer glow ring */}
+              <div className="absolute -inset-4 bg-primary/20 rounded-[2rem] blur-2xl group-hover:bg-primary/30 transition-all duration-700" />
+              
+              {/* Holographic effect */}
+              <div className="absolute -inset-1 rounded-[1.75rem] holographic opacity-50" />
+              
+              {/* Main logo container */}
+              <div className="relative w-28 h-28 rounded-[1.5rem] bg-gradient-to-br from-primary/30 via-primary/15 to-transparent border border-white/10 flex items-center justify-center shadow-2xl glow-primary float-subtle backdrop-blur-xl overflow-hidden">
+                {/* Inner shine */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent" />
+                
+                {/* Logo text */}
+                <span className="text-6xl font-bold gradient-text relative z-10">V</span>
+                
+                {/* Sparkle */}
+                <Sparkles className="absolute top-3 right-3 w-4 h-4 text-primary/60 animate-pulse" />
               </div>
-              <div className="absolute -inset-4 bg-primary/20 rounded-[2rem] blur-2xl -z-10" />
             </div>
           </div>
-          <h1 className="text-4xl font-bold tracking-tight mb-3">
+          
+          <h1 className="text-5xl font-bold tracking-tight mb-4 gradient-text">
             Bienvenue
           </h1>
-          <p className="text-muted-foreground text-lg">
+          <p className="text-muted-foreground text-lg font-light">
             Connecte-toi pour retrouver tes amis
           </p>
         </div>
 
         {/* Auth Card */}
-        <div className="card-modern p-8 border-gradient">
+        <div className="glass-premium rounded-3xl p-8 shimmer-border">
           <Button
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
-            className="w-full h-14 rounded-xl font-medium text-base bg-foreground text-background hover:bg-foreground/90 transition-all duration-300 hover:shadow-[0_8px_30px_rgba(255,255,255,0.1)] hover:scale-[1.02] active:scale-[0.98] btn-modern"
+            className="w-full h-16 rounded-2xl font-semibold text-base bg-foreground text-background hover:bg-foreground/90 transition-all duration-400 hover:shadow-[0_8px_40px_rgba(255,255,255,0.15)] hover:scale-[1.02] active:scale-[0.98] group relative overflow-hidden"
           >
+            {/* Shine effect on hover */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700" />
+            
             {googleLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <>
-                <svg className="h-5 w-5 mr-3" viewBox="0 0 24 24">
+                <svg className="h-5 w-5 mr-3 relative z-10" viewBox="0 0 24 24">
                   <path
                     fill="currentColor"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -109,23 +167,23 @@ const Auth = () => {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                Continuer avec Google
+                <span className="relative z-10">Continuer avec Google</span>
               </>
             )}
           </Button>
 
-          <div className="mt-8 pt-6 border-t border-white/[0.08]">
-            <p className="text-center text-sm text-muted-foreground/60">
+          <div className="mt-8 pt-6 border-t border-white/[0.06]">
+            <p className="text-center text-sm text-muted-foreground/50 font-light">
               En continuant, tu acceptes nos conditions d'utilisation
             </p>
           </div>
         </div>
 
         {/* Bottom decoration */}
-        <div className="mt-8 flex justify-center gap-1">
-          <div className="w-8 h-1 rounded-full bg-primary/40" />
-          <div className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-          <div className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+        <div className="mt-10 flex justify-center items-center gap-2">
+          <div className="w-12 h-1 rounded-full bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="w-2 h-2 rounded-full bg-primary/30 animate-pulse" />
+          <div className="w-12 h-1 rounded-full bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         </div>
       </div>
     </div>

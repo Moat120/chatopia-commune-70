@@ -46,6 +46,10 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          cyan: "hsl(var(--accent-cyan))",
+          rose: "hsl(var(--accent-rose))",
+          amber: "hsl(var(--accent-amber))",
+          emerald: "hsl(var(--accent-emerald))",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
@@ -75,6 +79,12 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      height: {
+        '13': '3.25rem',
+      },
+      width: {
+        '13': '3.25rem',
       },
       keyframes: {
         "accordion-down": {
@@ -115,6 +125,14 @@ export default {
             opacity: "0"
           },
         },
+        "float-subtle": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+        "float-slow": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-6px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -124,9 +142,16 @@ export default {
         "scale-in": "scale-in 0.2s ease-out",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         "speaking-ring": "speaking-ring 1s ease-out infinite",
+        "float-subtle": "float-subtle 5s ease-in-out infinite",
+        "float-slow": "float-slow 8s ease-in-out infinite",
       },
       backdropBlur: {
         xs: "2px",
+      },
+      transitionDuration: {
+        '400': '400ms',
+        '600': '600ms',
+        '800': '800ms',
       },
     },
   },

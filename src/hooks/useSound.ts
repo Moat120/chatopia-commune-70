@@ -1,121 +1,138 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback } from "react";
 
 const NOTIFICATION_SOUND = "/sounds/notification.wav";
 
-export const useSound = () => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+// Create audio context for better sound control
+let audioContext: AudioContext | null = null;
 
+const getAudioContext = () => {
+  if (!audioContext) {
+    audioContext = new AudioContext();
+  }
+  return audioContext;
+};
+
+// Play sound with custom settings
+const playSound = (options: {
+  volume?: number;
+  playbackRate?: number;
+  detune?: number;
+}) => {
+  const { volume = 0.5, playbackRate = 1, detune = 0 } = options;
+  
+  try {
+    const audio = new Audio(NOTIFICATION_SOUND);
+    audio.volume = Math.min(Math.max(volume, 0), 1);
+    audio.playbackRate = playbackRate;
+    audio.play().catch((e) => console.log("[Sound] Play error:", e));
+  } catch (error) {
+    console.log("[Sound] Error:", error);
+  }
+};
+
+export const useSound = () => {
   const playNotification = useCallback(() => {
-    try {
-      const audio = new Audio(NOTIFICATION_SOUND);
-      audio.volume = 0.5;
-      audio.play().catch((e) => console.log("[Sound] Play error:", e));
-    } catch (error) {
-      console.log("[Sound] Error:", error);
-    }
+    playSound({ volume: 0.5, playbackRate: 1.0 });
   }, []);
 
   const playClick = useCallback(() => {
-    try {
-      const audio = new Audio(NOTIFICATION_SOUND);
-      audio.volume = 0.3;
-      audio.playbackRate = 1.5;
-      audio.play().catch((e) => console.log("[Sound] Play error:", e));
-    } catch (error) {
-      console.log("[Sound] Error:", error);
-    }
+    playSound({ volume: 0.25, playbackRate: 1.6 });
   }, []);
 
   const playJoin = useCallback(() => {
-    try {
-      const audio = new Audio(NOTIFICATION_SOUND);
-      audio.volume = 0.4;
-      audio.playbackRate = 1.2;
-      audio.play().catch((e) => console.log("[Sound] Play error:", e));
-    } catch (error) {
-      console.log("[Sound] Error:", error);
-    }
+    playSound({ volume: 0.4, playbackRate: 1.25 });
   }, []);
 
   const playLeave = useCallback(() => {
-    try {
-      const audio = new Audio(NOTIFICATION_SOUND);
-      audio.volume = 0.4;
-      audio.playbackRate = 0.8;
-      audio.play().catch((e) => console.log("[Sound] Play error:", e));
-    } catch (error) {
-      console.log("[Sound] Error:", error);
-    }
+    playSound({ volume: 0.35, playbackRate: 0.75 });
   }, []);
 
   const playRingtone = useCallback(() => {
-    try {
-      const audio = new Audio(NOTIFICATION_SOUND);
-      audio.volume = 0.7;
-      audio.playbackRate = 1.0;
-      audio.play().catch((e) => console.log("[Sound] Play error:", e));
-    } catch (error) {
-      console.log("[Sound] Error:", error);
-    }
+    playSound({ volume: 0.7, playbackRate: 1.0 });
   }, []);
 
-  return { playNotification, playClick, playJoin, playLeave, playRingtone };
+  const playMessageSent = useCallback(() => {
+    playSound({ volume: 0.2, playbackRate: 1.8 });
+  }, []);
+
+  const playMessageReceived = useCallback(() => {
+    playSound({ volume: 0.35, playbackRate: 1.4 });
+  }, []);
+
+  const playMute = useCallback(() => {
+    playSound({ volume: 0.25, playbackRate: 0.9 });
+  }, []);
+
+  const playUnmute = useCallback(() => {
+    playSound({ volume: 0.3, playbackRate: 1.3 });
+  }, []);
+
+  const playPttOn = useCallback(() => {
+    playSound({ volume: 0.3, playbackRate: 1.5 });
+  }, []);
+
+  const playPttOff = useCallback(() => {
+    playSound({ volume: 0.25, playbackRate: 1.1 });
+  }, []);
+
+  return { 
+    playNotification, 
+    playClick, 
+    playJoin, 
+    playLeave, 
+    playRingtone,
+    playMessageSent,
+    playMessageReceived,
+    playMute,
+    playUnmute,
+    playPttOn,
+    playPttOff
+  };
 };
 
 // Standalone functions for use outside of React components
 export const playNotificationSound = () => {
-  try {
-    const audio = new Audio(NOTIFICATION_SOUND);
-    audio.volume = 0.5;
-    audio.play().catch((e) => console.log("[Sound] Play error:", e));
-  } catch (error) {
-    console.log("[Sound] Error:", error);
-  }
+  playSound({ volume: 0.5, playbackRate: 1.0 });
 };
 
 export const playClickSound = () => {
-  try {
-    const audio = new Audio(NOTIFICATION_SOUND);
-    audio.volume = 0.3;
-    audio.playbackRate = 1.5;
-    audio.play().catch((e) => console.log("[Sound] Play error:", e));
-  } catch (error) {
-    console.log("[Sound] Error:", error);
-  }
+  playSound({ volume: 0.2, playbackRate: 1.7 });
 };
 
 export const playJoinSound = () => {
-  try {
-    const audio = new Audio(NOTIFICATION_SOUND);
-    audio.volume = 0.4;
-    audio.playbackRate = 1.2;
-    audio.play().catch((e) => console.log("[Sound] Play error:", e));
-  } catch (error) {
-    console.log("[Sound] Error:", error);
-  }
+  playSound({ volume: 0.4, playbackRate: 1.25 });
 };
 
 export const playLeaveSound = () => {
-  try {
-    const audio = new Audio(NOTIFICATION_SOUND);
-    audio.volume = 0.4;
-    audio.playbackRate = 0.8;
-    audio.play().catch((e) => console.log("[Sound] Play error:", e));
-  } catch (error) {
-    console.log("[Sound] Error:", error);
-  }
+  playSound({ volume: 0.35, playbackRate: 0.75 });
 };
 
-// Ringtone with higher volume for incoming calls
 export const playRingtoneSound = () => {
-  try {
-    const audio = new Audio(NOTIFICATION_SOUND);
-    audio.volume = 0.8;
-    audio.playbackRate = 1.0;
-    audio.play().catch((e) => console.log("[Sound] Play error:", e));
-  } catch (error) {
-    console.log("[Sound] Error:", error);
-  }
+  playSound({ volume: 0.75, playbackRate: 1.0 });
+};
+
+export const playMessageSentSound = () => {
+  playSound({ volume: 0.2, playbackRate: 1.8 });
+};
+
+export const playMessageReceivedSound = () => {
+  playSound({ volume: 0.35, playbackRate: 1.4 });
+};
+
+export const playMuteSound = () => {
+  playSound({ volume: 0.25, playbackRate: 0.85 });
+};
+
+export const playUnmuteSound = () => {
+  playSound({ volume: 0.3, playbackRate: 1.35 });
+};
+
+export const playPttOnSound = () => {
+  playSound({ volume: 0.3, playbackRate: 1.5 });
+};
+
+export const playPttOffSound = () => {
+  playSound({ volume: 0.25, playbackRate: 1.0 });
 };
 
 // Ringtone manager for continuous ringing
@@ -123,7 +140,7 @@ export class RingtoneManager {
   private intervalId: NodeJS.Timeout | null = null;
   private isPlaying = false;
 
-  start(intervalMs: number = 2000) {
+  start(intervalMs: number = 2500) {
     if (this.isPlaying) return;
     
     this.isPlaying = true;
