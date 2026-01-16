@@ -16,6 +16,7 @@ import {
   Bell,
   LogOut,
   Search,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AddFriendDialog from "./AddFriendDialog";
@@ -23,6 +24,7 @@ import FriendRequestsDialog from "./FriendRequestsDialog";
 import SettingsDialog from "@/components/SettingsDialog";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { playClickSound } from "@/hooks/useSound";
 
 interface FriendsSidebarProps {
   selectedFriend: Friend | null;
@@ -44,7 +46,6 @@ const FriendsSidebar = ({
   const [copied, setCopied] = useState(false);
   const [search, setSearch] = useState("");
 
-  // Mark messages as read when selecting a friend
   useEffect(() => {
     if (selectedFriend) {
       markAsRead(selectedFriend.id);
@@ -55,6 +56,7 @@ const FriendsSidebar = ({
     if (profile?.friend_code) {
       navigator.clipboard.writeText(profile.friend_code);
       setCopied(true);
+      playClickSound();
       toast({ title: "Code copié !" });
       setTimeout(() => setCopied(false), 2000);
     }
@@ -67,26 +69,26 @@ const FriendsSidebar = ({
   const offlineFriends = filteredFriends.filter((f) => f.status !== "online" && f.status !== "away");
 
   return (
-    <div className="w-80 h-full flex flex-col glass-subtle border-r border-white/[0.06]">
+    <div className="w-80 h-full flex flex-col glass-subtle border-r border-white/[0.04]">
       {/* Header */}
       <div className="p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+          <h2 className="text-lg font-bold flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
               <Users className="h-4 w-4 text-primary" />
             </div>
-            Amis
+            <span className="gradient-text-static">Amis</span>
           </h2>
           <div className="flex gap-1">
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-xl relative hover:bg-white/[0.08]"
-              onClick={() => setRequestsOpen(true)}
+              className="h-9 w-9 rounded-xl relative hover:bg-white/[0.06] transition-all duration-300"
+              onClick={() => { playClickSound(); setRequestsOpen(true); }}
             >
               <Bell className="h-4 w-4" />
               {pendingRequests.length > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs font-semibold">
+                <Badge className="absolute -top-1 -right-1 h-5 min-w-5 p-0 flex items-center justify-center text-xs font-bold bg-primary text-primary-foreground animate-scale-in glow-primary">
                   {pendingRequests.length}
                 </Badge>
               )}
@@ -94,8 +96,8 @@ const FriendsSidebar = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-xl hover:bg-white/[0.08]"
-              onClick={() => setAddFriendOpen(true)}
+              className="h-9 w-9 rounded-xl hover:bg-white/[0.06] transition-all duration-300"
+              onClick={() => { playClickSound(); setAddFriendOpen(true); }}
             >
               <UserPlus className="h-4 w-4" />
             </Button>
@@ -103,29 +105,32 @@ const FriendsSidebar = ({
         </div>
 
         {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="relative group">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Rechercher..."
-            className="pl-9 h-10 input-modern"
+            className="pl-10 h-11 input-modern"
           />
         </div>
 
-        {/* Friend Code */}
-        <div className="card-modern p-4">
-          <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">
-            Ton code ami
-          </p>
+        {/* Friend Code Card */}
+        <div className="card-modern p-4 hover:border-primary/20 transition-all duration-300 group">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="h-3 w-3 text-primary" />
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+              Ton code ami
+            </p>
+          </div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 font-mono text-base font-semibold text-primary tracking-wide">
+            <code className="flex-1 font-mono text-base font-bold gradient-text-static tracking-widest">
               {profile?.friend_code}
             </code>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-lg hover:bg-white/[0.1]"
+              className="h-8 w-8 rounded-lg hover:bg-white/[0.08] transition-all duration-300"
               onClick={copyFriendCode}
             >
               {copied ? (
@@ -141,21 +146,21 @@ const FriendsSidebar = ({
       {/* Friends List */}
       <ScrollArea className="flex-1 px-3">
         {loading ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">
-            <div className="w-8 h-8 mx-auto mb-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-            Chargement...
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-sm gap-4">
+            <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+            <span className="animate-pulse">Chargement...</span>
           </div>
         ) : friends.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted/30 flex items-center justify-center">
-              <Users className="h-8 w-8 opacity-40" />
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground animate-fade-in-up">
+            <div className="w-20 h-20 mb-5 rounded-3xl bg-gradient-to-br from-muted/30 to-transparent border border-white/[0.04] flex items-center justify-center">
+              <Users className="h-10 w-10 opacity-30" />
             </div>
-            <p className="text-sm mb-3">Aucun ami pour l'instant</p>
+            <p className="text-sm mb-4 font-medium">Aucun ami pour l'instant</p>
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl"
-              onClick={() => setAddFriendOpen(true)}
+              className="rounded-xl border-white/10 hover:border-primary/30 hover:bg-primary/10 transition-all duration-300"
+              onClick={() => { playClickSound(); setAddFriendOpen(true); }}
             >
               <UserPlus className="h-4 w-4 mr-2" />
               Ajouter des amis
@@ -165,21 +170,26 @@ const FriendsSidebar = ({
           <div className="space-y-6 pb-4">
             {onlineFriends.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-muted-foreground px-2 mb-2 uppercase tracking-wider flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-success" />
+                <p className="text-xs font-bold text-muted-foreground px-2 mb-3 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-success status-online" />
                   En ligne — {onlineFriends.length}
                 </p>
                 <div className="space-y-1">
-                  {onlineFriends.map((friend) => (
-                    <FriendItem
+                  {onlineFriends.map((friend, index) => (
+                    <div
                       key={friend.id}
-                      friend={friend}
-                      isSelected={selectedFriend?.id === friend.id}
-                      unreadCount={getUnreadCount(friend.id)}
-                      onSelect={() => onSelectFriend(friend)}
-                      onMessage={() => onSelectFriend(friend)}
-                      onCall={() => onStartCall(friend)}
-                    />
+                      className="animate-fade-in"
+                      style={{ animationDelay: `${index * 0.05}s` }}
+                    >
+                      <FriendItem
+                        friend={friend}
+                        isSelected={selectedFriend?.id === friend.id}
+                        unreadCount={getUnreadCount(friend.id)}
+                        onSelect={() => { playClickSound(); onSelectFriend(friend); }}
+                        onMessage={() => onSelectFriend(friend)}
+                        onCall={() => onStartCall(friend)}
+                      />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -187,20 +197,25 @@ const FriendsSidebar = ({
 
             {offlineFriends.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-muted-foreground px-2 mb-2 uppercase tracking-wider">
+                <p className="text-xs font-bold text-muted-foreground px-2 mb-3 uppercase tracking-wider">
                   Hors ligne — {offlineFriends.length}
                 </p>
                 <div className="space-y-1">
-                  {offlineFriends.map((friend) => (
-                    <FriendItem
+                  {offlineFriends.map((friend, index) => (
+                    <div
                       key={friend.id}
-                      friend={friend}
-                      isSelected={selectedFriend?.id === friend.id}
-                      unreadCount={getUnreadCount(friend.id)}
-                      onSelect={() => onSelectFriend(friend)}
-                      onMessage={() => onSelectFriend(friend)}
-                      onCall={() => onStartCall(friend)}
-                    />
+                      className="animate-fade-in"
+                      style={{ animationDelay: `${index * 0.05}s` }}
+                    >
+                      <FriendItem
+                        friend={friend}
+                        isSelected={selectedFriend?.id === friend.id}
+                        unreadCount={getUnreadCount(friend.id)}
+                        onSelect={() => { playClickSound(); onSelectFriend(friend); }}
+                        onMessage={() => onSelectFriend(friend)}
+                        onCall={() => onStartCall(friend)}
+                      />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -210,27 +225,27 @@ const FriendsSidebar = ({
       </ScrollArea>
 
       {/* User Profile Footer */}
-      <div className="p-4 glass-solid border-t border-white/[0.06]">
+      <div className="p-4 glass-solid border-t border-white/[0.04]">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Avatar className="h-10 w-10 ring-2 ring-primary/20">
+            <Avatar className="h-11 w-11 ring-2 ring-primary/20">
               <AvatarImage src={profile?.avatar_url || ""} className="object-cover" />
-              <AvatarFallback className="bg-primary/10 text-primary font-medium">
+              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary font-bold">
                 {profile?.username?.[0]?.toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-success rounded-full border-2 border-card" />
+            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-success rounded-full border-2 border-card status-online" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{profile?.username}</p>
-            <p className="text-xs text-success">En ligne</p>
+            <p className="text-sm font-semibold truncate">{profile?.username}</p>
+            <p className="text-xs text-success font-medium">En ligne</p>
           </div>
           <SettingsDialog />
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-9 w-9 rounded-xl hover:bg-white/[0.08]" 
-            onClick={signOut}
+            className="h-9 w-9 rounded-xl hover:bg-white/[0.06] hover:text-destructive transition-all duration-300" 
+            onClick={() => { playClickSound(); signOut(); }}
           >
             <LogOut className="h-4 w-4" />
           </Button>
@@ -264,73 +279,69 @@ const FriendItem = ({
   const isAway = friend.status === "away";
   const isActive = isOnline || isAway;
 
-  const getStatusColor = () => {
-    if (isOnline) return "bg-success";
-    if (isAway) return "bg-warning";
-    return "bg-muted-foreground/50";
-  };
-
-  const getStatusText = () => {
-    if (isOnline) return "En ligne";
-    if (isAway) return "Absent";
-    return "Hors ligne";
-  };
-
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-200",
+        "group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-300",
         isSelected
-          ? "bg-primary/15 border border-primary/20"
-          : "hover:bg-white/[0.06] border border-transparent",
-        unreadCount > 0 && !isSelected && "bg-primary/5"
+          ? "bg-primary/15 border border-primary/25 shadow-lg shadow-primary/10"
+          : "hover:bg-white/[0.04] border border-transparent",
+        unreadCount > 0 && !isSelected && "bg-primary/5 border-primary/10"
       )}
       onClick={onSelect}
     >
       <div className="relative">
-        <Avatar className="h-11 w-11">
+        <Avatar className={cn(
+          "h-12 w-12 transition-all duration-300",
+          isSelected && "ring-2 ring-primary/30"
+        )}>
           <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
-          <AvatarFallback className="bg-muted font-medium">
+          <AvatarFallback className="bg-gradient-to-br from-muted to-muted/50 font-semibold">
             {friend.username[0]?.toUpperCase()}
           </AvatarFallback>
         </Avatar>
         <span
           className={cn(
             "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-card transition-all duration-300",
-            getStatusColor()
+            isOnline && "bg-success status-online",
+            isAway && "bg-warning",
+            !isActive && "bg-muted-foreground/40"
           )}
         />
       </div>
+      
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className={cn(
-            "text-sm font-medium truncate",
-            unreadCount > 0 && "font-semibold"
+            "text-sm font-semibold truncate transition-colors duration-300",
+            unreadCount > 0 && "text-foreground"
           )}>
             {friend.username}
           </p>
           {unreadCount > 0 && (
             <Badge 
-              className="h-5 min-w-5 px-1.5 text-xs font-semibold bg-primary text-primary-foreground animate-scale-in"
+              className="h-5 min-w-5 px-1.5 text-xs font-bold bg-primary text-primary-foreground animate-scale-in"
             >
               {unreadCount > 99 ? "99+" : unreadCount}
             </Badge>
           )}
         </div>
         <p className={cn(
-          "text-xs transition-colors duration-300",
-          isOnline ? "text-success" : isAway ? "text-warning" : "text-muted-foreground"
+          "text-xs font-medium transition-colors duration-300",
+          isOnline ? "text-success" : isAway ? "text-warning" : "text-muted-foreground/60"
         )}>
-          {getStatusText()}
+          {isOnline ? "En ligne" : isAway ? "Absent" : "Hors ligne"}
         </p>
       </div>
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+      
+      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-lg hover:bg-white/[0.1]"
+          className="h-8 w-8 rounded-lg hover:bg-white/[0.08] transition-all duration-300"
           onClick={(e) => {
             e.stopPropagation();
+            playClickSound();
             onMessage();
           }}
         >
@@ -340,12 +351,15 @@ const FriendItem = ({
           variant="ghost"
           size="icon"
           className={cn(
-            "h-8 w-8 rounded-lg transition-all duration-200",
-            isActive ? "hover:bg-success/20 hover:text-success" : "opacity-50"
+            "h-8 w-8 rounded-lg transition-all duration-300",
+            isActive ? "hover:bg-success/15 hover:text-success" : "opacity-40 cursor-not-allowed"
           )}
           onClick={(e) => {
             e.stopPropagation();
-            onCall();
+            if (isActive) {
+              playClickSound();
+              onCall();
+            }
           }}
           disabled={!isActive}
         >

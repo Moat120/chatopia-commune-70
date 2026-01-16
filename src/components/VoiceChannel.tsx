@@ -1,4 +1,4 @@
-import { Volume2, Users, Zap } from "lucide-react";
+import { Volume2, Users, Zap, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
@@ -6,6 +6,8 @@ import { useSimpleLatency } from "@/hooks/useConnectionLatency";
 import VoiceUserCard from "@/components/voice/VoiceUserCard";
 import VoiceControls from "@/components/voice/VoiceControls";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { playClickSound } from "@/hooks/useSound";
 
 interface VoiceChannelProps {
   channelId: string;
@@ -39,6 +41,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   });
 
   const handleJoin = async () => {
+    playClickSound();
     await join();
     toast({
       title: "Connecté",
@@ -47,6 +50,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   };
 
   const handleLeave = async () => {
+    playClickSound();
     await leave();
     toast({
       title: "Déconnecté",
@@ -55,127 +59,130 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden">
-      {/* Subtle background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.02] via-transparent to-transparent pointer-events-none" />
-      
-      {/* Mesh pattern overlay */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
-        <div 
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.03) 0%, transparent 50%)`,
-          }}
-        />
-      </div>
+    <TooltipProvider delayDuration={200}>
+      <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden">
+        {/* Background effects */}
+        <div className="absolute inset-0 call-bg" />
+        <div className="absolute inset-0 noise pointer-events-none" />
 
-      <div className="relative w-full max-w-3xl space-y-10 animate-fade-in-up">
-        {/* Header */}
-        <div className="text-center space-y-6">
-          {/* Icon with glow */}
-          <div className={cn(
-            "mx-auto w-24 h-24 rounded-[2rem] flex items-center justify-center",
-            "bg-gradient-to-br from-primary/20 via-primary/10 to-transparent",
-            "border border-primary/20 backdrop-blur-xl",
-            "transition-all duration-700 ease-out",
-            "shadow-xl shadow-primary/10",
-            isConnected && "shadow-2xl shadow-primary/20 scale-105"
-          )}>
-            <Volume2 className={cn(
-              "h-12 w-12 text-primary transition-all duration-500",
-              isConnected && "animate-pulse"
-            )} />
-            
-            {/* Decorative rings */}
-            {isConnected && (
-              <>
-                <div className="absolute inset-0 rounded-[2rem] border border-primary/10 animate-ping opacity-30" />
-                <div className="absolute inset-2 rounded-[1.5rem] border border-primary/5 animate-ping opacity-20" style={{ animationDelay: '0.5s' }} />
-              </>
-            )}
-          </div>
-          
-          <div className="space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              {channelName}
-            </h2>
-            <p className="text-sm text-muted-foreground/70">
-              {isConnected 
-                ? "Vous êtes connecté au canal vocal" 
-                : "Cliquez pour rejoindre la conversation"}
-            </p>
-          </div>
-
-          {/* Connection quality & ping */}
-          {isConnected && (
-            <div className="flex justify-center gap-4 animate-scale-in">
-              <ConnectionQualityIndicator 
-                quality={connectionQuality} 
-                ping={ping}
-                showPing={true}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Connected Users */}
-        {isConnected && (
-          <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-            {/* Participants count */}
-            <div className="flex items-center justify-center gap-3">
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/30 backdrop-blur-xl border border-white/[0.05]">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">
-                  {connectedUsers.length} {connectedUsers.length === 1 ? 'participant' : 'participants'}
-                </span>
+        <div className="relative w-full max-w-3xl space-y-10 animate-reveal">
+          {/* Header */}
+          <div className="text-center space-y-6">
+            {/* Icon with glow */}
+            <div className="relative inline-block">
+              <div className={cn(
+                "absolute -inset-8 rounded-full blur-3xl transition-all duration-700",
+                isConnected ? "bg-success/20" : "bg-primary/15"
+              )} />
+              
+              <div className={cn(
+                "relative mx-auto w-28 h-28 rounded-[2rem] flex items-center justify-center",
+                "bg-gradient-to-br from-primary/25 via-primary/15 to-transparent",
+                "border border-primary/25 backdrop-blur-xl",
+                "transition-all duration-700 ease-out",
+                "shadow-xl",
+                isConnected && "shadow-2xl shadow-success/20 border-success/30"
+              )}>
+                <Volume2 className={cn(
+                  "h-14 w-14 transition-all duration-500",
+                  isConnected ? "text-success" : "text-primary"
+                )} />
+                
+                {/* Sparkle decoration */}
+                <Sparkles className="absolute top-3 right-3 w-5 h-5 text-primary/50 animate-pulse" />
+                
+                {/* Connected rings */}
+                {isConnected && (
+                  <>
+                    <div className="absolute inset-0 rounded-[2rem] border-2 border-success/30 animate-speaking-ring" />
+                    <div className="absolute inset-0 rounded-[2rem] border-2 border-success/20 animate-speaking-ring" style={{ animationDelay: '0.6s' }} />
+                  </>
+                )}
               </div>
             </div>
             
-            {/* User cards grid */}
-            <div className="flex flex-wrap justify-center gap-4">
-              {connectedUsers.map((user, index) => (
-                <div 
-                  key={user.odId}
-                  className="animate-scale-in"
-                  style={{ animationDelay: `${index * 0.08}s` }}
-                >
-                  <VoiceUserCard
-                    username={user.username}
-                    avatarUrl={user.avatarUrl}
-                    isSpeaking={user.isSpeaking}
-                    isMuted={user.isMuted}
-                    isCurrentUser={user.odId === currentUserId}
-                    audioLevel={user.odId === currentUserId ? audioLevel : 0}
-                  />
-                </div>
-              ))}
+            <div className="space-y-3">
+              <h2 className="text-4xl font-bold tracking-tight gradient-text-static">
+                {channelName}
+              </h2>
+              <p className="text-muted-foreground/60 text-lg font-light">
+                {isConnected 
+                  ? "Vous êtes connecté au canal vocal" 
+                  : "Cliquez pour rejoindre la conversation"}
+              </p>
             </div>
+
+            {/* Connection quality */}
+            {isConnected && (
+              <div className="flex justify-center animate-scale-in">
+                <ConnectionQualityIndicator 
+                  quality={connectionQuality} 
+                  ping={ping}
+                  showPing={true}
+                />
+              </div>
+            )}
           </div>
-        )}
 
-        {/* Controls */}
-        <div className="flex justify-center pt-6">
-          <VoiceControls
-            isConnected={isConnected}
-            isConnecting={isConnecting}
-            isMuted={isMuted}
-            onJoin={handleJoin}
-            onLeave={handleLeave}
-            onToggleMute={toggleMute}
-          />
-        </div>
+          {/* Connected Users */}
+          {isConnected && (
+            <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
+              {/* Participants count */}
+              <div className="flex items-center justify-center">
+                <div className="flex items-center gap-2.5 px-5 py-2.5 rounded-2xl bg-secondary/30 backdrop-blur-xl border border-white/[0.04]">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    {connectedUsers.length} {connectedUsers.length === 1 ? 'participant' : 'participants'}
+                  </span>
+                </div>
+              </div>
+              
+              {/* User cards grid */}
+              <div className="flex flex-wrap justify-center gap-5">
+                {connectedUsers.map((user, index) => (
+                  <div 
+                    key={user.odId}
+                    className="animate-scale-in"
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
+                    <VoiceUserCard
+                      username={user.username}
+                      avatarUrl={user.avatarUrl}
+                      isSpeaking={user.isSpeaking}
+                      isMuted={user.isMuted}
+                      isCurrentUser={user.odId === currentUserId}
+                      audioLevel={user.odId === currentUserId ? audioLevel : 0}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-        {/* Info text */}
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/40">
-          <Zap className="h-3 w-3" />
-          <span>
-            {isConnected 
-              ? "Votre avatar s'anime quand vous parlez" 
-              : "Détection vocale automatique • Push-to-Talk disponible"}
-          </span>
+          {/* Controls */}
+          <div className="flex justify-center pt-6">
+            <VoiceControls
+              isConnected={isConnected}
+              isConnecting={isConnecting}
+              isMuted={isMuted}
+              onJoin={handleJoin}
+              onLeave={handleLeave}
+              onToggleMute={toggleMute}
+            />
+          </div>
+
+          {/* Info text */}
+          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/40 font-medium">
+            <Zap className="h-3.5 w-3.5" />
+            <span>
+              {isConnected 
+                ? "Votre avatar s'anime quand vous parlez" 
+                : "Détection vocale automatique • Push-to-Talk disponible"}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 };
 
