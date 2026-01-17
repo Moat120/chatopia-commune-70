@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useGroups } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Loader2 } from "lucide-react";
+import { playClickSound } from "@/hooks/useSound";
 
 interface CreateGroupDialogProps {
   open: boolean;
@@ -25,19 +27,14 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("[CreateGroupDialog] Submit clicked, name:", name);
     
-    if (!name.trim()) {
-      console.log("[CreateGroupDialog] Name is empty, returning");
-      return;
-    }
+    if (!name.trim()) return;
 
+    playClickSound();
     setLoading(true);
-    console.log("[CreateGroupDialog] Calling createGroup...");
     
     try {
       const group = await createGroup(name.trim());
-      console.log("[CreateGroupDialog] Result:", group);
       
       if (group) {
         toast({
@@ -54,7 +51,6 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
         });
       }
     } catch (error) {
-      console.error("[CreateGroupDialog] Error:", error);
       toast({
         title: "Erreur",
         description: "Une erreur s'est produite lors de la création du groupe",
@@ -67,16 +63,23 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Créer un groupe
+      <DialogContent className="glass-premium border-white/[0.08] rounded-3xl sm:max-w-md">
+        <DialogHeader className="pb-4">
+          <DialogTitle className="flex items-center gap-3 text-xl">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
+              <Users className="h-5 w-5 text-primary" />
+            </div>
+            <span className="gradient-text-static">Créer un groupe</span>
           </DialogTitle>
+          <DialogDescription className="text-muted-foreground/70">
+            Crée un nouveau groupe pour discuter et appeler tes amis.
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Nom du groupe</Label>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-3">
+            <Label htmlFor="name" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              Nom du groupe
+            </Label>
             <Input
               id="name"
               placeholder="Mon super groupe"
@@ -84,21 +87,27 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
               onChange={(e) => setName(e.target.value)}
               maxLength={50}
               autoFocus
+              className="h-12 input-modern text-base"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground/60">
               Maximum 10 membres par groupe
             </p>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-3 pt-2">
             <Button
               type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
+              variant="ghost"
+              onClick={() => { playClickSound(); onOpenChange(false); }}
               disabled={loading}
+              className="rounded-xl hover:bg-white/[0.06]"
             >
               Annuler
             </Button>
-            <Button type="submit" disabled={!name.trim() || loading}>
+            <Button 
+              type="submit" 
+              disabled={!name.trim() || loading}
+              className="rounded-xl btn-premium"
+            >
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
