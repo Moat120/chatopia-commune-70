@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard } from "lucide-react";
+import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard, Sparkles } from "lucide-react";
 import { 
   getPushToTalkEnabled, 
   getPushToTalkKey, 
@@ -25,6 +25,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { playClickSound } from "@/hooks/useSound";
 
 // Audio settings keys
 const NOISE_SUPPRESSION_KEY = "noiseSuppressionEnabled";
@@ -71,7 +72,7 @@ export const setSelectedMicrophone = (deviceId: string) => {
   window.dispatchEvent(new CustomEvent("audioSettingsChange"));
 };
 
-// Get optimized audio constraints
+// Get optimized audio constraints - FIXED for real noise suppression
 export const getAudioConstraints = (): MediaTrackConstraints => {
   const selectedMic = getSelectedMicrophone();
   const noiseSuppression = getNoiseSuppression();
@@ -80,11 +81,27 @@ export const getAudioConstraints = (): MediaTrackConstraints => {
 
   return {
     deviceId: selectedMic ? { exact: selectedMic } : undefined,
-    echoCancellation: { ideal: echoCancellation },
-    noiseSuppression: { ideal: noiseSuppression },
-    autoGainControl: { ideal: autoGain },
+    // Use exact to FORCE the browser to apply these settings
+    echoCancellation: { exact: echoCancellation },
+    noiseSuppression: { exact: noiseSuppression },
+    autoGainControl: { exact: autoGain },
     sampleRate: { ideal: 48000 },
-    channelCount: { ideal: 1 },
+    sampleSize: { ideal: 16 },
+    channelCount: { exact: 1 },
+    // Chrome-specific advanced constraints for better noise reduction
+    ...(noiseSuppression && {
+      googNoiseSuppression: true,
+      googHighpassFilter: true,
+      googTypingNoiseDetection: true,
+    } as any),
+    ...(echoCancellation && {
+      googEchoCancellation: true,
+      googEchoCancellation2: true,
+    } as any),
+    ...(autoGain && {
+      googAutoGainControl: true,
+      googAutoGainControl2: true,
+    } as any),
   };
 };
 
@@ -124,7 +141,6 @@ const SettingsDialog = () => {
   useEffect(() => {
     const loadMicrophones = async () => {
       try {
-        // Request permission first
         await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop()));
         
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -137,7 +153,6 @@ const SettingsDialog = () => {
         
         setMicrophones(mics);
         
-        // Set default if none selected
         if (!selectedMic && mics.length > 0) {
           setSelectedMic(mics[0].deviceId);
         }
@@ -155,7 +170,6 @@ const SettingsDialog = () => {
     };
   }, [open]);
 
-  // Sync with profile changes
   useEffect(() => {
     if (profile) {
       setUsername(profile.username);
@@ -208,24 +222,43 @@ const SettingsDialog = () => {
   const handleNoiseSuppressionToggle = (enabled: boolean) => {
     setNoiseSuppressionState(enabled);
     setNoiseSuppression(enabled);
+    playClickSound();
+    
+    // Restart test to apply new settings
+    if (isTesting) {
+      stopTest();
+      setTimeout(() => startTest(), 100);
+    }
   };
 
   const handleEchoCancellationToggle = (enabled: boolean) => {
     setEchoCancellationState(enabled);
     setEchoCancellation(enabled);
+    playClickSound();
+    
+    if (isTesting) {
+      stopTest();
+      setTimeout(() => startTest(), 100);
+    }
   };
 
   const handleAutoGainToggle = (enabled: boolean) => {
     setAutoGainState(enabled);
     setAutoGain(enabled);
+    playClickSound();
+    
+    if (isTesting) {
+      stopTest();
+      setTimeout(() => startTest(), 100);
+    }
   };
 
   const handlePttToggle = (enabled: boolean) => {
     setPttEnabledState(enabled);
     setPushToTalkEnabled(enabled);
+    playClickSound();
   };
 
-  // Update PTT key when captured
   useEffect(() => {
     if (!isCapturing) {
       setPttKeyState(getPushToTalkKey());
@@ -236,7 +269,6 @@ const SettingsDialog = () => {
     setSelectedMic(deviceId);
     setSelectedMicrophone(deviceId);
     
-    // Restart test if currently testing
     if (isTesting) {
       stopTest();
       setTimeout(() => startTest(), 100);
@@ -245,22 +277,44 @@ const SettingsDialog = () => {
 
   const startTest = async () => {
     try {
-      stopTest(); // Clean up any existing test first
+      stopTest();
       
+      // Use the same constraints as voice calls for accurate testing
       const constraints: MediaStreamConstraints = {
         audio: {
           deviceId: selectedMic ? { exact: selectedMic } : undefined,
-          echoCancellation: { ideal: echoCancellation },
-          noiseSuppression: { ideal: noiseSuppression },
-          autoGainControl: { ideal: autoGain },
+          echoCancellation: { exact: echoCancellation },
+          noiseSuppression: { exact: noiseSuppression },
+          autoGainControl: { exact: autoGain },
           sampleRate: { ideal: 48000 },
+          sampleSize: { ideal: 16 },
+          // Chrome-specific
+          ...(noiseSuppression && {
+            googNoiseSuppression: true,
+            googHighpassFilter: true,
+            googTypingNoiseDetection: true,
+          } as any),
+          ...(echoCancellation && {
+            googEchoCancellation: true,
+          } as any),
+          ...(autoGain && {
+            googAutoGainControl: true,
+          } as any),
         },
       };
 
+      console.log('[SettingsDialog] Starting test with constraints:', constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      // Log what was actually applied
+      const track = stream.getAudioTracks()[0];
+      if (track) {
+        const settings = track.getSettings();
+        console.log('[SettingsDialog] Applied settings:', settings);
+      }
+      
       testStreamRef.current = stream;
 
-      // Create audio context and analyser
       audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
@@ -271,7 +325,6 @@ const SettingsDialog = () => {
       isTestingRef.current = true;
       setIsTesting(true);
 
-      // Start level monitoring
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
       let noiseFloor = 255;
       let peakLevel = 0;
@@ -282,7 +335,6 @@ const SettingsDialog = () => {
 
         analyserRef.current.getByteFrequencyData(dataArray);
         
-        // Calculate RMS level
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) {
           sum += dataArray[i] * dataArray[i];
@@ -292,14 +344,12 @@ const SettingsDialog = () => {
         
         setAudioLevel(normalizedLevel * 100);
 
-        // Track noise floor and peak for quality assessment
         sampleCount++;
         if (sampleCount > 10) {
           const avgLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
           if (avgLevel < noiseFloor && avgLevel > 0) noiseFloor = avgLevel;
           if (avgLevel > peakLevel) peakLevel = avgLevel;
 
-          // Calculate signal-to-noise ratio
           const snr = peakLevel - noiseFloor;
           if (snr > 40) {
             setAudioQuality("excellent");
@@ -356,6 +406,7 @@ const SettingsDialog = () => {
 
   const handleSave = async () => {
     stopTest();
+    playClickSound();
     
     try {
       await updateProfile({
@@ -381,7 +432,7 @@ const SettingsDialog = () => {
   const getQualityColor = () => {
     switch (audioQuality) {
       case "excellent": return "text-success";
-      case "good": return "text-yellow-500";
+      case "good": return "text-warning";
       case "poor": return "text-destructive";
     }
   };
@@ -400,37 +451,47 @@ const SettingsDialog = () => {
         <Button
           size="icon"
           variant="ghost"
-          className="w-8 h-8"
+          className="h-9 w-9 rounded-xl hover:bg-white/[0.06] transition-all duration-300"
           title="Paramètres"
+          onClick={playClickSound}
         >
           <Settings className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Paramètres</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto glass-premium border-white/[0.08] rounded-3xl">
+        <DialogHeader className="pb-4">
+          <DialogTitle className="flex items-center gap-3 text-xl">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
+              <Settings className="h-5 w-5 text-primary" />
+            </div>
+            <span className="gradient-text-static">Paramètres</span>
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground/70">
             Personnalisez votre profil et vos préférences audio
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6">
           {/* Avatar Section */}
-          <div className="space-y-3">
-            <Label className="text-base font-semibold">Photo de profil</Label>
-            <div className="flex items-center gap-4">
-              <Avatar className="w-20 h-20 ring-2 ring-primary/20">
-                <AvatarImage src={avatarUrl} className="object-cover" />
-                <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
-                  {username.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+          <div className="space-y-4">
+            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Photo de profil</Label>
+            <div className="flex items-center gap-5 p-4 rounded-2xl bg-secondary/30 border border-white/[0.04]">
+              <div className="relative">
+                <Avatar className="w-20 h-20 ring-2 ring-primary/20">
+                  <AvatarImage src={avatarUrl} className="object-cover" />
+                  <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary text-2xl font-bold">
+                    {username.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <Sparkles className="absolute -top-1 -right-1 w-5 h-5 text-primary/60" />
+              </div>
               <div className="flex flex-col gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => { playClickSound(); fileInputRef.current?.click(); }}
                   disabled={uploading}
+                  className="rounded-xl border-white/10 hover:border-primary/30 hover:bg-primary/10"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   {uploading ? "Chargement..." : "Changer"}
@@ -440,12 +501,13 @@ const SettingsDialog = () => {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setAvatarUrl("")}
+                    onClick={() => { playClickSound(); setAvatarUrl(""); }}
+                    className="rounded-xl hover:bg-destructive/10 hover:text-destructive"
                   >
                     Supprimer
                   </Button>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground/60">
                   Images et GIFs supportés
                 </p>
               </div>
@@ -460,29 +522,30 @@ const SettingsDialog = () => {
           </div>
 
           {/* Username Section */}
-          <div className="space-y-2">
-            <Label htmlFor="settings-username">Pseudo</Label>
+          <div className="space-y-3">
+            <Label htmlFor="settings-username" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Pseudo</Label>
             <Input
               id="settings-username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Votre pseudo"
               maxLength={20}
+              className="h-12 input-modern text-base"
             />
           </div>
 
           {/* Microphone Section */}
           <div className="space-y-4">
-            <Label className="text-base font-semibold">Microphone</Label>
+            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Microphone</Label>
             
-            <div className="space-y-3">
+            <div className="space-y-4">
               <Select value={selectedMic} onValueChange={handleMicChange}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12 input-modern">
                   <SelectValue placeholder="Sélectionner un microphone" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="glass-solid border-white/10 rounded-xl">
                   {microphones.map((mic) => (
-                    <SelectItem key={mic.deviceId} value={mic.deviceId}>
+                    <SelectItem key={mic.deviceId} value={mic.deviceId} className="rounded-lg">
                       {mic.label}
                     </SelectItem>
                   ))}
@@ -490,20 +553,25 @@ const SettingsDialog = () => {
               </Select>
 
               {/* Test Button & Level */}
-              <div className="space-y-3 p-4 rounded-xl bg-secondary/30">
+              <div className="space-y-4 p-5 rounded-2xl bg-secondary/30 border border-white/[0.04]">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     {isTesting ? (
-                      <Mic className="w-5 h-5 text-success animate-pulse" />
+                      <div className="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center">
+                        <Mic className="w-5 h-5 text-success animate-pulse" />
+                      </div>
                     ) : (
-                      <MicOff className="w-5 h-5 text-muted-foreground" />
+                      <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
+                        <MicOff className="w-5 h-5 text-muted-foreground" />
+                      </div>
                     )}
-                    <span className="text-sm font-medium">Test du microphone</span>
+                    <span className="text-sm font-semibold">Test du microphone</span>
                   </div>
                   <Button
                     size="sm"
                     variant={isTesting ? "destructive" : "secondary"}
-                    onClick={isTesting ? stopTest : startTest}
+                    onClick={() => { playClickSound(); isTesting ? stopTest() : startTest(); }}
+                    className="rounded-xl"
                   >
                     {isTesting ? (
                       <>
@@ -520,23 +588,23 @@ const SettingsDialog = () => {
                 </div>
 
                 {isTesting && (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Niveau audio</span>
-                        <span className={getQualityColor()}>
-                          Qualité: {getQualityLabel()}
-                        </span>
-                      </div>
-                      <Progress 
-                        value={audioLevel} 
-                        className="h-3"
+                  <div className="space-y-3 animate-fade-in">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground font-medium">Niveau audio</span>
+                      <span className={`font-bold ${getQualityColor()}`}>
+                        Qualité: {getQualityLabel()}
+                      </span>
+                    </div>
+                    <div className="h-3 rounded-full bg-muted/30 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-success via-warning to-destructive transition-all duration-75 rounded-full"
+                        style={{ width: `${audioLevel}%` }}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground/70">
                       Parlez dans votre microphone pour voir le niveau
                     </p>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
@@ -544,20 +612,22 @@ const SettingsDialog = () => {
 
           {/* Audio Processing Section */}
           <div className="space-y-4">
-            <Label className="text-base font-semibold">Traitement audio</Label>
+            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Traitement audio</Label>
             
             <div className="space-y-3">
               {/* Noise Suppression */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
-                <div className="flex items-center gap-3">
-                  {noiseSuppression ? (
-                    <Volume2 className="w-5 h-5 text-primary" />
-                  ) : (
-                    <VolumeX className="w-5 h-5 text-muted-foreground" />
-                  )}
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${noiseSuppression ? 'bg-primary/15' : 'bg-muted/30'}`}>
+                    {noiseSuppression ? (
+                      <Volume2 className="w-5 h-5 text-primary" />
+                    ) : (
+                      <VolumeX className="w-5 h-5 text-muted-foreground" />
+                    )}
+                  </div>
                   <div>
-                    <p className="text-sm font-medium">Suppression du bruit</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm font-semibold">Suppression du bruit</p>
+                    <p className="text-xs text-muted-foreground/70">
                       Réduit le bruit de fond (ventilateur, clavier, etc.)
                     </p>
                   </div>
@@ -569,12 +639,14 @@ const SettingsDialog = () => {
               </div>
 
               {/* Echo Cancellation */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
-                <div className="flex items-center gap-3">
-                  <Volume2 className="w-5 h-5 text-muted-foreground" />
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${echoCancellation ? 'bg-primary/15' : 'bg-muted/30'}`}>
+                    <Volume2 className={`w-5 h-5 ${echoCancellation ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </div>
                   <div>
-                    <p className="text-sm font-medium">Annulation d'écho</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm font-semibold">Annulation d'écho</p>
+                    <p className="text-xs text-muted-foreground/70">
                       Empêche l'écho de vos haut-parleurs
                     </p>
                   </div>
@@ -586,12 +658,14 @@ const SettingsDialog = () => {
               </div>
 
               {/* Auto Gain */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
-                <div className="flex items-center gap-3">
-                  <Mic className="w-5 h-5 text-muted-foreground" />
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${autoGain ? 'bg-primary/15' : 'bg-muted/30'}`}>
+                    <Mic className={`w-5 h-5 ${autoGain ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </div>
                   <div>
-                    <p className="text-sm font-medium">Gain automatique</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm font-semibold">Gain automatique</p>
+                    <p className="text-xs text-muted-foreground/70">
                       Ajuste automatiquement le volume du micro
                     </p>
                   </div>
@@ -606,16 +680,18 @@ const SettingsDialog = () => {
 
           {/* Push-to-Talk Section */}
           <div className="space-y-4">
-            <Label className="text-base font-semibold">Push-to-Talk</Label>
+            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Push-to-Talk</Label>
             
             <div className="space-y-3">
               {/* PTT Toggle */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30">
-                <div className="flex items-center gap-3">
-                  <Radio className={`w-5 h-5 ${pttEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${pttEnabled ? 'bg-primary/15' : 'bg-muted/30'}`}>
+                    <Radio className={`w-5 h-5 ${pttEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </div>
                   <div>
-                    <p className="text-sm font-medium">Activer Push-to-Talk</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm font-semibold">Activer Push-to-Talk</p>
+                    <p className="text-xs text-muted-foreground/70">
                       Maintenez une touche pour parler
                     </p>
                   </div>
@@ -628,12 +704,14 @@ const SettingsDialog = () => {
 
               {/* PTT Key Selection */}
               {pttEnabled && (
-                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 animate-fade-in">
-                  <div className="flex items-center gap-3">
-                    <Keyboard className="w-5 h-5 text-muted-foreground" />
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] animate-fade-in transition-all duration-300 hover:border-white/[0.08]">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
+                      <Keyboard className="w-5 h-5 text-muted-foreground" />
+                    </div>
                     <div>
-                      <p className="text-sm font-medium">Touche Push-to-Talk</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm font-semibold">Touche Push-to-Talk</p>
+                      <p className="text-xs text-muted-foreground/70">
                         Appuyez sur la touche souhaitée
                       </p>
                     </div>
@@ -641,8 +719,8 @@ const SettingsDialog = () => {
                   <Button
                     variant={isCapturing ? "default" : "outline"}
                     size="sm"
-                    onClick={isCapturing ? cancelCapture : startCapture}
-                    className="min-w-[100px]"
+                    onClick={() => { playClickSound(); isCapturing ? cancelCapture() : startCapture(); }}
+                    className="min-w-[100px] rounded-xl"
                   >
                     {isCapturing ? (
                       <span className="animate-pulse">Appuyez...</span>
@@ -655,7 +733,7 @@ const SettingsDialog = () => {
             </div>
           </div>
 
-          <Button onClick={handleSave} className="w-full" disabled={uploading}>
+          <Button onClick={handleSave} className="w-full h-12 rounded-2xl btn-premium text-base font-semibold" disabled={uploading}>
             Sauvegarder
           </Button>
         </div>

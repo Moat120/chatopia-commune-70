@@ -3,11 +3,13 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Monitor, Zap, Crown } from "lucide-react";
 import { ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
 import { cn } from "@/lib/utils";
+import { playClickSound } from "@/hooks/useSound";
 
 interface ScreenShareQualityDialogProps {
   open: boolean;
@@ -48,41 +50,50 @@ const ScreenShareQualityDialog = ({
   onSelectQuality,
 }: ScreenShareQualityDialogProps) => {
   const handleSelect = (quality: ScreenQuality) => {
+    playClickSound();
     onSelectQuality(quality);
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Monitor className="h-5 w-5 text-primary" />
-            Qualité du partage d'écran
+      <DialogContent className="glass-premium border-white/[0.08] rounded-3xl sm:max-w-md">
+        <DialogHeader className="pb-4">
+          <DialogTitle className="flex items-center gap-3 text-xl">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
+              <Monitor className="h-5 w-5 text-primary" />
+            </div>
+            <span className="gradient-text-static">Qualité du partage</span>
           </DialogTitle>
+          <DialogDescription className="text-muted-foreground/70">
+            Sélectionnez la qualité de partage d'écran.
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 py-4">
-          {qualityOptions.map((option) => {
+        <div className="grid gap-3">
+          {qualityOptions.map((option, index) => {
             const Icon = option.icon;
             const preset = QUALITY_PRESETS[option.quality];
             return (
               <Button
                 key={option.quality}
-                variant="outline"
+                variant="ghost"
                 className={cn(
-                  "flex items-center justify-start gap-4 h-auto py-4 px-4",
-                  "hover:bg-primary/10 hover:border-primary/50 transition-all"
+                  "flex items-center justify-start gap-4 h-auto p-5 rounded-2xl",
+                  "bg-secondary/30 border border-white/[0.04]",
+                  "hover:bg-primary/10 hover:border-primary/30 transition-all duration-300",
+                  "animate-fade-in"
                 )}
+                style={{ animationDelay: `${index * 0.05}s` }}
                 onClick={() => handleSelect(option.quality)}
               >
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <Icon className="h-5 w-5 text-primary" />
+                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+                  <Icon className="h-6 w-6 text-primary" />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="font-semibold">{option.label}</p>
-                  <p className="text-xs text-muted-foreground">{option.description}</p>
+                  <p className="font-bold">{option.label}</p>
+                  <p className="text-xs text-muted-foreground/70">{option.description}</p>
                 </div>
-                <div className="text-xs text-muted-foreground text-right">
+                <div className="text-xs text-muted-foreground/50 text-right font-medium">
                   {preset.width}×{preset.height}
                 </div>
               </Button>
