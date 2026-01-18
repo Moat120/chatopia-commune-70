@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -72,7 +72,7 @@ export const setSelectedMicrophone = (deviceId: string) => {
   window.dispatchEvent(new CustomEvent("audioSettingsChange"));
 };
 
-// Get optimized audio constraints - FIXED for real noise suppression
+// Get optimized audio constraints with FALLBACK for browser compatibility
 export const getAudioConstraints = (): MediaTrackConstraints => {
   const selectedMic = getSelectedMicrophone();
   const noiseSuppression = getNoiseSuppression();
@@ -80,14 +80,14 @@ export const getAudioConstraints = (): MediaTrackConstraints => {
   const autoGain = getAutoGain();
 
   return {
-    deviceId: selectedMic ? { exact: selectedMic } : undefined,
-    // Use exact to FORCE the browser to apply these settings
-    echoCancellation: { exact: echoCancellation },
-    noiseSuppression: { exact: noiseSuppression },
-    autoGainControl: { exact: autoGain },
+    deviceId: selectedMic ? { ideal: selectedMic } : undefined,
+    // Use ideal for better compatibility - falls back gracefully
+    echoCancellation: { ideal: echoCancellation },
+    noiseSuppression: { ideal: noiseSuppression },
+    autoGainControl: { ideal: autoGain },
     sampleRate: { ideal: 48000 },
     sampleSize: { ideal: 16 },
-    channelCount: { exact: 1 },
+    channelCount: { ideal: 1 },
     // Chrome-specific advanced constraints for better noise reduction
     ...(noiseSuppression && {
       googNoiseSuppression: true,
@@ -279,13 +279,13 @@ const SettingsDialog = () => {
     try {
       stopTest();
       
-      // Use the same constraints as voice calls for accurate testing
+      // Use ideal constraints for better compatibility
       const constraints: MediaStreamConstraints = {
         audio: {
-          deviceId: selectedMic ? { exact: selectedMic } : undefined,
-          echoCancellation: { exact: echoCancellation },
-          noiseSuppression: { exact: noiseSuppression },
-          autoGainControl: { exact: autoGain },
+          deviceId: selectedMic ? { ideal: selectedMic } : undefined,
+          echoCancellation: { ideal: echoCancellation },
+          noiseSuppression: { ideal: noiseSuppression },
+          autoGainControl: { ideal: autoGain },
           sampleRate: { ideal: 48000 },
           sampleSize: { ideal: 16 },
           // Chrome-specific
@@ -311,6 +311,9 @@ const SettingsDialog = () => {
       if (track) {
         const settings = track.getSettings();
         console.log('[SettingsDialog] Applied settings:', settings);
+        console.log('[SettingsDialog] Noise suppression:', settings.noiseSuppression);
+        console.log('[SettingsDialog] Echo cancellation:', settings.echoCancellation);
+        console.log('[SettingsDialog] Auto gain:', settings.autoGainControl);
       }
       
       testStreamRef.current = stream;
@@ -458,8 +461,8 @@ const SettingsDialog = () => {
           <Settings className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto glass-premium border-white/[0.08] rounded-3xl">
-        <DialogHeader className="pb-4">
+      <DialogContent className="sm:max-w-lg glass-premium border-white/[0.08] rounded-3xl p-0 max-h-[85vh] flex flex-col">
+        <DialogHeader className="p-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-3 text-xl">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
               <Settings className="h-5 w-5 text-primary" />
@@ -470,269 +473,274 @@ const SettingsDialog = () => {
             Personnalisez votre profil et vos préférences audio
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-6">
-          {/* Avatar Section */}
-          <div className="space-y-4">
-            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Photo de profil</Label>
-            <div className="flex items-center gap-5 p-4 rounded-2xl bg-secondary/30 border border-white/[0.04]">
-              <div className="relative">
-                <Avatar className="w-20 h-20 ring-2 ring-primary/20">
-                  <AvatarImage src={avatarUrl} className="object-cover" />
-                  <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary text-2xl font-bold">
-                    {username.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <Sparkles className="absolute -top-1 -right-1 w-5 h-5 text-primary/60" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { playClickSound(); fileInputRef.current?.click(); }}
-                  disabled={uploading}
-                  className="rounded-xl border-white/10 hover:border-primary/30 hover:bg-primary/10"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {uploading ? "Chargement..." : "Changer"}
-                </Button>
-                {avatarUrl && (
+
+        <ScrollArea className="flex-1 px-6">
+          <div className="space-y-6 pb-6">
+            {/* Avatar Section */}
+            <div className="space-y-4">
+              <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Photo de profil</Label>
+              <div className="flex items-center gap-5 p-4 rounded-2xl bg-secondary/30 border border-white/[0.04]">
+                <div className="relative">
+                  <Avatar className="w-20 h-20 ring-2 ring-primary/20">
+                    <AvatarImage src={avatarUrl} className="object-cover" />
+                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary text-2xl font-bold">
+                      {username.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Sparkles className="absolute -top-1 -right-1 w-5 h-5 text-primary/60" />
+                </div>
+                <div className="flex flex-col gap-2">
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => { playClickSound(); setAvatarUrl(""); }}
-                    className="rounded-xl hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => { playClickSound(); fileInputRef.current?.click(); }}
+                    disabled={uploading}
+                    className="rounded-xl border-white/10 hover:border-primary/30 hover:bg-primary/10"
                   >
-                    Supprimer
+                    <Upload className="w-4 h-4 mr-2" />
+                    {uploading ? "Chargement..." : "Changer"}
                   </Button>
-                )}
-                <p className="text-xs text-muted-foreground/60">
-                  Images et GIFs supportés
-                </p>
+                  {avatarUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { playClickSound(); setAvatarUrl(""); }}
+                      className="rounded-xl hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      Supprimer
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground/60">
+                    Images et GIFs supportés
+                  </p>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,.gif"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,.gif"
-                className="hidden"
-                onChange={handleFileChange}
+            </div>
+
+            {/* Username Section */}
+            <div className="space-y-3">
+              <Label htmlFor="settings-username" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Pseudo</Label>
+              <Input
+                id="settings-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Votre pseudo"
+                maxLength={20}
+                className="h-12 input-modern text-base"
               />
             </div>
-          </div>
 
-          {/* Username Section */}
-          <div className="space-y-3">
-            <Label htmlFor="settings-username" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Pseudo</Label>
-            <Input
-              id="settings-username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Votre pseudo"
-              maxLength={20}
-              className="h-12 input-modern text-base"
-            />
-          </div>
-
-          {/* Microphone Section */}
-          <div className="space-y-4">
-            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Microphone</Label>
-            
+            {/* Microphone Section */}
             <div className="space-y-4">
-              <Select value={selectedMic} onValueChange={handleMicChange}>
-                <SelectTrigger className="h-12 input-modern">
-                  <SelectValue placeholder="Sélectionner un microphone" />
-                </SelectTrigger>
-                <SelectContent className="glass-solid border-white/10 rounded-xl">
-                  {microphones.map((mic) => (
-                    <SelectItem key={mic.deviceId} value={mic.deviceId} className="rounded-lg">
-                      {mic.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Microphone</Label>
+              
+              <div className="space-y-4">
+                <Select value={selectedMic} onValueChange={handleMicChange}>
+                  <SelectTrigger className="h-12 input-modern">
+                    <SelectValue placeholder="Sélectionner un microphone" />
+                  </SelectTrigger>
+                  <SelectContent className="glass-solid border-white/10 rounded-xl">
+                    {microphones.map((mic) => (
+                      <SelectItem key={mic.deviceId} value={mic.deviceId} className="rounded-lg">
+                        {mic.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              {/* Test Button & Level */}
-              <div className="space-y-4 p-5 rounded-2xl bg-secondary/30 border border-white/[0.04]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {isTesting ? (
-                      <div className="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center">
-                        <Mic className="w-5 h-5 text-success animate-pulse" />
-                      </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
-                        <MicOff className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                    )}
-                    <span className="text-sm font-semibold">Test du microphone</span>
+                {/* Test Button & Level */}
+                <div className="space-y-4 p-5 rounded-2xl bg-secondary/30 border border-white/[0.04]">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {isTesting ? (
+                        <div className="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center">
+                          <Mic className="w-5 h-5 text-success animate-pulse" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
+                          <MicOff className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <span className="text-sm font-semibold">Test du microphone</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isTesting ? "destructive" : "secondary"}
+                      onClick={() => { playClickSound(); isTesting ? stopTest() : startTest(); }}
+                      className="rounded-xl"
+                    >
+                      {isTesting ? (
+                        <>
+                          <Square className="w-4 h-4 mr-2" />
+                          Arrêter
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 mr-2" />
+                          Tester
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant={isTesting ? "destructive" : "secondary"}
-                    onClick={() => { playClickSound(); isTesting ? stopTest() : startTest(); }}
-                    className="rounded-xl"
-                  >
-                    {isTesting ? (
-                      <>
-                        <Square className="w-4 h-4 mr-2" />
-                        Arrêter
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-2" />
-                        Tester
-                      </>
-                    )}
-                  </Button>
+
+                  {isTesting && (
+                    <div className="space-y-3 animate-fade-in">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground font-medium">Niveau audio</span>
+                        <span className={`font-bold ${getQualityColor()}`}>
+                          Qualité: {getQualityLabel()}
+                        </span>
+                      </div>
+                      <div className="h-3 rounded-full bg-muted/30 overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-success via-warning to-destructive transition-all duration-75 rounded-full"
+                          style={{ width: `${audioLevel}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground/70">
+                        Parlez dans votre microphone pour voir le niveau
+                      </p>
+                    </div>
+                  )}
                 </div>
-
-                {isTesting && (
-                  <div className="space-y-3 animate-fade-in">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground font-medium">Niveau audio</span>
-                      <span className={`font-bold ${getQualityColor()}`}>
-                        Qualité: {getQualityLabel()}
-                      </span>
-                    </div>
-                    <div className="h-3 rounded-full bg-muted/30 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-success via-warning to-destructive transition-all duration-75 rounded-full"
-                        style={{ width: `${audioLevel}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground/70">
-                      Parlez dans votre microphone pour voir le niveau
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
-          </div>
 
-          {/* Audio Processing Section */}
-          <div className="space-y-4">
-            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Traitement audio</Label>
-            
-            <div className="space-y-3">
-              {/* Noise Suppression */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${noiseSuppression ? 'bg-primary/15' : 'bg-muted/30'}`}>
-                    {noiseSuppression ? (
-                      <Volume2 className="w-5 h-5 text-primary" />
-                    ) : (
-                      <VolumeX className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Suppression du bruit</p>
-                    <p className="text-xs text-muted-foreground/70">
-                      Réduit le bruit de fond (ventilateur, clavier, etc.)
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={noiseSuppression}
-                  onCheckedChange={handleNoiseSuppressionToggle}
-                />
-              </div>
-
-              {/* Echo Cancellation */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${echoCancellation ? 'bg-primary/15' : 'bg-muted/30'}`}>
-                    <Volume2 className={`w-5 h-5 ${echoCancellation ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Annulation d'écho</p>
-                    <p className="text-xs text-muted-foreground/70">
-                      Empêche l'écho de vos haut-parleurs
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={echoCancellation}
-                  onCheckedChange={handleEchoCancellationToggle}
-                />
-              </div>
-
-              {/* Auto Gain */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${autoGain ? 'bg-primary/15' : 'bg-muted/30'}`}>
-                    <Mic className={`w-5 h-5 ${autoGain ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Gain automatique</p>
-                    <p className="text-xs text-muted-foreground/70">
-                      Ajuste automatiquement le volume du micro
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={autoGain}
-                  onCheckedChange={handleAutoGainToggle}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Push-to-Talk Section */}
-          <div className="space-y-4">
-            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Push-to-Talk</Label>
-            
-            <div className="space-y-3">
-              {/* PTT Toggle */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${pttEnabled ? 'bg-primary/15' : 'bg-muted/30'}`}>
-                    <Radio className={`w-5 h-5 ${pttEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Activer Push-to-Talk</p>
-                    <p className="text-xs text-muted-foreground/70">
-                      Maintenez une touche pour parler
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={pttEnabled}
-                  onCheckedChange={handlePttToggle}
-                />
-              </div>
-
-              {/* PTT Key Selection */}
-              {pttEnabled && (
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] animate-fade-in transition-all duration-300 hover:border-white/[0.08]">
+            {/* Audio Processing Section */}
+            <div className="space-y-4">
+              <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Traitement audio</Label>
+              
+              <div className="space-y-3">
+                {/* Noise Suppression */}
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
-                      <Keyboard className="w-5 h-5 text-muted-foreground" />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${noiseSuppression ? 'bg-primary/15' : 'bg-muted/30'}`}>
+                      {noiseSuppression ? (
+                        <Volume2 className="w-5 h-5 text-primary" />
+                      ) : (
+                        <VolumeX className="w-5 h-5 text-muted-foreground" />
+                      )}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">Touche Push-to-Talk</p>
+                      <p className="text-sm font-semibold">Suppression du bruit</p>
                       <p className="text-xs text-muted-foreground/70">
-                        Appuyez sur la touche souhaitée
+                        Réduit le bruit de fond (ventilateur, clavier, etc.)
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant={isCapturing ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => { playClickSound(); isCapturing ? cancelCapture() : startCapture(); }}
-                    className="min-w-[100px] rounded-xl"
-                  >
-                    {isCapturing ? (
-                      <span className="animate-pulse">Appuyez...</span>
-                    ) : (
-                      getKeyDisplayName(pttKey)
-                    )}
-                  </Button>
+                  <Switch
+                    checked={noiseSuppression}
+                    onCheckedChange={handleNoiseSuppressionToggle}
+                  />
                 </div>
-              )}
+
+                {/* Echo Cancellation */}
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${echoCancellation ? 'bg-primary/15' : 'bg-muted/30'}`}>
+                      <Volume2 className={`w-5 h-5 ${echoCancellation ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">Annulation d'écho</p>
+                      <p className="text-xs text-muted-foreground/70">
+                        Empêche l'écho de vos haut-parleurs
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={echoCancellation}
+                    onCheckedChange={handleEchoCancellationToggle}
+                  />
+                </div>
+
+                {/* Auto Gain */}
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${autoGain ? 'bg-primary/15' : 'bg-muted/30'}`}>
+                      <Mic className={`w-5 h-5 ${autoGain ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">Gain automatique</p>
+                      <p className="text-xs text-muted-foreground/70">
+                        Ajuste automatiquement le volume du micro
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={autoGain}
+                    onCheckedChange={handleAutoGainToggle}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Push-to-Talk Section */}
+            <div className="space-y-4">
+              <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Push-to-Talk</Label>
+              
+              <div className="space-y-3">
+                {/* PTT Toggle */}
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${pttEnabled ? 'bg-primary/15' : 'bg-muted/30'}`}>
+                      <Radio className={`w-5 h-5 ${pttEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">Activer Push-to-Talk</p>
+                      <p className="text-xs text-muted-foreground/70">
+                        Maintenez une touche pour parler
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={pttEnabled}
+                    onCheckedChange={handlePttToggle}
+                  />
+                </div>
+
+                {/* PTT Key Selection */}
+                {pttEnabled && (
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] animate-fade-in transition-all duration-300 hover:border-white/[0.08]">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
+                        <Keyboard className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Touche Push-to-Talk</p>
+                        <p className="text-xs text-muted-foreground/70">
+                          Appuyez sur la touche souhaitée
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant={isCapturing ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => { playClickSound(); isCapturing ? cancelCapture() : startCapture(); }}
+                      className="min-w-[100px] rounded-xl"
+                    >
+                      {isCapturing ? (
+                        <span className="animate-pulse">Appuyez...</span>
+                      ) : (
+                        getKeyDisplayName(pttKey)
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+        </ScrollArea>
 
+        <div className="p-6 pt-4 shrink-0 border-t border-white/[0.04]">
           <Button onClick={handleSave} className="w-full h-12 rounded-2xl btn-premium text-base font-semibold" disabled={uploading}>
             Sauvegarder
           </Button>
