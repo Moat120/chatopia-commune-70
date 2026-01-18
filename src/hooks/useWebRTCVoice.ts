@@ -62,29 +62,30 @@ const RTC_CONFIG: RTCConfiguration = {
   rtcpMuxPolicy: "require",
 };
 
-// Build audio constraints from settings - FIXED for proper noise suppression
-const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
+// Build audio constraints with FALLBACK for browser compatibility
+const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> => {
   const selectedMic = getSelectedMicrophone();
   const noiseSuppression = getNoiseSuppression();
   const echoCancellation = getEchoCancellation();
   const autoGain = getAutoGain();
 
-  // Use "exact" for critical settings to FORCE browser to apply them
+  // Use "ideal" for better browser compatibility - falls back gracefully
   return {
-    deviceId: selectedMic ? { exact: selectedMic } : undefined,
-    // CRITICAL: Use exact or ideal with specific values for real noise suppression
-    echoCancellation: { exact: echoCancellation },
-    noiseSuppression: { exact: noiseSuppression },
-    autoGainControl: { exact: autoGain },
-    // Add advanced constraints for better quality
+    deviceId: selectedMic ? { ideal: selectedMic } : undefined,
+    // Use ideal instead of exact for compatibility
+    echoCancellation: { ideal: echoCancellation },
+    noiseSuppression: { ideal: noiseSuppression },
+    autoGainControl: { ideal: autoGain },
+    // Audio quality settings
     sampleRate: { ideal: 48000 },
     sampleSize: { ideal: 16 },
-    channelCount: { exact: 1 },
-    // These help with noise reduction on supported browsers
+    channelCount: { ideal: 1 },
+    // Chrome-specific advanced constraints for better noise reduction
     ...(noiseSuppression && {
       googNoiseSuppression: true,
       googHighpassFilter: true,
       googTypingNoiseDetection: true,
+      googNoiseSuppression2: true,
     } as any),
     ...(echoCancellation && {
       googEchoCancellation: true,
@@ -97,6 +98,102 @@ const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
   };
 };
 
+// Web Audio API Noise Processor for additional noise reduction
+class NoiseProcessor {
+  private audioContext: AudioContext | null = null;
+  private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private destinationNode: MediaStreamAudioDestinationNode | null = null;
+  private gainNode: GainNode | null = null;
+  private highpassFilter: BiquadFilterNode | null = null;
+  private lowpassFilter: BiquadFilterNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
+
+  async process(stream: MediaStream): Promise<MediaStream> {
+    try {
+      // Create audio context
+      this.audioContext = new AudioContext({ sampleRate: 48000 });
+      
+      // Create source from input stream
+      this.sourceNode = this.audioContext.createMediaStreamSource(stream);
+      
+      // Create destination for output
+      this.destinationNode = this.audioContext.createMediaStreamDestination();
+      
+      // Create highpass filter to remove low frequency rumble (< 80Hz)
+      this.highpassFilter = this.audioContext.createBiquadFilter();
+      this.highpassFilter.type = "highpass";
+      this.highpassFilter.frequency.value = 80;
+      this.highpassFilter.Q.value = 0.7;
+      
+      // Create lowpass filter to remove high frequency hiss (> 12kHz)
+      this.lowpassFilter = this.audioContext.createBiquadFilter();
+      this.lowpassFilter.type = "lowpass";
+      this.lowpassFilter.frequency.value = 12000;
+      this.lowpassFilter.Q.value = 0.7;
+      
+      // Create compressor for dynamics control
+      this.compressor = this.audioContext.createDynamicsCompressor();
+      this.compressor.threshold.value = -24;
+      this.compressor.knee.value = 30;
+      this.compressor.ratio.value = 12;
+      this.compressor.attack.value = 0.003;
+      this.compressor.release.value = 0.25;
+      
+      // Create gain node
+      this.gainNode = this.audioContext.createGain();
+      this.gainNode.gain.value = 1.0;
+      
+      // Connect the audio processing chain
+      this.sourceNode
+        .connect(this.highpassFilter)
+        .connect(this.lowpassFilter)
+        .connect(this.compressor)
+        .connect(this.gainNode)
+        .connect(this.destinationNode);
+      
+      console.log('[NoiseProcessor] Audio processing chain created');
+      
+      // Return the processed stream
+      return this.destinationNode.stream;
+    } catch (error) {
+      console.error('[NoiseProcessor] Failed to create processing chain:', error);
+      // Return original stream if processing fails
+      return stream;
+    }
+  }
+
+  cleanup() {
+    try {
+      if (this.sourceNode) {
+        this.sourceNode.disconnect();
+        this.sourceNode = null;
+      }
+      if (this.highpassFilter) {
+        this.highpassFilter.disconnect();
+        this.highpassFilter = null;
+      }
+      if (this.lowpassFilter) {
+        this.lowpassFilter.disconnect();
+        this.lowpassFilter = null;
+      }
+      if (this.compressor) {
+        this.compressor.disconnect();
+        this.compressor = null;
+      }
+      if (this.gainNode) {
+        this.gainNode.disconnect();
+        this.gainNode = null;
+      }
+      if (this.audioContext && this.audioContext.state !== 'closed') {
+        this.audioContext.close();
+        this.audioContext = null;
+      }
+    } catch (error) {
+      console.error('[NoiseProcessor] Cleanup error:', error);
+    }
+  }
+}
+
 export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const { user, profile } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
@@ -108,6 +205,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const [isPttActive, setIsPttActive] = useState(false);
 
   const localStreamRef = useRef<MediaStream | null>(null);
+  const rawStreamRef = useRef<MediaStream | null>(null);
+  const noiseProcessorRef = useRef<NoiseProcessor | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -396,6 +495,18 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     });
     remoteAudiosRef.current.clear();
 
+    // Cleanup noise processor
+    if (noiseProcessorRef.current) {
+      noiseProcessorRef.current.cleanup();
+      noiseProcessorRef.current = null;
+    }
+
+    // Stop raw stream
+    if (rawStreamRef.current) {
+      rawStreamRef.current.getTracks().forEach((track) => track.stop());
+      rawStreamRef.current = null;
+    }
+
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
@@ -431,15 +542,16 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setConnectionQuality("connecting");
 
     try {
-      const audioConstraints = getOptimizedAudioConstraints();
+      const audioConstraints = await getOptimizedAudioConstraints();
       console.log('[Voice] Getting media with constraints:', audioConstraints);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const rawStream = await navigator.mediaDevices.getUserMedia({
         audio: audioConstraints,
       });
+      rawStreamRef.current = rawStream;
 
       // Log applied constraints to verify noise suppression is active
-      const audioTrack = stream.getAudioTracks()[0];
+      const audioTrack = rawStream.getAudioTracks()[0];
       if (audioTrack) {
         const settings = audioTrack.getSettings();
         console.log('[Voice] Applied audio settings:', settings);
@@ -448,7 +560,15 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         console.log('[Voice] Auto gain active:', settings.autoGainControl);
       }
 
-      localStreamRef.current = stream;
+      // Apply additional Web Audio API noise processing
+      let processedStream = rawStream;
+      if (getNoiseSuppression()) {
+        noiseProcessorRef.current = new NoiseProcessor();
+        processedStream = await noiseProcessorRef.current.process(rawStream);
+        console.log('[Voice] Web Audio API noise processing applied');
+      }
+
+      localStreamRef.current = processedStream;
 
       // Setup channels
       const signalingChannel = supabase.channel(`voice-sig-${channelId}`, {
@@ -504,39 +624,33 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
         if (key !== currentUserId) {
           playLeaveSound();
+          const pc = peerConnectionsRef.current.get(key);
+          if (pc) {
+            pc.close();
+            peerConnectionsRef.current.delete(key);
+          }
+          const audio = remoteAudiosRef.current.get(key);
+          if (audio) {
+            audio.srcObject = null;
+            remoteAudiosRef.current.delete(key);
+          }
         }
-        const pc = peerConnectionsRef.current.get(key);
-        if (pc) {
-          pc.close();
-          peerConnectionsRef.current.delete(key);
-        }
-        const audio = remoteAudiosRef.current.get(key);
-        if (audio) {
-          audio.srcObject = null;
-          remoteAudiosRef.current.delete(key);
-        }
-        pendingCandidatesRef.current.delete(key);
       });
 
-      await presenceChannel.subscribe();
-
-      // If PTT is enabled, start muted
-      if (pttEnabledRef.current) {
-        const audioTrack = stream.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.enabled = false;
-          isMutedRef.current = true;
-          setIsMuted(true);
+      await presenceChannel.subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await presenceChannel.track({
+            odId: currentUserId,
+            username: currentUsername,
+            avatarUrl: currentAvatarUrl,
+            isSpeaking: false,
+            isMuted: false,
+          });
         }
-      }
-
-      await presenceChannel.track({
-        odId: currentUserId,
-        username: currentUsername,
-        avatarUrl: currentAvatarUrl,
-        isSpeaking: false,
-        isMuted: pttEnabledRef.current,
       });
+
+      // Start voice detection
+      startVoiceDetection(rawStream);
 
       isConnectedRef.current = true;
       setIsConnected(true);
@@ -544,10 +658,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       setConnectionQuality("good");
 
       playJoinSound();
-      startVoiceDetection(stream);
     } catch (error: any) {
       console.error("[Voice] Join error:", error);
-      onError?.(error.message || "Impossible de rejoindre le canal vocal");
+      onError?.(error.message || "Failed to join voice channel");
+      setIsConnecting(false);
       cleanup();
     }
   }, [
@@ -556,11 +670,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     currentUsername,
     currentAvatarUrl,
     isConnecting,
-    cleanup,
     handleSignal,
     initiateConnection,
-    onError,
     startVoiceDetection,
+    cleanup,
+    onError,
   ]);
 
   const leave = useCallback(async () => {
@@ -571,20 +685,21 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const toggleMute = useCallback(() => {
     if (!localStreamRef.current) return;
 
-    const newMuted = !isMuted;
-    localStreamRef.current.getAudioTracks().forEach((track) => {
-      track.enabled = !newMuted;
-    });
-    isMutedRef.current = newMuted;
-    setIsMuted(newMuted);
+    const audioTrack = localStreamRef.current.getAudioTracks()[0];
+    if (audioTrack) {
+      const newMuted = !isMuted;
+      audioTrack.enabled = !newMuted;
+      setIsMuted(newMuted);
+      isMutedRef.current = newMuted;
 
-    presenceChannelRef.current?.track({
-      odId: currentUserId,
-      username: currentUsername,
-      avatarUrl: currentAvatarUrl,
-      isSpeaking: false,
-      isMuted: newMuted,
-    });
+      presenceChannelRef.current?.track({
+        odId: currentUserId,
+        username: currentUsername,
+        avatarUrl: currentAvatarUrl,
+        isSpeaking: false,
+        isMuted: newMuted,
+      });
+    }
   }, [isMuted, currentUserId, currentUsername, currentAvatarUrl]);
 
   // Cleanup on unmount
