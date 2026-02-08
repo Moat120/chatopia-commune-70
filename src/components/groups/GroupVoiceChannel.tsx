@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Volume2, Users, Zap, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
@@ -24,6 +24,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   const { toast } = useToast();
   const { user, profile } = useAuth();
   const [qualityDialogOpen, setQualityDialogOpen] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
   const { ping } = useSimpleLatency();
 
   const {
@@ -103,11 +104,22 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
 
   const handleLeave = async () => {
     playClickSound();
+    setIsDeafened(false);
     if (isSharing) await stopScreenShare();
     await cleanupScreenShare();
     await leave();
     onEnd();
   };
+
+  const handleToggleDeafen = useCallback(() => {
+    playClickSound();
+    setIsDeafened(prev => !prev);
+    document.querySelectorAll('audio').forEach(audio => {
+      if (audio.srcObject) {
+        audio.muted = !isDeafened;
+      }
+    });
+  }, [isDeafened]);
 
   const handleToggleScreenShare = () => {
     playClickSound();
@@ -265,10 +277,12 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
             isConnecting={isConnecting}
             isMuted={isMuted}
             isScreenSharing={isSharing}
+            isDeafened={isDeafened}
             onJoin={handleJoin}
             onLeave={handleLeave}
             onToggleMute={toggleMute}
             onToggleScreenShare={handleToggleScreenShare}
+            onToggleDeafen={handleToggleDeafen}
           />
         </div>
 

@@ -332,7 +332,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       console.log('[Voice] Connection state for', remoteUserId, ':', state);
       if (state === "connected") {
         setConnectionQuality("excellent");
-      } else if (state === "failed" || state === "disconnected") {
+      } else if (state === "failed") {
+        console.log('[Voice] Connection failed, attempting ICE restart for', remoteUserId);
+        setConnectionQuality("poor");
+        pc.restartIce();
+      } else if (state === "disconnected") {
         setConnectionQuality("poor");
         const audio = remoteAudiosRef.current.get(remoteUserId);
         if (audio) {

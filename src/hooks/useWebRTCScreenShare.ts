@@ -33,6 +33,21 @@ const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun2.l.google.com:19302" },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
 
 export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShareProps) => {
@@ -66,7 +81,12 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       existing.close();
     }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({
+      iceServers: ICE_SERVERS,
+      iceCandidatePoolSize: 10,
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+    });
 
     pc.ontrack = (event) => {
       console.log(`[ScreenShare] Received track from ${sharerId}`, event.streams);
@@ -97,6 +117,10 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     pc.onconnectionstatechange = () => {
       console.log(`[ScreenShare] Incoming connection state with ${sharerId}: ${pc.connectionState}`);
+      if (pc.connectionState === "failed") {
+        console.log(`[ScreenShare] Incoming connection failed, restarting ICE for ${sharerId}`);
+        pc.restartIce();
+      }
       if (pc.connectionState === "failed" || pc.connectionState === "disconnected" || pc.connectionState === "closed") {
         setRemoteStreams((prev) => {
           const next = new Map(prev);
@@ -120,7 +144,12 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       existing.close();
     }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({
+      iceServers: ICE_SERVERS,
+      iceCandidatePoolSize: 10,
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+    });
 
     // Add our local screen tracks
     if (localStreamRef.current) {
@@ -148,6 +177,10 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     pc.onconnectionstatechange = () => {
       console.log(`[ScreenShare] Outgoing connection state with ${viewerId}: ${pc.connectionState}`);
+      if (pc.connectionState === "failed") {
+        console.log(`[ScreenShare] Outgoing connection failed, restarting ICE for ${viewerId}`);
+        pc.restartIce();
+      }
     };
 
     outgoingConnectionsRef.current.set(viewerId, pc);

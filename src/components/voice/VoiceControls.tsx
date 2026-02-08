@@ -1,4 +1,4 @@
-import { Phone, PhoneOff, Mic, MicOff, Loader2 } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Loader2, VolumeX, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -6,18 +6,22 @@ interface VoiceControlsProps {
   isConnected: boolean;
   isConnecting: boolean;
   isMuted: boolean;
+  isDeafened?: boolean;
   onJoin: () => void;
   onLeave: () => void;
   onToggleMute: () => void;
+  onToggleDeafen?: () => void;
 }
 
 const VoiceControls = ({
   isConnected,
   isConnecting,
   isMuted,
+  isDeafened = false,
   onJoin,
   onLeave,
-  onToggleMute
+  onToggleMute,
+  onToggleDeafen
 }: VoiceControlsProps) => {
   if (!isConnected) {
     return (
@@ -107,6 +111,52 @@ const VoiceControls = ({
           {isMuted ? "Réactiver le micro" : "Couper le micro"}
         </span>
       </Button>
+
+      {/* Deafen button */}
+      {onToggleDeafen && (
+        <Button
+          onClick={onToggleDeafen}
+          size="lg"
+          className={cn(
+            "relative group h-16 w-16 rounded-2xl p-0",
+            "transition-all duration-300 ease-out",
+            "hover:-translate-y-0.5 hover:shadow-xl",
+            isDeafened
+              ? cn(
+                  "bg-gradient-to-br from-amber-500/20 to-amber-600/10",
+                  "border-2 border-amber-500/30",
+                  "text-amber-400 hover:text-amber-300",
+                  "hover:from-amber-500/30 hover:to-amber-600/20",
+                  "hover:shadow-amber-500/20"
+                )
+              : cn(
+                  "bg-gradient-to-br from-secondary/80 to-secondary/40",
+                  "border-2 border-white/[0.08]",
+                  "text-foreground hover:text-foreground",
+                  "hover:from-secondary hover:to-secondary/60",
+                  "hover:border-white/[0.15]"
+                )
+          )}
+        >
+          <div className="relative">
+            {isDeafened ? (
+              <VolumeX className="h-6 w-6" />
+            ) : (
+              <Volume2 className="h-6 w-6" />
+            )}
+          </div>
+          
+          <span className={cn(
+            "absolute -bottom-10 left-1/2 -translate-x-1/2",
+            "px-3 py-1.5 rounded-lg text-xs font-medium",
+            "bg-popover/95 backdrop-blur-xl border border-border/50",
+            "opacity-0 group-hover:opacity-100 transition-all duration-200",
+            "pointer-events-none whitespace-nowrap shadow-xl"
+          )}>
+            {isDeafened ? "Réactiver le son" : "Se rendre sourd"}
+          </span>
+        </Button>
+      )}
 
       {/* Leave button */}
       <Button

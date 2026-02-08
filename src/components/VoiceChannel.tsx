@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import { Volume2, Users, Zap, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +18,7 @@ interface VoiceChannelProps {
 const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   const { toast } = useToast();
   const { ping } = useSimpleLatency();
+  const [isDeafened, setIsDeafened] = useState(false);
 
   const {
     isConnected,
@@ -51,12 +53,24 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
 
   const handleLeave = async () => {
     playClickSound();
+    setIsDeafened(false);
     await leave();
     toast({
       title: "Déconnecté",
       description: "Vous avez quitté le canal vocal",
     });
   };
+
+  const handleToggleDeafen = useCallback(() => {
+    playClickSound();
+    setIsDeafened(prev => !prev);
+    // Mute/unmute all remote audio elements
+    document.querySelectorAll('audio').forEach(audio => {
+      if (audio.srcObject) {
+        audio.muted = !isDeafened;
+      }
+    });
+  }, [isDeafened]);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -165,9 +179,11 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
               isConnected={isConnected}
               isConnecting={isConnecting}
               isMuted={isMuted}
+              isDeafened={isDeafened}
               onJoin={handleJoin}
               onLeave={handleLeave}
               onToggleMute={toggleMute}
+              onToggleDeafen={handleToggleDeafen}
             />
           </div>
 
