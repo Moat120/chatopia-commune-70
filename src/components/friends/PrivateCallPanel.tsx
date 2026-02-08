@@ -53,7 +53,7 @@ const RTC_CONFIG: RTCConfiguration = {
   rtcpMuxPolicy: "require",
 };
 
-// Build audio constraints from settings - FIXED for proper noise suppression
+// Build audio constraints from settings - using ideal for browser compatibility
 const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
   const selectedMic = getSelectedMicrophone();
   const noiseSuppression = getNoiseSuppression();
@@ -61,18 +61,19 @@ const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
   const autoGain = getAutoGain();
 
   return {
-    deviceId: selectedMic ? { exact: selectedMic } : undefined,
-    echoCancellation: { exact: echoCancellation },
-    noiseSuppression: { exact: noiseSuppression },
-    autoGainControl: { exact: autoGain },
+    deviceId: selectedMic ? { ideal: selectedMic } : undefined,
+    echoCancellation: { ideal: echoCancellation },
+    noiseSuppression: { ideal: noiseSuppression },
+    autoGainControl: { ideal: autoGain },
     sampleRate: { ideal: 48000 },
     sampleSize: { ideal: 16 },
-    channelCount: { exact: 1 },
+    channelCount: { ideal: 1 },
     // Chrome-specific advanced constraints
     ...(noiseSuppression && {
       googNoiseSuppression: true,
       googHighpassFilter: true,
       googTypingNoiseDetection: true,
+      googNoiseSuppression2: true,
     } as any),
     ...(echoCancellation && {
       googEchoCancellation: true,
@@ -84,6 +85,80 @@ const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
     } as any),
   };
 };
+
+// Web Audio API Noise Processor for additional noise reduction
+class PrivateCallNoiseProcessor {
+  private audioContext: AudioContext | null = null;
+  private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private destinationNode: MediaStreamAudioDestinationNode | null = null;
+  private gainNode: GainNode | null = null;
+  private highpassFilter: BiquadFilterNode | null = null;
+  private lowpassFilter: BiquadFilterNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
+
+  async process(stream: MediaStream): Promise<MediaStream> {
+    try {
+      this.audioContext = new AudioContext({ sampleRate: 48000 });
+      this.sourceNode = this.audioContext.createMediaStreamSource(stream);
+      this.destinationNode = this.audioContext.createMediaStreamDestination();
+
+      this.highpassFilter = this.audioContext.createBiquadFilter();
+      this.highpassFilter.type = "highpass";
+      this.highpassFilter.frequency.value = 80;
+      this.highpassFilter.Q.value = 0.7;
+
+      this.lowpassFilter = this.audioContext.createBiquadFilter();
+      this.lowpassFilter.type = "lowpass";
+      this.lowpassFilter.frequency.value = 12000;
+      this.lowpassFilter.Q.value = 0.7;
+
+      this.compressor = this.audioContext.createDynamicsCompressor();
+      this.compressor.threshold.value = -24;
+      this.compressor.knee.value = 30;
+      this.compressor.ratio.value = 12;
+      this.compressor.attack.value = 0.003;
+      this.compressor.release.value = 0.25;
+
+      this.gainNode = this.audioContext.createGain();
+      this.gainNode.gain.value = 1.0;
+
+      this.sourceNode
+        .connect(this.highpassFilter)
+        .connect(this.lowpassFilter)
+        .connect(this.compressor)
+        .connect(this.gainNode)
+        .connect(this.destinationNode);
+
+      console.log('[PrivateCall NoiseProcessor] Audio processing chain created');
+      return this.destinationNode.stream;
+    } catch (error) {
+      console.error('[PrivateCall NoiseProcessor] Failed:', error);
+      return stream;
+    }
+  }
+
+  cleanup() {
+    try {
+      this.sourceNode?.disconnect();
+      this.highpassFilter?.disconnect();
+      this.lowpassFilter?.disconnect();
+      this.compressor?.disconnect();
+      this.gainNode?.disconnect();
+      if (this.audioContext && this.audioContext.state !== 'closed') {
+        this.audioContext.close();
+      }
+    } catch (error) {
+      console.error('[PrivateCall NoiseProcessor] Cleanup error:', error);
+    }
+    this.audioContext = null;
+    this.sourceNode = null;
+    this.destinationNode = null;
+    this.gainNode = null;
+    this.highpassFilter = null;
+    this.lowpassFilter = null;
+    this.compressor = null;
+  }
+}
 
 const PrivateCallPanel = ({
   friend,
@@ -105,6 +180,8 @@ const PrivateCallPanel = ({
   const [isPttActive, setIsPttActive] = useState(false);
   
   const localStreamRef = useRef<MediaStream | null>(null);
+  const rawStreamRef = useRef<MediaStream | null>(null);
+  const noiseProcessorRef = useRef<PrivateCallNoiseProcessor | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -114,6 +191,8 @@ const PrivateCallPanel = ({
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
   const ringtoneManager = useRef<RingtoneManager>(new RingtoneManager());
   const pttEnabledRef = useRef(getPushToTalkEnabled());
+  const isMutedRef = useRef(false);
+  const callStatusRef = useRef(callStatus);
 
   // PTT handlers
   const handlePttPush = useCallback(() => {
@@ -149,6 +228,15 @@ const PrivateCallPanel = ({
   useEffect(() => {
     pttEnabledRef.current = pttEnabled;
   }, [pttEnabled]);
+
+  // Sync refs to avoid stale closures in rAF loops
+  useEffect(() => {
+    callStatusRef.current = callStatus;
+  }, [callStatus]);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
 
   // Play ringtone for incoming calls
   useEffect(() => {
@@ -249,17 +337,17 @@ const PrivateCallPanel = ({
 
       // Optimized friend speaking detection
       try {
-        const audioContext = new AudioContext({ sampleRate: 48000 });
-        const source = audioContext.createMediaStreamSource(remoteStream);
-        const analyser = audioContext.createAnalyser();
+        const remoteAudioContext = new AudioContext({ sampleRate: 48000 });
+        const source = remoteAudioContext.createMediaStreamSource(remoteStream);
+        const analyser = remoteAudioContext.createAnalyser();
         analyser.fftSize = 128;
         analyser.smoothingTimeConstant = 0.3;
         source.connect(analyser);
         
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const detectFriendSpeaking = () => {
-          if (callStatus === "ended") {
-            audioContext.close();
+          if (callStatusRef.current === "ended") {
+            remoteAudioContext.close();
             return;
           }
           analyser.getByteFrequencyData(dataArray);
@@ -290,6 +378,11 @@ const PrivateCallPanel = ({
 
     pc.onconnectionstatechange = () => {
       console.log('[PrivateCall] Connection state:', pc.connectionState);
+      // Auto ICE restart on failure
+      if (pc.connectionState === 'failed') {
+        console.log('[PrivateCall] Connection failed, attempting ICE restart');
+        pc.restartIce();
+      }
     };
 
     return pc;
@@ -317,19 +410,20 @@ const PrivateCallPanel = ({
             console.log('[PrivateCall] Applied settings:', track.getSettings());
           }
           
-          // Start voice detection for callee
-          audioContextRef.current = new AudioContext();
+          // Start voice detection for callee using refs to avoid stale closures
+          audioContextRef.current = new AudioContext({ sampleRate: 48000 });
           analyserRef.current = audioContextRef.current.createAnalyser();
           const source = audioContextRef.current.createMediaStreamSource(stream);
           source.connect(analyserRef.current);
-          analyserRef.current.fftSize = 256;
+          analyserRef.current.fftSize = 128;
+          analyserRef.current.smoothingTimeConstant = 0.3;
 
           const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
           const detectVoice = () => {
-            if (!analyserRef.current || callStatus === "ended") return;
+            if (!analyserRef.current || callStatusRef.current === "ended") return;
             analyserRef.current.getByteFrequencyData(dataArray);
             const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-            setIsSpeaking(average > 15 && !isMuted);
+            setIsSpeaking(average > 15 && !isMutedRef.current);
             animationRef.current = requestAnimationFrame(detectVoice);
           };
           detectVoice();
@@ -466,46 +560,58 @@ const PrivateCallPanel = ({
       const audioConstraints = getOptimizedAudioConstraints();
       console.log('[PrivateCall] Starting audio with constraints:', audioConstraints);
       
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const rawStream = await navigator.mediaDevices.getUserMedia({ 
         audio: audioConstraints,
       });
+      rawStreamRef.current = rawStream;
       
       // Log applied settings
-      const track = stream.getAudioTracks()[0];
+      const track = rawStream.getAudioTracks()[0];
       if (track) {
         const settings = track.getSettings();
         console.log('[PrivateCall] Applied settings:', settings);
+        console.log('[PrivateCall] Noise suppression:', settings.noiseSuppression);
+        console.log('[PrivateCall] Echo cancellation:', settings.echoCancellation);
+      }
+
+      // Apply Web Audio API noise processing
+      let processedStream = rawStream;
+      if (getNoiseSuppression()) {
+        noiseProcessorRef.current = new PrivateCallNoiseProcessor();
+        processedStream = await noiseProcessorRef.current.process(rawStream);
+        console.log('[PrivateCall] Web Audio API noise processing applied');
       }
       
-      localStreamRef.current = stream;
+      localStreamRef.current = processedStream;
 
-      // Optimized voice detection
+      // Voice detection using raw stream for accurate levels
       audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       analyserRef.current = audioContextRef.current.createAnalyser();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
+      const source = audioContextRef.current.createMediaStreamSource(rawStream);
       source.connect(analyserRef.current);
       analyserRef.current.fftSize = 128;
       analyserRef.current.smoothingTimeConstant = 0.3;
 
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
       const detectVoice = () => {
-        if (!analyserRef.current || callStatus === "ended") return;
+        if (!analyserRef.current || callStatusRef.current === "ended") return;
         analyserRef.current.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        setIsSpeaking(average > 15 && !isMuted);
+        setIsSpeaking(average > 15 && !isMutedRef.current);
         animationRef.current = requestAnimationFrame(detectVoice);
       };
       detectVoice();
 
-      // Setup peer connection with stream
-      const pc = setupPeerConnection(stream);
+      // Setup peer connection with processed stream
+      const pc = setupPeerConnection(processedStream);
 
       // If PTT is enabled, start muted
       if (pttEnabled) {
-        const audioTrack = stream.getAudioTracks()[0];
+        const audioTrack = processedStream.getAudioTracks()[0];
         if (audioTrack) {
           audioTrack.enabled = false;
           setIsMuted(true);
+          isMutedRef.current = true;
         }
       }
 
@@ -533,8 +639,20 @@ const PrivateCallPanel = ({
   };
 
   const cleanup = () => {
+    callStatusRef.current = "ended";
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    // Cleanup noise processor
+    if (noiseProcessorRef.current) {
+      noiseProcessorRef.current.cleanup();
+      noiseProcessorRef.current = null;
+    }
+    // Stop raw stream
+    if (rawStreamRef.current) {
+      rawStreamRef.current.getTracks().forEach((track) => track.stop());
+      rawStreamRef.current = null;
     }
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -599,7 +717,9 @@ const PrivateCallPanel = ({
       localStreamRef.current.getAudioTracks().forEach((track) => {
         track.enabled = isMuted;
       });
-      setIsMuted(!isMuted);
+      const newMuted = !isMuted;
+      setIsMuted(newMuted);
+      isMutedRef.current = newMuted;
     }
   };
 

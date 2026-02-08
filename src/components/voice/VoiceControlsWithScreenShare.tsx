@@ -1,4 +1,4 @@
-import { Phone, PhoneOff, Mic, MicOff, Monitor, MonitorOff, Loader2 } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Monitor, MonitorOff, Loader2, VolumeX, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -7,10 +7,12 @@ interface VoiceControlsWithScreenShareProps {
   isConnecting: boolean;
   isMuted: boolean;
   isScreenSharing: boolean;
+  isDeafened?: boolean;
   onJoin: () => void;
   onLeave: () => void;
   onToggleMute: () => void;
   onToggleScreenShare: () => void;
+  onToggleDeafen?: () => void;
 }
 
 const VoiceControlsWithScreenShare = ({
@@ -18,10 +20,12 @@ const VoiceControlsWithScreenShare = ({
   isConnecting,
   isMuted,
   isScreenSharing,
+  isDeafened = false,
   onJoin,
   onLeave,
   onToggleMute,
   onToggleScreenShare,
+  onToggleDeafen,
 }: VoiceControlsWithScreenShareProps) => {
   if (!isConnected) {
     return (
@@ -39,7 +43,6 @@ const VoiceControlsWithScreenShare = ({
           "disabled:opacity-60"
         )}
       >
-        {/* Shimmer effect */}
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
         </div>
@@ -92,13 +95,7 @@ const VoiceControlsWithScreenShare = ({
               )
         )}
       >
-        {isMuted ? (
-          <MicOff className="h-6 w-6" />
-        ) : (
-          <Mic className="h-6 w-6" />
-        )}
-        
-        {/* Tooltip */}
+        {isMuted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
         <span className={cn(
           "absolute -bottom-10 left-1/2 -translate-x-1/2",
           "px-3 py-1.5 rounded-lg text-xs font-medium",
@@ -109,6 +106,46 @@ const VoiceControlsWithScreenShare = ({
           {isMuted ? "Réactiver" : "Couper"}
         </span>
       </Button>
+
+      {/* Deafen Toggle */}
+      {onToggleDeafen && (
+        <Button
+          size="lg"
+          onClick={onToggleDeafen}
+          className={cn(
+            "relative group h-16 w-16 rounded-full p-0",
+            "transition-all duration-300 ease-out",
+            "hover:-translate-y-0.5",
+            isDeafened
+              ? cn(
+                  "bg-gradient-to-br from-amber-500/20 to-amber-600/10",
+                  "border-2 border-amber-500/30",
+                  "text-amber-400 hover:text-amber-300",
+                  "hover:from-amber-500/30 hover:to-amber-600/20",
+                  "hover:shadow-xl hover:shadow-amber-500/20"
+                )
+              : cn(
+                  "bg-gradient-to-br from-secondary/80 to-secondary/40",
+                  "border-2 border-white/[0.08]",
+                  "text-foreground",
+                  "hover:from-secondary hover:to-secondary/60",
+                  "hover:border-white/[0.15]",
+                  "hover:shadow-xl hover:shadow-black/20"
+                )
+          )}
+        >
+          {isDeafened ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
+          <span className={cn(
+            "absolute -bottom-10 left-1/2 -translate-x-1/2",
+            "px-3 py-1.5 rounded-lg text-xs font-medium",
+            "bg-popover/95 backdrop-blur-xl border border-border/50",
+            "opacity-0 group-hover:opacity-100 transition-all duration-200",
+            "pointer-events-none whitespace-nowrap shadow-xl"
+          )}>
+            {isDeafened ? "Réactiver le son" : "Se rendre sourd"}
+          </span>
+        </Button>
+      )}
 
       {/* Screen Share Toggle */}
       <Button
@@ -136,13 +173,7 @@ const VoiceControlsWithScreenShare = ({
               )
         )}
       >
-        {isScreenSharing ? (
-          <MonitorOff className="h-6 w-6" />
-        ) : (
-          <Monitor className="h-6 w-6" />
-        )}
-        
-        {/* Tooltip */}
+        {isScreenSharing ? <MonitorOff className="h-6 w-6" /> : <Monitor className="h-6 w-6" />}
         <span className={cn(
           "absolute -bottom-10 left-1/2 -translate-x-1/2",
           "px-3 py-1.5 rounded-lg text-xs font-medium",
@@ -169,8 +200,6 @@ const VoiceControlsWithScreenShare = ({
         )}
       >
         <PhoneOff className="h-6 w-6" />
-        
-        {/* Tooltip */}
         <span className={cn(
           "absolute -bottom-10 left-1/2 -translate-x-1/2",
           "px-3 py-1.5 rounded-lg text-xs font-medium",
