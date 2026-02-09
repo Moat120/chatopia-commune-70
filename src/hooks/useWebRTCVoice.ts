@@ -9,6 +9,7 @@ import {
   getAutoGain 
 } from "@/components/SettingsDialog";
 import { usePushToTalk, getPushToTalkEnabled } from "@/hooks/usePushToTalk";
+import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
 
 export interface VoiceUser {
   odId: string;
@@ -54,7 +55,6 @@ const ICE_SERVERS = [
   },
 ];
 
-// Optimized RTC config for low latency
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: ICE_SERVERS,
   iceCandidatePoolSize: 10,
@@ -69,18 +69,14 @@ const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> =>
   const echoCancellation = getEchoCancellation();
   const autoGain = getAutoGain();
 
-  // Use "ideal" for better browser compatibility - falls back gracefully
   return {
     deviceId: selectedMic ? { ideal: selectedMic } : undefined,
-    // Use ideal instead of exact for compatibility
     echoCancellation: { ideal: echoCancellation },
     noiseSuppression: { ideal: noiseSuppression },
     autoGainControl: { ideal: autoGain },
-    // Audio quality settings
     sampleRate: { ideal: 48000 },
     sampleSize: { ideal: 16 },
     channelCount: { ideal: 1 },
-    // Chrome-specific advanced constraints for better noise reduction
     ...(noiseSuppression && {
       googNoiseSuppression: true,
       googHighpassFilter: true,
@@ -98,102 +94,6 @@ const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> =>
   };
 };
 
-// Web Audio API Noise Processor for additional noise reduction
-class NoiseProcessor {
-  private audioContext: AudioContext | null = null;
-  private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private destinationNode: MediaStreamAudioDestinationNode | null = null;
-  private gainNode: GainNode | null = null;
-  private highpassFilter: BiquadFilterNode | null = null;
-  private lowpassFilter: BiquadFilterNode | null = null;
-  private compressor: DynamicsCompressorNode | null = null;
-
-  async process(stream: MediaStream): Promise<MediaStream> {
-    try {
-      // Create audio context
-      this.audioContext = new AudioContext({ sampleRate: 48000 });
-      
-      // Create source from input stream
-      this.sourceNode = this.audioContext.createMediaStreamSource(stream);
-      
-      // Create destination for output
-      this.destinationNode = this.audioContext.createMediaStreamDestination();
-      
-      // Create highpass filter to remove low frequency rumble (< 80Hz)
-      this.highpassFilter = this.audioContext.createBiquadFilter();
-      this.highpassFilter.type = "highpass";
-      this.highpassFilter.frequency.value = 80;
-      this.highpassFilter.Q.value = 0.7;
-      
-      // Create lowpass filter to remove high frequency hiss (> 12kHz)
-      this.lowpassFilter = this.audioContext.createBiquadFilter();
-      this.lowpassFilter.type = "lowpass";
-      this.lowpassFilter.frequency.value = 12000;
-      this.lowpassFilter.Q.value = 0.7;
-      
-      // Create compressor for dynamics control
-      this.compressor = this.audioContext.createDynamicsCompressor();
-      this.compressor.threshold.value = -24;
-      this.compressor.knee.value = 30;
-      this.compressor.ratio.value = 12;
-      this.compressor.attack.value = 0.003;
-      this.compressor.release.value = 0.25;
-      
-      // Create gain node
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.gain.value = 1.0;
-      
-      // Connect the audio processing chain
-      this.sourceNode
-        .connect(this.highpassFilter)
-        .connect(this.lowpassFilter)
-        .connect(this.compressor)
-        .connect(this.gainNode)
-        .connect(this.destinationNode);
-      
-      console.log('[NoiseProcessor] Audio processing chain created');
-      
-      // Return the processed stream
-      return this.destinationNode.stream;
-    } catch (error) {
-      console.error('[NoiseProcessor] Failed to create processing chain:', error);
-      // Return original stream if processing fails
-      return stream;
-    }
-  }
-
-  cleanup() {
-    try {
-      if (this.sourceNode) {
-        this.sourceNode.disconnect();
-        this.sourceNode = null;
-      }
-      if (this.highpassFilter) {
-        this.highpassFilter.disconnect();
-        this.highpassFilter = null;
-      }
-      if (this.lowpassFilter) {
-        this.lowpassFilter.disconnect();
-        this.lowpassFilter = null;
-      }
-      if (this.compressor) {
-        this.compressor.disconnect();
-        this.compressor = null;
-      }
-      if (this.gainNode) {
-        this.gainNode.disconnect();
-        this.gainNode = null;
-      }
-      if (this.audioContext && this.audioContext.state !== 'closed') {
-        this.audioContext.close();
-        this.audioContext = null;
-      }
-    } catch (error) {
-      console.error('[NoiseProcessor] Cleanup error:', error);
-    }
-  }
-}
-
 export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const { user, profile } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
@@ -203,10 +103,12 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>("connecting");
   const [audioLevel, setAudioLevel] = useState(0);
   const [isPttActive, setIsPttActive] = useState(false);
+  // Per-user volume control: Map<userId, volume 0-2>
+  const [userVolumes, setUserVolumes] = useState<Record<string, number>>({});
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const rawStreamRef = useRef<MediaStream | null>(null);
-  const noiseProcessorRef = useRef<NoiseProcessor | null>(null);
+  const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -224,10 +126,36 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const currentUsername = profile?.username || "Utilisateur";
   const currentAvatarUrl = profile?.avatar_url || "";
 
+  // Load saved volume for a user from localStorage
+  const getSavedVolume = useCallback((userId: string): number => {
+    try {
+      const saved = localStorage.getItem(`userVolume_${userId}`);
+      return saved !== null ? parseFloat(saved) : 1.0;
+    } catch {
+      return 1.0;
+    }
+  }, []);
+
+  // Set volume for a specific user (0-2, where 1 = 100%, 2 = 200%)
+  const setUserVolume = useCallback((userId: string, volume: number) => {
+    const clampedVolume = Math.max(0, Math.min(2, volume));
+    
+    // Update the audio element volume
+    const audio = remoteAudiosRef.current.get(userId);
+    if (audio) {
+      audio.volume = clampedVolume;
+    }
+    
+    // Persist to localStorage
+    localStorage.setItem(`userVolume_${userId}`, String(clampedVolume));
+    
+    // Update state
+    setUserVolumes(prev => ({ ...prev, [userId]: clampedVolume }));
+  }, []);
+
   // Push-to-Talk handlers
   const handlePttPush = useCallback(() => {
     if (!localStreamRef.current || !pttEnabledRef.current) return;
-    
     const audioTrack = localStreamRef.current.getAudioTracks()[0];
     if (audioTrack) {
       audioTrack.enabled = true;
@@ -239,7 +167,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
   const handlePttRelease = useCallback(() => {
     if (!localStreamRef.current || !pttEnabledRef.current) return;
-    
     const audioTrack = localStreamRef.current.getAudioTracks()[0];
     if (audioTrack) {
       audioTrack.enabled = false;
@@ -249,19 +176,17 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
   }, []);
 
-  // Use Push-to-Talk hook
   const { isPushing, pttEnabled } = usePushToTalk({
     onPush: handlePttPush,
     onRelease: handlePttRelease,
     isEnabled: isConnectedRef.current,
   });
 
-  // Update PTT enabled ref
   useEffect(() => {
     pttEnabledRef.current = pttEnabled;
   }, [pttEnabled]);
 
-  // Optimized peer connection with low latency settings - BIDIRECTIONAL
+  // Peer connection with per-user volume applied on track received
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
     const existing = peerConnectionsRef.current.get(remoteUserId);
     if (existing) {
@@ -272,13 +197,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     console.log('[Voice] Creating peer connection for:', remoteUserId);
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
-    // CRITICAL: Add local audio tracks with optimized sender parameters
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
-        console.log('[Voice] Adding local track:', track.kind, 'to peer:', remoteUserId);
         const sender = pc.addTrack(track, localStreamRef.current!);
-        
-        // Optimize audio sender for low latency
         if (track.kind === 'audio') {
           const params = sender.getParameters();
           if (params.encodings && params.encodings.length > 0) {
@@ -289,13 +210,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           }
         }
       });
-    } else {
-      console.warn('[Voice] No local stream when creating peer connection!');
     }
 
-    // Handle incoming audio with immediate playback
     pc.ontrack = (event) => {
-      console.log('[Voice] Received remote track from:', remoteUserId, 'kind:', event.track.kind);
+      console.log('[Voice] Received remote track from:', remoteUserId);
       const [remoteStream] = event.streams;
 
       let audio = remoteAudiosRef.current.get(remoteUserId);
@@ -303,15 +221,19 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         audio = new Audio();
         audio.autoplay = true;
         (audio as any).playsInline = true;
-        // Low latency audio settings
         (audio as any).mozPreservesPitch = false;
         remoteAudiosRef.current.set(remoteUserId, audio);
       }
+      
+      // Apply saved volume for this user
+      const savedVolume = getSavedVolume(remoteUserId);
+      audio.volume = savedVolume;
+      setUserVolumes(prev => ({ ...prev, [remoteUserId]: savedVolume }));
+      
       audio.srcObject = remoteStream;
       audio.play().catch(console.error);
     };
 
-    // Immediate ICE candidate sending
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
         signalingChannelRef.current.send({
@@ -333,16 +255,17 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       if (state === "connected") {
         setConnectionQuality("excellent");
       } else if (state === "failed") {
-        console.log('[Voice] Connection failed, attempting ICE restart for', remoteUserId);
         setConnectionQuality("poor");
         pc.restartIce();
       } else if (state === "disconnected") {
         setConnectionQuality("poor");
-        const audio = remoteAudiosRef.current.get(remoteUserId);
-        if (audio) {
-          audio.srcObject = null;
-          remoteAudiosRef.current.delete(remoteUserId);
-        }
+        // Auto-reconnect after 5s if still disconnected
+        setTimeout(() => {
+          if (pc.connectionState === "disconnected") {
+            console.log('[Voice] Still disconnected after 5s, restarting ICE');
+            pc.restartIce();
+          }
+        }, 5000);
       }
     };
 
@@ -352,9 +275,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     peerConnectionsRef.current.set(remoteUserId, pc);
     return pc;
-  }, [currentUserId]);
+  }, [currentUserId, getSavedVolume]);
 
-  // Optimized signal handling
   const handleSignal = useCallback(async (message: SignalMessage) => {
     if (message.to !== currentUserId || !isConnectedRef.current) return;
 
@@ -365,7 +287,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(message.data));
-
         const pending = pendingCandidatesRef.current.get(message.from) || [];
         await Promise.all(pending.map(c => pc!.addIceCandidate(c).catch(() => {})));
         pendingCandidatesRef.current.delete(message.from);
@@ -408,19 +329,18 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
   }, [currentUserId, createPeerConnection]);
 
-  // Optimized voice detection with reduced overhead
   const startVoiceDetection = useCallback((stream: MediaStream) => {
     try {
       audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 128; // Smaller for faster processing
+      analyserRef.current.fftSize = 128;
       analyserRef.current.smoothingTimeConstant = 0.3;
       source.connect(analyserRef.current);
 
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
       let lastBroadcast = 0;
-      const BROADCAST_INTERVAL = 200; // Reduced frequency
+      const BROADCAST_INTERVAL = 200;
 
       const detectSpeaking = () => {
         if (!analyserRef.current || !isConnectedRef.current) return;
@@ -462,9 +382,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     const pc = createPeerConnection(remoteUserId);
 
     try {
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-      });
+      const offer = await pc.createOffer({ offerToReceiveAudio: true });
       await pc.setLocalDescription(offer);
 
       signalingChannelRef.current?.send({
@@ -499,13 +417,12 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     });
     remoteAudiosRef.current.clear();
 
-    // Cleanup noise processor
+    // Cleanup advanced noise processor
     if (noiseProcessorRef.current) {
       noiseProcessorRef.current.cleanup();
       noiseProcessorRef.current = null;
     }
 
-    // Stop raw stream
     if (rawStreamRef.current) {
       rawStreamRef.current.getTracks().forEach((track) => track.stop());
       rawStreamRef.current = null;
@@ -537,6 +454,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setConnectedUsers([]);
     setConnectionQuality("connecting");
     setAudioLevel(0);
+    setUserVolumes({});
   }, []);
 
   const join = useCallback(async () => {
@@ -554,22 +472,18 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       });
       rawStreamRef.current = rawStream;
 
-      // Log applied constraints to verify noise suppression is active
       const audioTrack = rawStream.getAudioTracks()[0];
       if (audioTrack) {
         const settings = audioTrack.getSettings();
         console.log('[Voice] Applied audio settings:', settings);
-        console.log('[Voice] Noise suppression active:', settings.noiseSuppression);
-        console.log('[Voice] Echo cancellation active:', settings.echoCancellation);
-        console.log('[Voice] Auto gain active:', settings.autoGainControl);
       }
 
-      // Apply additional Web Audio API noise processing
+      // Apply AdvancedNoiseProcessor pipeline
       let processedStream = rawStream;
       if (getNoiseSuppression()) {
-        noiseProcessorRef.current = new NoiseProcessor();
+        noiseProcessorRef.current = new AdvancedNoiseProcessor();
         processedStream = await noiseProcessorRef.current.process(rawStream);
-        console.log('[Voice] Web Audio API noise processing applied');
+        console.log('[Voice] Advanced noise processing applied, latency:', noiseProcessorRef.current.getLatency(), 'ms');
       }
 
       localStreamRef.current = processedStream;
@@ -653,7 +567,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         }
       });
 
-      // Start voice detection
       startVoiceDetection(rawStream);
 
       isConnectedRef.current = true;
@@ -706,7 +619,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
   }, [isMuted, currentUserId, currentUsername, currentAvatarUrl]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanup();
@@ -722,6 +634,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     connectionQuality,
     audioLevel,
     isPttActive,
+    userVolumes,
+    setUserVolume,
     join,
     leave,
     toggleMute,

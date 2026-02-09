@@ -28,6 +28,8 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     currentUserId,
     connectionQuality,
     audioLevel,
+    userVolumes,
+    setUserVolume,
     join,
     leave,
     toggleMute
@@ -64,7 +66,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   const handleToggleDeafen = useCallback(() => {
     playClickSound();
     setIsDeafened(prev => !prev);
-    // Mute/unmute all remote audio elements
     document.querySelectorAll('audio').forEach(audio => {
       if (audio.srcObject) {
         audio.muted = !isDeafened;
@@ -75,14 +76,12 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden">
-        {/* Background effects */}
         <div className="absolute inset-0 call-bg" />
         <div className="absolute inset-0 noise pointer-events-none" />
 
         <div className="relative w-full max-w-3xl space-y-10 animate-reveal">
           {/* Header */}
           <div className="text-center space-y-6">
-            {/* Icon with glow */}
             <div className="relative inline-block">
               <div className={cn(
                 "absolute -inset-8 rounded-full blur-3xl transition-all duration-700",
@@ -102,10 +101,8 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                   isConnected ? "text-success" : "text-primary"
                 )} />
                 
-                {/* Sparkle decoration */}
                 <Sparkles className="absolute top-3 right-3 w-5 h-5 text-primary/50 animate-pulse" />
                 
-                {/* Connected rings */}
                 {isConnected && (
                   <>
                     <div className="absolute inset-0 rounded-[2rem] border-2 border-success/30 animate-speaking-ring" />
@@ -126,7 +123,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
               </p>
             </div>
 
-            {/* Connection quality */}
             {isConnected && (
               <div className="flex justify-center animate-scale-in">
                 <ConnectionQualityIndicator 
@@ -141,7 +137,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
           {/* Connected Users */}
           {isConnected && (
             <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-              {/* Participants count */}
               <div className="flex items-center justify-center">
                 <div className="flex items-center gap-2.5 px-5 py-2.5 rounded-2xl bg-secondary/30 backdrop-blur-xl border border-white/[0.04]">
                   <Users className="h-4 w-4 text-muted-foreground" />
@@ -151,7 +146,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                 </div>
               </div>
               
-              {/* User cards grid */}
               <div className="flex flex-wrap justify-center gap-5">
                 {connectedUsers.map((user, index) => (
                   <div 
@@ -166,6 +160,8 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                       isMuted={user.isMuted}
                       isCurrentUser={user.odId === currentUserId}
                       audioLevel={user.odId === currentUserId ? audioLevel : 0}
+                      volume={userVolumes[user.odId]}
+                      onVolumeChange={(v) => setUserVolume(user.odId, v)}
                     />
                   </div>
                 ))}
@@ -187,7 +183,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
             />
           </div>
 
-          {/* Info text */}
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/40 font-medium">
             <Zap className="h-3.5 w-3.5" />
             <span>

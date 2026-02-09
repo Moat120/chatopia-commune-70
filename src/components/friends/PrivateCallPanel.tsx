@@ -86,79 +86,7 @@ const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
   };
 };
 
-// Web Audio API Noise Processor for additional noise reduction
-class PrivateCallNoiseProcessor {
-  private audioContext: AudioContext | null = null;
-  private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private destinationNode: MediaStreamAudioDestinationNode | null = null;
-  private gainNode: GainNode | null = null;
-  private highpassFilter: BiquadFilterNode | null = null;
-  private lowpassFilter: BiquadFilterNode | null = null;
-  private compressor: DynamicsCompressorNode | null = null;
-
-  async process(stream: MediaStream): Promise<MediaStream> {
-    try {
-      this.audioContext = new AudioContext({ sampleRate: 48000 });
-      this.sourceNode = this.audioContext.createMediaStreamSource(stream);
-      this.destinationNode = this.audioContext.createMediaStreamDestination();
-
-      this.highpassFilter = this.audioContext.createBiquadFilter();
-      this.highpassFilter.type = "highpass";
-      this.highpassFilter.frequency.value = 80;
-      this.highpassFilter.Q.value = 0.7;
-
-      this.lowpassFilter = this.audioContext.createBiquadFilter();
-      this.lowpassFilter.type = "lowpass";
-      this.lowpassFilter.frequency.value = 12000;
-      this.lowpassFilter.Q.value = 0.7;
-
-      this.compressor = this.audioContext.createDynamicsCompressor();
-      this.compressor.threshold.value = -24;
-      this.compressor.knee.value = 30;
-      this.compressor.ratio.value = 12;
-      this.compressor.attack.value = 0.003;
-      this.compressor.release.value = 0.25;
-
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.gain.value = 1.0;
-
-      this.sourceNode
-        .connect(this.highpassFilter)
-        .connect(this.lowpassFilter)
-        .connect(this.compressor)
-        .connect(this.gainNode)
-        .connect(this.destinationNode);
-
-      console.log('[PrivateCall NoiseProcessor] Audio processing chain created');
-      return this.destinationNode.stream;
-    } catch (error) {
-      console.error('[PrivateCall NoiseProcessor] Failed:', error);
-      return stream;
-    }
-  }
-
-  cleanup() {
-    try {
-      this.sourceNode?.disconnect();
-      this.highpassFilter?.disconnect();
-      this.lowpassFilter?.disconnect();
-      this.compressor?.disconnect();
-      this.gainNode?.disconnect();
-      if (this.audioContext && this.audioContext.state !== 'closed') {
-        this.audioContext.close();
-      }
-    } catch (error) {
-      console.error('[PrivateCall NoiseProcessor] Cleanup error:', error);
-    }
-    this.audioContext = null;
-    this.sourceNode = null;
-    this.destinationNode = null;
-    this.gainNode = null;
-    this.highpassFilter = null;
-    this.lowpassFilter = null;
-    this.compressor = null;
-  }
-}
+import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
 
 const PrivateCallPanel = ({
   friend,
@@ -181,7 +109,7 @@ const PrivateCallPanel = ({
   
   const localStreamRef = useRef<MediaStream | null>(null);
   const rawStreamRef = useRef<MediaStream | null>(null);
-  const noiseProcessorRef = useRef<PrivateCallNoiseProcessor | null>(null);
+  const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -577,9 +505,9 @@ const PrivateCallPanel = ({
       // Apply Web Audio API noise processing
       let processedStream = rawStream;
       if (getNoiseSuppression()) {
-        noiseProcessorRef.current = new PrivateCallNoiseProcessor();
+        noiseProcessorRef.current = new AdvancedNoiseProcessor();
         processedStream = await noiseProcessorRef.current.process(rawStream);
-        console.log('[PrivateCall] Web Audio API noise processing applied');
+        console.log('[PrivateCall] Advanced noise processing applied, latency:', noiseProcessorRef.current.getLatency(), 'ms');
       }
       
       localStreamRef.current = processedStream;
