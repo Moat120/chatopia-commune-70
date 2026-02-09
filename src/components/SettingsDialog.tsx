@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard, Sparkles } from "lucide-react";
+import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard, Sparkles, Zap } from "lucide-react";
 import { 
   getPushToTalkEnabled, 
   getPushToTalkKey, 
@@ -26,6 +26,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { playClickSound } from "@/hooks/useSound";
+import { cn } from "@/lib/utils";
+import { getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/hooks/useNoiseProcessor";
 
 // Audio settings keys
 const NOISE_SUPPRESSION_KEY = "noiseSuppressionEnabled";
@@ -126,6 +128,7 @@ const SettingsDialog = () => {
   const [audioQuality, setAudioQuality] = useState<"excellent" | "good" | "poor">("excellent");
   const [pttEnabled, setPttEnabledState] = useState(getPushToTalkEnabled());
   const [pttKey, setPttKeyState] = useState(getPushToTalkKey());
+  const [noiseMode, setNoiseModeState] = useState<NoiseSuppressionMode>(getNoiseSuppressionMode());
   
   const { isCapturing, startCapture, cancelCapture } = usePushToTalkKeyCapture();
   
@@ -461,7 +464,7 @@ const SettingsDialog = () => {
           <Settings className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg glass-premium border-white/[0.08] rounded-3xl p-0 max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-lg glass-premium border-white/[0.08] rounded-3xl p-0 max-h-[80vh] flex flex-col overflow-hidden">
         <DialogHeader className="p-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-3 text-xl">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
@@ -474,7 +477,7 @@ const SettingsDialog = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6">
+        <ScrollArea className="flex-1 min-h-0 px-6">
           <div className="space-y-6 pb-6">
             {/* Avatar Section */}
             <div className="space-y-4">
@@ -633,7 +636,7 @@ const SettingsDialog = () => {
                     <div>
                       <p className="text-sm font-semibold">Suppression du bruit</p>
                       <p className="text-xs text-muted-foreground/70">
-                        Réduit le bruit de fond (ventilateur, clavier, etc.)
+                        Pipeline avancé : noise gate adaptatif + filtrage vocal
                       </p>
                     </div>
                   </div>
@@ -642,6 +645,50 @@ const SettingsDialog = () => {
                     onCheckedChange={handleNoiseSuppressionToggle}
                   />
                 </div>
+
+                {/* Noise Suppression Mode */}
+                {noiseSuppression && (
+                  <div className="p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] space-y-3 animate-fade-in">
+                    <div className="flex items-center gap-3">
+                      <Zap className="w-4 h-4 text-primary" />
+                      <p className="text-sm font-semibold">Mode de suppression</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => {
+                          setNoiseModeState('standard');
+                          setNoiseSuppressionMode('standard');
+                          playClickSound();
+                        }}
+                        className={cn(
+                          "p-3 rounded-xl text-left transition-all duration-300 border",
+                          noiseMode === 'standard'
+                            ? "bg-primary/15 border-primary/30 text-foreground"
+                            : "bg-secondary/20 border-white/[0.04] text-muted-foreground hover:border-white/[0.08]"
+                        )}
+                      >
+                        <p className="text-sm font-semibold">Standard</p>
+                        <p className="text-[10px] text-muted-foreground/70 mt-0.5">Filtrage léger, naturel</p>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setNoiseModeState('aggressive');
+                          setNoiseSuppressionMode('aggressive');
+                          playClickSound();
+                        }}
+                        className={cn(
+                          "p-3 rounded-xl text-left transition-all duration-300 border",
+                          noiseMode === 'aggressive'
+                            ? "bg-primary/15 border-primary/30 text-foreground"
+                            : "bg-secondary/20 border-white/[0.04] text-muted-foreground hover:border-white/[0.08]"
+                        )}
+                      >
+                        <p className="text-sm font-semibold">Agressif</p>
+                        <p className="text-[10px] text-muted-foreground/70 mt-0.5">Max suppression</p>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Echo Cancellation */}
                 <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-white/[0.04] transition-all duration-300 hover:border-white/[0.08]">

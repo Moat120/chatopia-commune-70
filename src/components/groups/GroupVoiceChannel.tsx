@@ -35,6 +35,8 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     currentUserId,
     connectionQuality,
     audioLevel,
+    userVolumes,
+    setUserVolume,
     join,
     leave,
     toggleMute,
@@ -245,6 +247,8 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
                           isCurrentUser={user.odId === currentUserId}
                           audioLevel={user.odId === currentUserId ? audioLevel : 0}
                           compact={hasActiveScreenShare}
+                          volume={userVolumes[user.odId]}
+                          onVolumeChange={(v) => setUserVolume(user.odId, v)}
                         />
                       </div>
                     ))}

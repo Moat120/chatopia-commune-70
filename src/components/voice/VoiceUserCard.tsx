@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MicOff, Volume2 } from "lucide-react";
+import { MicOff, Volume2, VolumeX } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
 interface VoiceUserCardProps {
@@ -10,6 +12,10 @@ interface VoiceUserCardProps {
   isCurrentUser?: boolean;
   audioLevel?: number;
   compact?: boolean;
+  /** Volume 0-2 (0=mute, 1=100%, 2=200%) */
+  volume?: number;
+  /** Called when user adjusts volume slider */
+  onVolumeChange?: (volume: number) => void;
 }
 
 const VoiceUserCard = ({ 
@@ -19,21 +25,30 @@ const VoiceUserCard = ({
   isMuted, 
   isCurrentUser,
   audioLevel = 0,
-  compact = false
+  compact = false,
+  volume,
+  onVolumeChange,
 }: VoiceUserCardProps) => {
-  // Scale avatar ring based on audio level
+  const [showVolume, setShowVolume] = useState(false);
   const ringScale = isSpeaking ? 1 + audioLevel * 0.2 : 1;
   const glowIntensity = isSpeaking ? Math.max(0.3, audioLevel) : 0;
 
+  const hasVolumeControl = !isCurrentUser && volume !== undefined && onVolumeChange;
+  const volumePercent = Math.round((volume ?? 1) * 100);
+
   if (compact) {
     return (
-      <div className={cn(
-        "relative flex items-center gap-3 p-3 rounded-xl",
-        "bg-gradient-to-r from-secondary/40 to-secondary/20",
-        "backdrop-blur-xl border border-white/[0.05]",
-        "transition-all duration-300",
-        isSpeaking && !isMuted && "from-emerald-500/10 to-emerald-500/5 border-emerald-500/20"
-      )}>
+      <div 
+        className={cn(
+          "relative flex items-center gap-3 p-3 rounded-xl",
+          "bg-gradient-to-r from-secondary/40 to-secondary/20",
+          "backdrop-blur-xl border border-white/[0.05]",
+          "transition-all duration-300",
+          isSpeaking && !isMuted && "from-emerald-500/10 to-emerald-500/5 border-emerald-500/20"
+        )}
+        onMouseEnter={() => hasVolumeControl && setShowVolume(true)}
+        onMouseLeave={() => setShowVolume(false)}
+      >
         <div className="relative">
           <Avatar className={cn(
             "h-10 w-10 ring-2 ring-offset-1 ring-offset-background transition-all duration-200",
@@ -58,6 +73,21 @@ const VoiceUserCard = ({
             {username}
             {isCurrentUser && <span className="text-muted-foreground/50 ml-1.5 text-xs">(Vous)</span>}
           </p>
+          {/* Compact volume slider */}
+          {showVolume && hasVolumeControl && (
+            <div className="flex items-center gap-2 mt-1 animate-fade-in">
+              <VolumeIcon volume={volume ?? 1} className="h-3 w-3 text-muted-foreground shrink-0" />
+              <Slider
+                value={[volume ?? 1]}
+                min={0}
+                max={2}
+                step={0.05}
+                onValueChange={([v]) => onVolumeChange?.(v)}
+                className="flex-1"
+              />
+              <span className="text-[10px] text-muted-foreground w-8 text-right">{volumePercent}%</span>
+            </div>
+          )}
         </div>
         {isSpeaking && !isMuted && (
           <Volume2 className="h-4 w-4 text-emerald-400 animate-pulse flex-shrink-0" />
@@ -67,15 +97,19 @@ const VoiceUserCard = ({
   }
 
   return (
-    <div className={cn(
-      "group relative flex flex-col items-center gap-4 p-5 rounded-3xl",
-      "bg-gradient-to-b from-secondary/50 to-secondary/20",
-      "backdrop-blur-xl border border-white/[0.05]",
-      "transition-all duration-500 ease-out",
-      "hover:border-white/[0.1] hover:from-secondary/60 hover:to-secondary/30",
-      "hover:shadow-2xl hover:shadow-black/20 hover:-translate-y-1",
-      isSpeaking && !isMuted && "from-emerald-500/10 to-transparent border-emerald-500/20 shadow-lg shadow-emerald-500/10"
-    )}>
+    <div 
+      className={cn(
+        "group relative flex flex-col items-center gap-4 p-5 rounded-3xl",
+        "bg-gradient-to-b from-secondary/50 to-secondary/20",
+        "backdrop-blur-xl border border-white/[0.05]",
+        "transition-all duration-500 ease-out",
+        "hover:border-white/[0.1] hover:from-secondary/60 hover:to-secondary/30",
+        "hover:shadow-2xl hover:shadow-black/20 hover:-translate-y-1",
+        isSpeaking && !isMuted && "from-emerald-500/10 to-transparent border-emerald-500/20 shadow-lg shadow-emerald-500/10"
+      )}
+      onMouseEnter={() => hasVolumeControl && setShowVolume(true)}
+      onMouseLeave={() => setShowVolume(false)}
+    >
       {/* Speaking glow effect */}
       {isSpeaking && !isMuted && (
         <div 
@@ -88,7 +122,6 @@ const VoiceUserCard = ({
 
       {/* Avatar container with animated rings */}
       <div className="relative">
-        {/* Outer animated rings */}
         {isSpeaking && !isMuted && (
           <>
             <div 
@@ -108,7 +141,6 @@ const VoiceUserCard = ({
           </>
         )}
         
-        {/* Avatar with dynamic glow */}
         <Avatar 
           className={cn(
             "h-20 w-20 transition-all duration-200",
@@ -179,8 +211,32 @@ const VoiceUserCard = ({
           </p>
         )}
       </div>
+
+      {/* Volume slider - shown on hover for non-current users */}
+      {showVolume && hasVolumeControl && (
+        <div className="w-full px-2 space-y-1 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <VolumeIcon volume={volume ?? 1} className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <Slider
+              value={[volume ?? 1]}
+              min={0}
+              max={2}
+              step={0.05}
+              onValueChange={([v]) => onVolumeChange?.(v)}
+              className="flex-1"
+            />
+            <span className="text-xs text-muted-foreground w-10 text-right font-medium">{volumePercent}%</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+/** Helper to pick the right volume icon */
+function VolumeIcon({ volume, className }: { volume: number; className?: string }) {
+  if (volume === 0) return <VolumeX className={className} />;
+  return <Volume2 className={className} />;
+}
 
 export default VoiceUserCard;
