@@ -636,7 +636,7 @@ const SettingsDialog = () => {
                     <div>
                       <p className="text-sm font-semibold">Suppression du bruit</p>
                       <p className="text-xs text-muted-foreground/70">
-                        Pipeline avancé : noise gate adaptatif + filtrage vocal
+                        RNNoise (réseau neuronal) + filtrage vocal avancé
                       </p>
                     </div>
                   </div>
