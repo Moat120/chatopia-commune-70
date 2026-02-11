@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import AddMemberDialog from "./AddMemberDialog";
+import GroupMembersPanel from "./GroupMembersPanel";
 import { playClickSound, playMessageSentSound } from "@/hooks/useSound";
 
 interface GroupChatPanelProps {
@@ -26,6 +27,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const [members, setMembers] = useState<{ user_id: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +64,8 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
   const isOwnerOrAdmin = group.owner_id === user?.id;
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex h-full">
+      <div className="flex-1 flex flex-col h-full">
       {/* Header */}
       <div className="h-[76px] px-6 flex items-center justify-between glass-solid border-b border-white/[0.04]">
         <div className="flex items-center gap-4">
@@ -81,6 +84,18 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => { playClickSound(); setMembersOpen(prev => !prev); }}
+            title="Membres"
+            className={cn(
+              "h-10 w-10 rounded-xl transition-all duration-300",
+              membersOpen ? "bg-primary/15 text-primary" : "hover:bg-white/[0.06]"
+            )}
+          >
+            <Users className="h-5 w-5" />
+          </Button>
           {isOwnerOrAdmin && (
             <Button 
               variant="ghost" 
@@ -99,14 +114,6 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
             className="h-10 w-10 rounded-xl hover:bg-success/15 hover:text-success transition-all duration-300"
           >
             <Phone className="h-5 w-5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            className="h-10 w-10 rounded-xl hover:bg-white/[0.06]"
-            onClick={playClickSound}
-          >
-            <MoreHorizontal className="h-5 w-5" />
           </Button>
           <Button 
             variant="ghost" 
@@ -236,6 +243,17 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           </Button>
         </div>
       </div>
+      </div>
+
+      {/* Members Panel */}
+      {membersOpen && (
+        <GroupMembersPanel
+          groupId={group.id}
+          isOwner={isOwnerOrAdmin}
+          onAddMember={() => setAddMemberOpen(true)}
+          onClose={() => setMembersOpen(false)}
+        />
+      )}
     </div>
   );
 };
