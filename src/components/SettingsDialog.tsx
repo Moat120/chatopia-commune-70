@@ -464,7 +464,7 @@ const SettingsDialog = () => {
           <Settings className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg glass-premium border-white/[0.08] rounded-3xl p-0 max-h-[80vh] flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-lg glass-premium border-white/[0.08] rounded-3xl p-0 max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="p-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-3 text-xl">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
