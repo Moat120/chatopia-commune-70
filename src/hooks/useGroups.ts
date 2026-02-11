@@ -141,30 +141,39 @@ export const useGroups = () => {
   const getGroupMembers = useCallback(
     async (groupId: string): Promise<GroupMember[]> => {
       try {
-        const { data, error } = await supabase
+        // Step 1: Get group members
+        const { data: membersData, error: membersError } = await supabase
           .from("group_members")
-          .select(`
-            id,
-            user_id,
-            role,
-            profiles (
-              username,
-              avatar_url,
-              status
-            )
-          `)
+          .select("id, user_id, role")
           .eq("group_id", groupId);
 
-        if (error) throw error;
+        if (membersError) throw membersError;
+        if (!membersData || membersData.length === 0) return [];
 
-        return (data || []).map((item: any) => ({
-          id: item.id,
-          user_id: item.user_id,
-          role: item.role,
-          username: item.profiles?.username || "Unknown",
-          avatar_url: item.profiles?.avatar_url,
-          status: item.profiles?.status,
-        }));
+        // Step 2: Get profiles for these users
+        const userIds = membersData.map(m => m.user_id);
+        const { data: profilesData, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url, status")
+          .in("id", userIds);
+
+        if (profilesError) throw profilesError;
+
+        const profilesMap = new Map(
+          (profilesData || []).map(p => [p.id, p])
+        );
+
+        return membersData.map((item) => {
+          const profile = profilesMap.get(item.user_id);
+          return {
+            id: item.id,
+            user_id: item.user_id,
+            role: item.role,
+            username: profile?.username || "Unknown",
+            avatar_url: profile?.avatar_url || null,
+            status: profile?.status || null,
+          };
+        });
       } catch (error) {
         console.error("Error fetching group members:", error);
         return [];
