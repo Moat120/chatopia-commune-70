@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { useGroups } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Loader2 } from "lucide-react";
-import { playClickSound } from "@/hooks/useSound";
 
 interface CreateGroupDialogProps {
   open: boolean;
@@ -30,7 +29,6 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
     
     if (!name.trim()) return;
 
-    playClickSound();
     setLoading(true);
     
     try {
@@ -97,7 +95,7 @@ const CreateGroupDialog = ({ open, onOpenChange }: CreateGroupDialogProps) => {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => { playClickSound(); onOpenChange(false); }}
+              onClick={() => onOpenChange(false)}
               disabled={loading}
               className="rounded-xl hover:bg-white/[0.06]"
             >

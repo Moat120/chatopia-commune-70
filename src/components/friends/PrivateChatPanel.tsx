@@ -11,7 +11,7 @@ import { Phone, X, Send, Loader2, MoreHorizontal, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { playClickSound, playMessageSentSound } from "@/hooks/useSound";
+
 
 interface PrivateChatPanelProps {
   friend: Friend;
@@ -56,7 +56,6 @@ const PrivateChatPanel = ({
 
     stopTyping();
     setSending(true);
-    playMessageSentSound();
     await sendMessage(input);
     setInput("");
     setSending(false);
@@ -114,7 +113,7 @@ const PrivateChatPanel = ({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => { playClickSound(); onStartCall(); }}
+            onClick={onStartCall}
             disabled={!isActive}
             className={cn(
               "h-10 w-10 rounded-xl transition-all duration-300",
@@ -127,14 +126,14 @@ const PrivateChatPanel = ({
             variant="ghost" 
             size="icon" 
             className="h-10 w-10 rounded-xl hover:bg-white/[0.06]"
-            onClick={playClickSound}
+            onClick={() => {}}
           >
             <MoreHorizontal className="h-5 w-5" />
           </Button>
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => { playClickSound(); onClose(); }}
+            onClick={onClose}
             className="h-10 w-10 rounded-xl hover:bg-white/[0.06]"
           >
             <X className="h-5 w-5" />

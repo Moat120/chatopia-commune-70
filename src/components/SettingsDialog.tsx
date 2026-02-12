@@ -25,7 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { playClickSound } from "@/hooks/useSound";
+
 import { cn } from "@/lib/utils";
 import { getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/hooks/useNoiseProcessor";
 
@@ -225,7 +225,6 @@ const SettingsDialog = () => {
   const handleNoiseSuppressionToggle = (enabled: boolean) => {
     setNoiseSuppressionState(enabled);
     setNoiseSuppression(enabled);
-    playClickSound();
     
     // Restart test to apply new settings
     if (isTesting) {
@@ -237,7 +236,6 @@ const SettingsDialog = () => {
   const handleEchoCancellationToggle = (enabled: boolean) => {
     setEchoCancellationState(enabled);
     setEchoCancellation(enabled);
-    playClickSound();
     
     if (isTesting) {
       stopTest();
@@ -248,7 +246,6 @@ const SettingsDialog = () => {
   const handleAutoGainToggle = (enabled: boolean) => {
     setAutoGainState(enabled);
     setAutoGain(enabled);
-    playClickSound();
     
     if (isTesting) {
       stopTest();
@@ -259,7 +256,6 @@ const SettingsDialog = () => {
   const handlePttToggle = (enabled: boolean) => {
     setPttEnabledState(enabled);
     setPushToTalkEnabled(enabled);
-    playClickSound();
   };
 
   useEffect(() => {
@@ -412,7 +408,7 @@ const SettingsDialog = () => {
 
   const handleSave = async () => {
     stopTest();
-    playClickSound();
+    
     
     try {
       await updateProfile({
@@ -459,7 +455,7 @@ const SettingsDialog = () => {
           variant="ghost"
           className="h-9 w-9 rounded-xl hover:bg-white/[0.06] transition-all duration-300"
           title="Paramètres"
-          onClick={playClickSound}
+          onClick={() => setOpen(true)}
         >
           <Settings className="w-4 h-4" />
         </Button>
@@ -497,7 +493,7 @@ const SettingsDialog = () => {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => { playClickSound(); fileInputRef.current?.click(); }}
+                    onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
                     className="rounded-xl border-white/10 hover:border-primary/30 hover:bg-primary/10"
                   >
@@ -509,7 +505,7 @@ const SettingsDialog = () => {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => { playClickSound(); setAvatarUrl(""); }}
+                      onClick={() => setAvatarUrl("")}
                       className="rounded-xl hover:bg-destructive/10 hover:text-destructive"
                     >
                       Supprimer
@@ -578,7 +574,7 @@ const SettingsDialog = () => {
                     <Button
                       size="sm"
                       variant={isTesting ? "destructive" : "secondary"}
-                      onClick={() => { playClickSound(); isTesting ? stopTest() : startTest(); }}
+                      onClick={() => { isTesting ? stopTest() : startTest(); }}
                       className="rounded-xl"
                     >
                       {isTesting ? (
@@ -658,7 +654,6 @@ const SettingsDialog = () => {
                         onClick={() => {
                           setNoiseModeState('standard');
                           setNoiseSuppressionMode('standard');
-                          playClickSound();
                         }}
                         className={cn(
                           "p-3 rounded-xl text-left transition-all duration-300 border",
@@ -674,7 +669,6 @@ const SettingsDialog = () => {
                         onClick={() => {
                           setNoiseModeState('aggressive');
                           setNoiseSuppressionMode('aggressive');
-                          playClickSound();
                         }}
                         className={cn(
                           "p-3 rounded-xl text-left transition-all duration-300 border",
@@ -771,7 +765,7 @@ const SettingsDialog = () => {
                     <Button
                       variant={isCapturing ? "default" : "outline"}
                       size="sm"
-                      onClick={() => { playClickSound(); isCapturing ? cancelCapture() : startCapture(); }}
+                      onClick={() => { isCapturing ? cancelCapture() : startCapture(); }}
                       className="min-w-[100px] rounded-xl"
                     >
                       {isCapturing ? (

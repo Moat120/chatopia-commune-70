@@ -12,7 +12,7 @@ import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Users, Phone, PhoneOff, Sparkles } from "lucide-react";
-import { RingtoneManager, playClickSound } from "@/hooks/useSound";
+
 import { cn } from "@/lib/utils";
 import { usePresence } from "@/hooks/usePresence";
 import { useCallCleanup } from "@/hooks/useCallCleanup";
@@ -46,19 +46,6 @@ const Index = () => {
     callId: string;
   } | null>(null);
   
-  const ringtoneManager = useRef<RingtoneManager>(new RingtoneManager());
-
-  useEffect(() => {
-    if (incomingCall && !activeCall) {
-      ringtoneManager.current.start(2000);
-    } else {
-      ringtoneManager.current.stop();
-    }
-
-    return () => {
-      ringtoneManager.current.stop();
-    };
-  }, [incomingCall, activeCall]);
 
   useEffect(() => {
     if (!user) return;
@@ -152,7 +139,6 @@ const Index = () => {
           <NavButton
             active={viewMode === "friends"}
             onClick={() => {
-              playClickSound();
               setViewMode("friends");
               setSelectedGroup(null);
             }}
@@ -162,7 +148,6 @@ const Index = () => {
           <NavButton
             active={viewMode === "groups"}
             onClick={() => {
-              playClickSound();
               setViewMode("groups");
               setSelectedFriend(null);
             }}

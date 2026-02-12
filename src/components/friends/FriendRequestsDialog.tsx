@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bell, Check, X, UserPlus } from "lucide-react";
-import { playClickSound } from "@/hooks/useSound";
 
 interface FriendRequestsDialogProps {
   open: boolean;
@@ -23,12 +22,10 @@ const FriendRequestsDialog = ({
   const { pendingRequests, acceptRequest, declineRequest } = useFriends();
 
   const handleAccept = async (id: string) => {
-    playClickSound();
     await acceptRequest(id);
   };
 
   const handleDecline = async (id: string) => {
-    playClickSound();
     await declineRequest(id);
   };
 

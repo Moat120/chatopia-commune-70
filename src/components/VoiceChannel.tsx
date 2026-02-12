@@ -8,7 +8,6 @@ import VoiceUserCard from "@/components/voice/VoiceUserCard";
 import VoiceControls from "@/components/voice/VoiceControls";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { playClickSound } from "@/hooks/useSound";
 
 interface VoiceChannelProps {
   channelId: string;
@@ -45,7 +44,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   });
 
   const handleJoin = async () => {
-    playClickSound();
     await join();
     toast({
       title: "Connecté",
@@ -54,7 +52,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   };
 
   const handleLeave = async () => {
-    playClickSound();
     setIsDeafened(false);
     await leave();
     toast({
@@ -64,7 +61,6 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
   };
 
   const handleToggleDeafen = useCallback(() => {
-    playClickSound();
     setIsDeafened(prev => !prev);
     document.querySelectorAll('audio').forEach(audio => {
       if (audio.srcObject) {

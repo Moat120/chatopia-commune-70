@@ -2,7 +2,6 @@ import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { X, Maximize2, Minimize2, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { playClickSound } from "@/hooks/useSound";
 
 interface ScreenStream {
   odId: string;
@@ -69,7 +68,7 @@ const ScreenTile = ({
                 size="icon"
                 variant="ghost"
                 className="h-9 w-9 rounded-xl text-white hover:bg-white/20 transition-all duration-300"
-                onClick={() => { playClickSound(); setIsMuted(!isMuted); }}
+                onClick={() => setIsMuted(!isMuted)}
               >
                 {isMuted ? (
                   <VolumeX className="h-4 w-4" />
@@ -83,7 +82,7 @@ const ScreenTile = ({
               size="icon"
               variant="ghost"
               className="h-9 w-9 rounded-xl text-white hover:bg-white/20 transition-all duration-300"
-              onClick={() => { playClickSound(); onExpand(); }}
+              onClick={onExpand}
             >
               {isExpanded ? (
                 <Minimize2 className="h-4 w-4" />
@@ -97,7 +96,7 @@ const ScreenTile = ({
                 size="icon"
                 variant="ghost"
                 className="h-9 w-9 rounded-xl text-destructive hover:bg-destructive/20 transition-all duration-300"
-                onClick={() => { playClickSound(); onStopLocal(); }}
+                onClick={() => onStopLocal()}
               >
                 <X className="h-4 w-4" />
               </Button>
