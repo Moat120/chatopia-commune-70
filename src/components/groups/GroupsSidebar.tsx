@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Users, Plus, MessageCircle, Phone, ChevronLeft, Search, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import CreateGroupDialog from "./CreateGroupDialog";
-import { playClickSound } from "@/hooks/useSound";
 
 interface GroupsSidebarProps {
   selectedGroup: Group | null;
@@ -40,7 +39,7 @@ const GroupsSidebar = ({
               variant="ghost"
               size="icon"
               className="h-9 w-9 rounded-xl hover:bg-white/[0.06] transition-all duration-300"
-              onClick={() => { playClickSound(); onBack(); }}
+              onClick={onBack}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -55,7 +54,7 @@ const GroupsSidebar = ({
             variant="ghost"
             size="icon"
             className="h-9 w-9 rounded-xl hover:bg-white/[0.06] hover:text-primary transition-all duration-300"
-            onClick={() => { playClickSound(); setCreateOpen(true); }}
+            onClick={() => setCreateOpen(true)}
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -90,7 +89,7 @@ const GroupsSidebar = ({
               variant="outline"
               size="sm"
               className="rounded-xl border-white/10 hover:border-primary/30 hover:bg-primary/10 transition-all duration-300"
-              onClick={() => { playClickSound(); setCreateOpen(true); }}
+              onClick={() => setCreateOpen(true)}
             >
               <Plus className="h-4 w-4 mr-2" />
               Créer un groupe
@@ -107,9 +106,9 @@ const GroupsSidebar = ({
                 <GroupItem
                   group={group}
                   isSelected={selectedGroup?.id === group.id}
-                  onSelect={() => { playClickSound(); onSelectGroup(group); }}
+                  onSelect={() => onSelectGroup(group)}
                   onMessage={() => onSelectGroup(group)}
-                  onCall={() => { playClickSound(); onStartGroupCall(group); }}
+                  onCall={() => onStartGroupCall(group)}
                 />
               </div>
             ))}
@@ -172,7 +171,6 @@ const GroupItem = ({
           className="h-8 w-8 rounded-lg hover:bg-white/[0.08] transition-all duration-300"
           onClick={(e) => {
             e.stopPropagation();
-            playClickSound();
             onMessage();
           }}
         >

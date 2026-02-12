@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Phone, PhoneOff, Mic, MicOff, Loader2, Monitor, MonitorOff, Radio, Volume2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { RingtoneManager, playClickSound, playMuteSound, playUnmuteSound } from "@/hooks/useSound";
+
 import { 
   getSelectedMicrophone, 
   getNoiseSuppression, 
@@ -117,7 +117,7 @@ const PrivateCallPanel = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
-  const ringtoneManager = useRef<RingtoneManager>(new RingtoneManager());
+  
   const pttEnabledRef = useRef(getPushToTalkEnabled());
   const isMutedRef = useRef(false);
   const callStatusRef = useRef(callStatus);
@@ -166,18 +166,6 @@ const PrivateCallPanel = ({
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
-  // Play ringtone for incoming calls
-  useEffect(() => {
-    if (isIncoming && callStatus === "ringing") {
-      ringtoneManager.current.start(2000);
-    } else {
-      ringtoneManager.current.stop();
-    }
-
-    return () => {
-      ringtoneManager.current.stop();
-    };
-  }, [isIncoming, callStatus]);
 
   const channelId = useMemo(() => `private-call-${[user?.id, friend.id].sort().join('-')}`, [user?.id, friend.id]);
 
@@ -604,7 +592,6 @@ const PrivateCallPanel = ({
 
   const acceptCall = async () => {
     if (!callId) return;
-    playClickSound();
     setCallStatus("connecting");
     
     await supabase
@@ -615,8 +602,6 @@ const PrivateCallPanel = ({
 
   const declineCall = async () => {
     if (!callId) return;
-    playClickSound();
-    
     await supabase
       .from("private_calls")
       .update({ status: "declined", ended_at: new Date().toISOString() })
@@ -628,8 +613,6 @@ const PrivateCallPanel = ({
 
   const endCall = async () => {
     if (!callId) return;
-    playClickSound();
-
     await supabase
       .from("private_calls")
       .update({ status: "ended", ended_at: new Date().toISOString() })
@@ -641,7 +624,6 @@ const PrivateCallPanel = ({
 
   const toggleMute = () => {
     if (localStreamRef.current) {
-      if (isMuted) playUnmuteSound(); else playMuteSound();
       localStreamRef.current.getAudioTracks().forEach((track) => {
         track.enabled = isMuted;
       });
@@ -652,7 +634,6 @@ const PrivateCallPanel = ({
   };
 
   const handleToggleScreenShare = () => {
-    playClickSound();
     if (isSharing) {
       stopScreenShare();
     } else {

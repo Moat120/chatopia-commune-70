@@ -13,7 +13,6 @@ import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialo
 import { Group } from "@/hooks/useGroups";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { playClickSound } from "@/hooks/useSound";
 
 interface GroupVoiceChannelProps {
   group: Group;
@@ -96,7 +95,6 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   }, [isSharing, localStream, remoteStreams, screenSharers, user, profile]);
 
   const handleJoin = async () => {
-    playClickSound();
     await join();
     toast({
       title: "Connecté",
@@ -105,7 +103,6 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   };
 
   const handleLeave = async () => {
-    playClickSound();
     setIsDeafened(false);
     if (isSharing) await stopScreenShare();
     await cleanupScreenShare();
@@ -114,7 +111,6 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   };
 
   const handleToggleDeafen = useCallback(() => {
-    playClickSound();
     setIsDeafened(prev => !prev);
     document.querySelectorAll('audio').forEach(audio => {
       if (audio.srcObject) {
@@ -124,7 +120,6 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   }, [isDeafened]);
 
   const handleToggleScreenShare = () => {
-    playClickSound();
     if (isSharing) {
       stopScreenShare();
     } else {

@@ -12,7 +12,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import AddMemberDialog from "./AddMemberDialog";
 import GroupMembersPanel from "./GroupMembersPanel";
-import { playClickSound, playMessageSentSound } from "@/hooks/useSound";
+
 
 interface GroupChatPanelProps {
   group: Group;
@@ -48,7 +48,6 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
   const handleSend = async () => {
     if (!input.trim() || sending) return;
     setSending(true);
-    playMessageSentSound();
     const success = await sendMessage(input);
     if (success) setInput("");
     setSending(false);
@@ -87,7 +86,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => { playClickSound(); setMembersOpen(prev => !prev); }}
+            onClick={() => setMembersOpen(prev => !prev)}
             title="Membres"
             className={cn(
               "h-10 w-10 rounded-xl transition-all duration-300",
@@ -100,7 +99,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={() => { playClickSound(); setAddMemberOpen(true); }} 
+              onClick={() => setAddMemberOpen(true)} 
               title="Inviter"
               className="h-10 w-10 rounded-xl hover:bg-white/[0.06]"
             >
@@ -110,7 +109,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => { playClickSound(); onStartCall(); }}
+            onClick={onStartCall}
             className="h-10 w-10 rounded-xl hover:bg-success/15 hover:text-success transition-all duration-300"
           >
             <Phone className="h-5 w-5" />
@@ -118,7 +117,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => { playClickSound(); onClose(); }}
+            onClick={onClose}
             className="h-10 w-10 rounded-xl hover:bg-white/[0.06]"
           >
             <X className="h-5 w-5" />

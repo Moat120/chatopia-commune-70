@@ -24,7 +24,7 @@ import FriendRequestsDialog from "./FriendRequestsDialog";
 import SettingsDialog from "@/components/SettingsDialog";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { playClickSound } from "@/hooks/useSound";
+
 
 interface FriendsSidebarProps {
   selectedFriend: Friend | null;
@@ -56,7 +56,7 @@ const FriendsSidebar = ({
     if (profile?.friend_code) {
       navigator.clipboard.writeText(profile.friend_code);
       setCopied(true);
-      playClickSound();
+      toast({ title: "Code copié !" });
       toast({ title: "Code copié !" });
       setTimeout(() => setCopied(false), 2000);
     }
@@ -84,7 +84,7 @@ const FriendsSidebar = ({
               variant="ghost"
               size="icon"
               className="h-9 w-9 rounded-xl relative hover:bg-white/[0.06] transition-all duration-300"
-              onClick={() => { playClickSound(); setRequestsOpen(true); }}
+              onClick={() => setRequestsOpen(true)}
             >
               <Bell className="h-4 w-4" />
               {pendingRequests.length > 0 && (
@@ -97,7 +97,7 @@ const FriendsSidebar = ({
               variant="ghost"
               size="icon"
               className="h-9 w-9 rounded-xl hover:bg-white/[0.06] transition-all duration-300"
-              onClick={() => { playClickSound(); setAddFriendOpen(true); }}
+              onClick={() => setAddFriendOpen(true)}
             >
               <UserPlus className="h-4 w-4" />
             </Button>
@@ -160,7 +160,7 @@ const FriendsSidebar = ({
               variant="outline"
               size="sm"
               className="rounded-xl border-white/10 hover:border-primary/30 hover:bg-primary/10 transition-all duration-300"
-              onClick={() => { playClickSound(); setAddFriendOpen(true); }}
+              onClick={() => setAddFriendOpen(true)}
             >
               <UserPlus className="h-4 w-4 mr-2" />
               Ajouter des amis
@@ -185,7 +185,7 @@ const FriendsSidebar = ({
                         friend={friend}
                         isSelected={selectedFriend?.id === friend.id}
                         unreadCount={getUnreadCount(friend.id)}
-                        onSelect={() => { playClickSound(); onSelectFriend(friend); }}
+                        onSelect={() => onSelectFriend(friend)}
                         onMessage={() => onSelectFriend(friend)}
                         onCall={() => onStartCall(friend)}
                       />
@@ -211,7 +211,7 @@ const FriendsSidebar = ({
                         friend={friend}
                         isSelected={selectedFriend?.id === friend.id}
                         unreadCount={getUnreadCount(friend.id)}
-                        onSelect={() => { playClickSound(); onSelectFriend(friend); }}
+                        onSelect={() => onSelectFriend(friend)}
                         onMessage={() => onSelectFriend(friend)}
                         onCall={() => onStartCall(friend)}
                       />
@@ -245,7 +245,7 @@ const FriendsSidebar = ({
             variant="ghost" 
             size="icon" 
             className="h-9 w-9 rounded-xl hover:bg-white/[0.06] hover:text-destructive transition-all duration-300" 
-            onClick={() => { playClickSound(); signOut(); }}
+            onClick={signOut}
           >
             <LogOut className="h-4 w-4" />
           </Button>
@@ -341,7 +341,6 @@ const FriendItem = ({
           className="h-8 w-8 rounded-lg hover:bg-white/[0.08] transition-all duration-300"
           onClick={(e) => {
             e.stopPropagation();
-            playClickSound();
             onMessage();
           }}
         >
@@ -357,7 +356,6 @@ const FriendItem = ({
           onClick={(e) => {
             e.stopPropagation();
             if (isActive) {
-              playClickSound();
               onCall();
             }
           }}

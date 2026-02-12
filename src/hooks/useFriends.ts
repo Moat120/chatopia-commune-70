@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { playNotificationSound } from "@/hooks/useSound";
+
 
 export interface Friend {
   id: string;
@@ -94,10 +94,6 @@ export const useFriends = () => {
         created_at: r.created_at,
       })).filter(r => r.requester) || [];
 
-      // Play notification sound if there are new requests
-      if (requests.length > previousRequestsCount.current && previousRequestsCount.current > 0) {
-        playNotificationSound();
-      }
       previousRequestsCount.current = requests.length;
 
       setPendingRequests(requests);

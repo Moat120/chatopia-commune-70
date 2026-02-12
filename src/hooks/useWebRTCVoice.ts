@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { playJoinSound, playLeaveSound } from "@/hooks/useSound";
+
 import { 
   getSelectedMicrophone, 
   getNoiseSuppression, 
@@ -532,7 +532,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       presenceChannel.on("presence", { event: "join" }, ({ key }) => {
         if (key !== currentUserId) {
-          playJoinSound();
           if (currentUserId < key) {
             initiateConnection(key);
           }
@@ -541,7 +540,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
         if (key !== currentUserId) {
-          playLeaveSound();
           const pc = peerConnectionsRef.current.get(key);
           if (pc) {
             pc.close();
@@ -574,7 +572,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       setIsConnecting(false);
       setConnectionQuality("good");
 
-      playJoinSound();
     } catch (error: any) {
       console.error("[Voice] Join error:", error);
       onError?.(error.message || "Failed to join voice channel");
@@ -595,7 +592,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   ]);
 
   const leave = useCallback(async () => {
-    playLeaveSound();
     await cleanup();
   }, [cleanup]);
 

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Session } from "@supabase/supabase-js";
 import { Loader2, Sparkles } from "lucide-react";
-import { playClickSound } from "@/hooks/useSound";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -39,7 +38,6 @@ const Auth = () => {
   }, [navigate]);
 
   const handleGoogleSignIn = async () => {
-    playClickSound();
     setGoogleLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({

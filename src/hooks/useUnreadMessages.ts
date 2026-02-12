@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { playNotificationSound } from "@/hooks/useSound";
+
 
 interface UnreadCounts {
   [odId: string]: number;
@@ -75,8 +75,6 @@ export const useUnreadMessages = () => {
         (payload) => {
           const msg = payload.new as any;
           
-          // Play sound for new message
-          playNotificationSound();
           
           setUnreadCounts((prev) => ({
             ...prev,

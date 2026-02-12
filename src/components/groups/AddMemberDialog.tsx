@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserPlus, Loader2, Users } from "lucide-react";
-import { playClickSound } from "@/hooks/useSound";
 
 interface AddMemberDialogProps {
   open: boolean;
@@ -39,7 +38,6 @@ const AddMemberDialog = ({
   );
 
   const handleAdd = async (userId: string, username: string) => {
-    playClickSound();
     setLoading(userId);
     const success = await addMember(groupId, userId);
     setLoading(null);

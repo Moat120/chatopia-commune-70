@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Monitor, Zap, Crown } from "lucide-react";
 import { ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
 import { cn } from "@/lib/utils";
-import { playClickSound } from "@/hooks/useSound";
 
 interface ScreenShareQualityDialogProps {
   open: boolean;
@@ -50,7 +49,6 @@ const ScreenShareQualityDialog = ({
   onSelectQuality,
 }: ScreenShareQualityDialogProps) => {
   const handleSelect = (quality: ScreenQuality) => {
-    playClickSound();
     onSelectQuality(quality);
     onOpenChange(false);
   };

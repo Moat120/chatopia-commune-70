@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { playNotificationSound } from "@/hooks/useSound";
+
 
 export interface PrivateMessage {
   id: string;
@@ -86,10 +86,6 @@ export const usePrivateChat = (friendId: string | null) => {
                 return [...prev, msg];
               });
               
-              // Play notification sound for incoming messages (not our own)
-              if (msg.sender_id === friendId && !isInitialLoad.current) {
-                playNotificationSound();
-              }
               
               // Mark as read if we're the receiver
               if (msg.receiver_id === user.id) {

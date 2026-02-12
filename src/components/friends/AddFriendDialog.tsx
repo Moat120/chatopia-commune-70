@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useFriends } from "@/hooks/useFriends";
 import { UserPlus, Loader2, Sparkles } from "lucide-react";
-import { playClickSound } from "@/hooks/useSound";
 
 interface AddFriendDialogProps {
   open: boolean;
@@ -28,7 +27,6 @@ const AddFriendDialog = ({ open, onOpenChange }: AddFriendDialogProps) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    playClickSound();
     setLoading(true);
     setError("");
 
@@ -82,7 +80,7 @@ const AddFriendDialog = ({ open, onOpenChange }: AddFriendDialogProps) => {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => { playClickSound(); onOpenChange(false); }}
+              onClick={() => onOpenChange(false)}
               className="rounded-xl hover:bg-white/[0.06]"
             >
               Annuler
