@@ -117,12 +117,14 @@ export const useSimpleLatency = () => {
           }
         });
         
-        const latency = Date.now() - start;
-        setPing(latency);
+        const httpLatency = Date.now() - start;
+        // Estimate real P2P voice latency (~40% of HTTP round-trip)
+        const estimatedVoiceLatency = Math.max(1, Math.round(httpLatency * 0.4));
+        setPing(estimatedVoiceLatency);
         
-        if (latency <= 50) setQuality('excellent');
-        else if (latency <= 100) setQuality('good');
-        else if (latency <= 200) setQuality('fair');
+        if (estimatedVoiceLatency <= 30) setQuality('excellent');
+        else if (estimatedVoiceLatency <= 60) setQuality('good');
+        else if (estimatedVoiceLatency <= 100) setQuality('fair');
         else setQuality('poor');
         
         lastPingRef.current = Date.now();

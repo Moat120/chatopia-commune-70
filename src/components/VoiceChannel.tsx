@@ -71,122 +71,105 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden">
+      <div className="flex-1 flex flex-col h-full relative overflow-hidden">
         <div className="absolute inset-0 call-bg" />
         <div className="absolute inset-0 noise pointer-events-none" />
 
-        <div className="relative w-full max-w-3xl space-y-10 animate-reveal">
-          {/* Header */}
-          <div className="text-center space-y-6">
-            <div className="relative inline-block">
-              <div className={cn(
-                "absolute -inset-8 rounded-full blur-3xl transition-all duration-700",
-                isConnected ? "bg-success/20" : "bg-primary/15"
+        {/* Header Bar */}
+        <div className={cn(
+          "shrink-0 px-5 py-4 flex items-center justify-between relative z-10",
+          "border-b border-white/[0.04] glass-solid"
+        )}>
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center",
+              "bg-gradient-to-br from-primary/25 to-transparent",
+              "border border-primary/25",
+              isConnected && "border-success/30"
+            )}>
+              <Volume2 className={cn(
+                "h-5 w-5",
+                isConnected ? "text-success" : "text-primary"
               )} />
-              
-              <div className={cn(
-                "relative mx-auto w-28 h-28 rounded-[2rem] flex items-center justify-center",
-                "bg-gradient-to-br from-primary/25 via-primary/15 to-transparent",
-                "border border-primary/25 backdrop-blur-xl",
-                "transition-all duration-700 ease-out",
-                "shadow-xl",
-                isConnected && "shadow-2xl shadow-success/20 border-success/30"
-              )}>
-                <Volume2 className={cn(
-                  "h-14 w-14 transition-all duration-500",
-                  isConnected ? "text-success" : "text-primary"
-                )} />
-                
-                <Sparkles className="absolute top-3 right-3 w-5 h-5 text-primary/50 animate-pulse" />
-                
-                {isConnected && (
-                  <>
-                    <div className="absolute inset-0 rounded-[2rem] border-2 border-success/30 animate-speaking-ring" />
-                    <div className="absolute inset-0 rounded-[2rem] border-2 border-success/20 animate-speaking-ring" style={{ animationDelay: '0.6s' }} />
-                  </>
-                )}
-              </div>
             </div>
-            
-            <div className="space-y-3">
-              <h2 className="text-4xl font-bold tracking-tight gradient-text-static">
-                {channelName}
-              </h2>
-              <p className="text-muted-foreground/60 text-lg font-light">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight">{channelName}</h2>
+              <p className="text-xs text-muted-foreground/50">
                 {isConnected 
-                  ? "Vous êtes connecté au canal vocal" 
-                  : "Cliquez pour rejoindre la conversation"}
+                  ? `${connectedUsers.length} connecté${connectedUsers.length > 1 ? 's' : ''}`
+                  : "Canal vocal"}
               </p>
             </div>
-
-            {isConnected && (
-              <div className="flex justify-center animate-scale-in">
-                <ConnectionQualityIndicator 
-                  quality={connectionQuality} 
-                  ping={ping}
-                  showPing={true}
-                />
-              </div>
-            )}
           </div>
 
-          {/* Connected Users */}
           {isConnected && (
-            <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-              <div className="flex items-center justify-center">
-                <div className="flex items-center gap-2.5 px-5 py-2.5 rounded-2xl bg-secondary/30 backdrop-blur-xl border border-white/[0.04]">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-semibold text-muted-foreground">
-                    {connectedUsers.length} {connectedUsers.length === 1 ? 'participant' : 'participants'}
-                  </span>
+            <ConnectionQualityIndicator 
+              quality={connectionQuality} 
+              ping={ping}
+              showPing={true}
+            />
+          )}
+        </div>
+
+        {/* Participants Area */}
+        <div className="flex-1 min-h-0 overflow-y-auto relative z-10 p-6">
+          {isConnected ? (
+            <div className="flex flex-wrap justify-center gap-5 content-center min-h-full">
+              {connectedUsers.map((user, index) => (
+                <div 
+                  key={user.odId}
+                  className="animate-scale-in"
+                  style={{ animationDelay: `${index * 0.08}s` }}
+                >
+                  <VoiceUserCard
+                    username={user.username}
+                    avatarUrl={user.avatarUrl}
+                    isSpeaking={user.isSpeaking}
+                    isMuted={user.isMuted}
+                    isCurrentUser={user.odId === currentUserId}
+                    audioLevel={user.odId === currentUserId ? audioLevel : 0}
+                    volume={userVolumes[user.odId]}
+                    onVolumeChange={(v) => setUserVolume(user.odId, v)}
+                  />
                 </div>
-              </div>
-              
-              <div className="flex flex-wrap justify-center gap-5">
-                {connectedUsers.map((user, index) => (
-                  <div 
-                    key={user.odId}
-                    className="animate-scale-in"
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <VoiceUserCard
-                      username={user.username}
-                      avatarUrl={user.avatarUrl}
-                      isSpeaking={user.isSpeaking}
-                      isMuted={user.isMuted}
-                      isCurrentUser={user.odId === currentUserId}
-                      audioLevel={user.odId === currentUserId ? audioLevel : 0}
-                      volume={userVolumes[user.odId]}
-                      onVolumeChange={(v) => setUserVolume(user.odId, v)}
-                    />
-                  </div>
-                ))}
+              ))}
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center space-y-5 animate-reveal">
+                <div className={cn(
+                  "mx-auto w-24 h-24 rounded-3xl flex items-center justify-center",
+                  "bg-gradient-to-br from-primary/20 to-transparent",
+                  "border border-primary/20"
+                )}>
+                  <Volume2 className="h-12 w-12 text-primary/40" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-semibold gradient-text-static">{channelName}</h3>
+                  <p className="text-sm text-muted-foreground/50">
+                    Cliquez pour rejoindre la conversation
+                  </p>
+                </div>
               </div>
             </div>
           )}
+        </div>
 
-          {/* Controls */}
-          <div className="flex justify-center pt-6">
-            <VoiceControls
-              isConnected={isConnected}
-              isConnecting={isConnecting}
-              isMuted={isMuted}
-              isDeafened={isDeafened}
-              onJoin={handleJoin}
-              onLeave={handleLeave}
-              onToggleMute={toggleMute}
-              onToggleDeafen={handleToggleDeafen}
-            />
-          </div>
-
-          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/40 font-medium">
-            <Zap className="h-3.5 w-3.5" />
-            <span>
-              {isConnected 
-                ? "Votre avatar s'anime quand vous parlez" 
-                : "Détection vocale automatique • Push-to-Talk disponible"}
-            </span>
-          </div>
+        {/* Controls Bar */}
+        <div className={cn(
+          "shrink-0 px-6 py-5 flex justify-center relative z-10",
+          "border-t border-white/[0.04] glass-solid"
+        )}>
+          <VoiceControls
+            isConnected={isConnected}
+            isConnecting={isConnecting}
+            isMuted={isMuted}
+            isDeafened={isDeafened}
+            onJoin={handleJoin}
+            onLeave={handleLeave}
+            onToggleMute={toggleMute}
+            onToggleDeafen={handleToggleDeafen}
+          />
         </div>
       </div>
     </TooltipProvider>
