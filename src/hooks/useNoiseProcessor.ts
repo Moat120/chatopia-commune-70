@@ -90,21 +90,21 @@ export class AdvancedNoiseProcessor {
 
       // === Étape 1 : RNNoise WASM (cœur du pipeline) ===
       try {
-        const { RnnoiseWorkletNode, loadRnnoise } = await import('@sapphi-red/web-noise-suppressor');
+        // Dynamic import the library
+        const rnnoiseModule = await import('@sapphi-red/web-noise-suppressor');
+        const { RnnoiseWorkletNode, loadRnnoise } = rnnoiseModule;
 
-        // Charger les fichiers WASM et worklet via Vite
-        const rnnoiseWorkletUrl = new URL(
-          '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js',
-          import.meta.url
-        ).href;
-        const rnnoiseWasmUrl = new URL(
-          '@sapphi-red/web-noise-suppressor/rnnoise.wasm',
-          import.meta.url
-        ).href;
-        const rnnoiseSimdWasmUrl = new URL(
-          '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm',
-          import.meta.url
-        ).href;
+        // Use ?url suffix for Vite to get resolved URLs
+        const rnnoiseWorkletUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url')).default;
+        const rnnoiseWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise.wasm?url')).default;
+        
+        // Try SIMD first, fallback to non-SIMD
+        let rnnoiseSimdWasmUrl: string | undefined;
+        try {
+          rnnoiseSimdWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url')).default;
+        } catch {
+          console.log('[AdvancedNoiseProcessor] SIMD WASM not available, using non-SIMD');
+        }
 
         // Charger le binaire WASM (avec support SIMD automatique)
         const wasmBinary = await loadRnnoise({
@@ -218,20 +218,15 @@ export class AdvancedNoiseProcessor {
 
   /**
    * Change le mode de suppression de bruit en temps réel.
-   * Met à jour les paramètres des filtres et du compresseur.
-   * Note: RNNoise n'a pas de mode - il traite toujours au maximum.
-   * Le mode affecte uniquement le post-traitement (filtres + compresseur).
    */
   setMode(mode: NoiseSuppressionMode) {
     this.mode = mode;
     setNoiseSuppressionMode(mode);
 
-    // Mettre à jour le noise gate fallback si utilisé
     if (this.fallbackWorkletNode) {
       this.fallbackWorkletNode.port.postMessage({ type: 'setMode', mode });
     }
 
-    // Mettre à jour les paramètres des filtres
     if (this.peakingFilter) {
       this.peakingFilter.gain.value = mode === 'aggressive' ? -5 : -3;
     }
@@ -262,20 +257,17 @@ export class AdvancedNoiseProcessor {
 
   /**
    * Retourne la latence estimée du pipeline en millisecondes.
-   * RNNoise traite par blocs de 480 samples à 48kHz = 10ms.
    */
   getLatency(): number {
     if (!this.audioContext) return 0;
     const baseLatency = (this.audioContext.baseLatency || 0) * 1000;
     const outputLatency = (this.audioContext.outputLatency || 0) * 1000;
-    // RNNoise: 480 samples at 48kHz = 10ms
-    // Fallback worklet: 128 samples at 48kHz = ~2.67ms
     const processingLatency = this.useRnnoise ? 10 : this.useFallbackWorklet ? (128 / 48000) * 1000 : 0;
     return Math.round(baseLatency + outputLatency + processingLatency);
   }
 
   /**
-   * Indique si RNNoise est actif (true = neural network, false = fallback).
+   * Indique si RNNoise est actif.
    */
   isRnnoiseActive(): boolean {
     return this.useRnnoise;
@@ -288,7 +280,6 @@ export class AdvancedNoiseProcessor {
     try {
       this.sourceNode?.disconnect();
       
-      // Cleanup RNNoise node
       if (this.rnnoiseNode) {
         (this.rnnoiseNode as any).destroy?.();
         this.rnnoiseNode.disconnect();
