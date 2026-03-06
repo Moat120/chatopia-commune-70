@@ -51,7 +51,10 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
     if (!input.trim() || sending) return;
     setSending(true);
     const success = await sendMessage(input);
-    if (success) setInput("");
+    if (success) {
+      playMessageSent();
+      setInput("");
+    }
     setSending(false);
   };
 
