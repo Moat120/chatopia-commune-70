@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Group, useGroups } from "@/hooks/useGroups";
 import { useGroupChat } from "@/hooks/useGroupChat";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSound } from "@/hooks/useSound";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
