@@ -76,7 +76,7 @@ const VoiceControls = ({
     <div className="flex items-center gap-4">
       {/* Mute button */}
       <Button
-        onClick={onToggleMute}
+        onClick={handleToggleMute}
         size="lg"
         className={cn(
           "relative group h-16 w-16 rounded-2xl p-0",
