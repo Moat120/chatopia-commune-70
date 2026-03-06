@@ -25,6 +25,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
   const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = useGroupChat(group.id);
   const { getGroupMembers } = useGroups();
+  const { playMessageSent } = useSound();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
