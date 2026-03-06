@@ -118,6 +118,7 @@ const Index = () => {
         .eq("id", incomingCall.callId);
       ringtoneRef.current.stop();
       setIncomingCall(null);
+    }
   };
 
   const handleStartGroupCall = (group: Group) => {
