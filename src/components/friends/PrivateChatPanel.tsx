@@ -27,6 +27,7 @@ const PrivateChatPanel = ({
 }: PrivateChatPanelProps) => {
   const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = usePrivateChat(friend.id);
+  const { playMessageSent } = useSound();
   const channelId = `private-${[user?.id, friend.id].sort().join("-")}`;
   const { typingUsers, isTyping, startTyping, stopTyping } = useTypingIndicator(channelId);
   const [input, setInput] = useState("");

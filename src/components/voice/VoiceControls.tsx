@@ -167,7 +167,7 @@ const VoiceControls = ({
 
       {/* Leave button */}
       <Button
-        onClick={onLeave}
+        onClick={handleLeave}
         size="lg"
         className={cn(
           "relative group h-16 w-16 rounded-2xl p-0",
