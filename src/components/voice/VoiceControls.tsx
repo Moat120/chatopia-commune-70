@@ -1,6 +1,7 @@
 import { Phone, PhoneOff, Mic, MicOff, Loader2, VolumeX, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useSound } from "@/hooks/useSound";
 
 interface VoiceControlsProps {
   isConnected: boolean;
