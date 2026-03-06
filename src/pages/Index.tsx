@@ -33,6 +33,8 @@ const Index = () => {
   usePresence();
   useCallCleanup();
   
+  const ringtoneRef = useRef(new RingtoneManager());
+  
   const [viewMode, setViewMode] = useState<ViewMode>("friends");
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
