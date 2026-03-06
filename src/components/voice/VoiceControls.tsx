@@ -122,7 +122,7 @@ const VoiceControls = ({
       {/* Deafen button */}
       {onToggleDeafen && (
         <Button
-          onClick={onToggleDeafen}
+          onClick={handleToggleDeafen}
           size="lg"
           className={cn(
             "relative group h-16 w-16 rounded-2xl p-0",
