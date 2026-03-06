@@ -105,6 +105,7 @@ const Index = () => {
         isIncoming: true,
         callId: incomingCall.callId,
       });
+      ringtoneRef.current.stop();
       setIncomingCall(null);
     }
   };
