@@ -59,6 +59,7 @@ const PrivateChatPanel = ({
     stopTyping();
     setSending(true);
     await sendMessage(input);
+    playMessageSent();
     setInput("");
     setSending(false);
   };
