@@ -24,6 +24,12 @@ const VoiceControls = ({
   onToggleMute,
   onToggleDeafen
 }: VoiceControlsProps) => {
+  const { playJoin, playLeave, playMute, playUnmute } = useSound();
+
+  const handleJoin = () => { playJoin(); onJoin(); };
+  const handleLeave = () => { playLeave(); onLeave(); };
+  const handleToggleMute = () => { isMuted ? playUnmute() : playMute(); onToggleMute(); };
+  const handleToggleDeafen = () => { onToggleDeafen?.(); };
   if (!isConnected) {
     return (
       <Button
