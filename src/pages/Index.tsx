@@ -77,6 +77,8 @@ const Index = () => {
                 friend: caller as Friend,
                 callId: call.id,
               });
+              playNotificationSound();
+              ringtoneRef.current.start();
               toast({
                 title: "Appel entrant",
                 description: `${caller.username} vous appelle`,
