@@ -116,8 +116,8 @@ const Index = () => {
         .from("private_calls")
         .update({ status: "declined", ended_at: new Date().toISOString() })
         .eq("id", incomingCall.callId);
+      ringtoneRef.current.stop();
       setIncomingCall(null);
-    }
   };
 
   const handleStartGroupCall = (group: Group) => {
