@@ -3,6 +3,7 @@ import { Friend } from "@/hooks/useFriends";
 import { usePrivateChat } from "@/hooks/usePrivateChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
+import { useSound } from "@/hooks/useSound";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
