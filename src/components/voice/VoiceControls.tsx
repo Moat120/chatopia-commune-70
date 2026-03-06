@@ -1,6 +1,7 @@
 import { Phone, PhoneOff, Mic, MicOff, Loader2, VolumeX, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useSound } from "@/hooks/useSound";
 
 interface VoiceControlsProps {
   isConnected: boolean;
@@ -23,10 +24,16 @@ const VoiceControls = ({
   onToggleMute,
   onToggleDeafen
 }: VoiceControlsProps) => {
+  const { playJoin, playLeave, playMute, playUnmute } = useSound();
+
+  const handleJoin = () => { playJoin(); onJoin(); };
+  const handleLeave = () => { playLeave(); onLeave(); };
+  const handleToggleMute = () => { isMuted ? playUnmute() : playMute(); onToggleMute(); };
+  const handleToggleDeafen = () => { onToggleDeafen?.(); };
   if (!isConnected) {
     return (
       <Button
-        onClick={onJoin}
+        onClick={handleJoin}
         disabled={isConnecting}
         size="lg"
         className={cn(
@@ -69,7 +76,7 @@ const VoiceControls = ({
     <div className="flex items-center gap-4">
       {/* Mute button */}
       <Button
-        onClick={onToggleMute}
+        onClick={handleToggleMute}
         size="lg"
         className={cn(
           "relative group h-16 w-16 rounded-2xl p-0",
@@ -115,7 +122,7 @@ const VoiceControls = ({
       {/* Deafen button */}
       {onToggleDeafen && (
         <Button
-          onClick={onToggleDeafen}
+          onClick={handleToggleDeafen}
           size="lg"
           className={cn(
             "relative group h-16 w-16 rounded-2xl p-0",
@@ -160,7 +167,7 @@ const VoiceControls = ({
 
       {/* Leave button */}
       <Button
-        onClick={onLeave}
+        onClick={handleLeave}
         size="lg"
         className={cn(
           "relative group h-16 w-16 rounded-2xl p-0",

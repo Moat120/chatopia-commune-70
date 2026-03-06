@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Group, useGroups } from "@/hooks/useGroups";
 import { useGroupChat } from "@/hooks/useGroupChat";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSound } from "@/hooks/useSound";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,6 +25,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
   const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = useGroupChat(group.id);
   const { getGroupMembers } = useGroups();
+  const { playMessageSent } = useSound();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -49,7 +51,10 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
     if (!input.trim() || sending) return;
     setSending(true);
     const success = await sendMessage(input);
-    if (success) setInput("");
+    if (success) {
+      playMessageSent();
+      setInput("");
+    }
     setSending(false);
   };
 

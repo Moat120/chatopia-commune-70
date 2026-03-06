@@ -12,6 +12,7 @@ import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Users, Phone, PhoneOff, Sparkles } from "lucide-react";
+import { playNotificationSound, RingtoneManager } from "@/hooks/useSound";
 
 import { cn } from "@/lib/utils";
 import { usePresence } from "@/hooks/usePresence";
@@ -31,6 +32,8 @@ const Index = () => {
   
   usePresence();
   useCallCleanup();
+  
+  const ringtoneRef = useRef(new RingtoneManager());
   
   const [viewMode, setViewMode] = useState<ViewMode>("friends");
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
@@ -74,6 +77,8 @@ const Index = () => {
                 friend: caller as Friend,
                 callId: call.id,
               });
+              playNotificationSound();
+              ringtoneRef.current.start();
               toast({
                 title: "Appel entrant",
                 description: `${caller.username} vous appelle`,
@@ -100,6 +105,7 @@ const Index = () => {
         isIncoming: true,
         callId: incomingCall.callId,
       });
+      ringtoneRef.current.stop();
       setIncomingCall(null);
     }
   };
@@ -110,6 +116,7 @@ const Index = () => {
         .from("private_calls")
         .update({ status: "declined", ended_at: new Date().toISOString() })
         .eq("id", incomingCall.callId);
+      ringtoneRef.current.stop();
       setIncomingCall(null);
     }
   };

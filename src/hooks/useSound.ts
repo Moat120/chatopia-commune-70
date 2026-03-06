@@ -1,155 +1,169 @@
 import { useCallback } from "react";
 
-const NOTIFICATION_SOUND = "/sounds/notification.wav";
+// Web Audio API synthesized sounds - pleasant, modern UI tones
+let audioCtx: AudioContext | null = null;
 
-// Create audio context for better sound control
-let audioContext: AudioContext | null = null;
-
-const getAudioContext = () => {
-  if (!audioContext) {
-    audioContext = new AudioContext();
+const getCtx = (): AudioContext => {
+  if (!audioCtx || audioCtx.state === "closed") {
+    audioCtx = new AudioContext();
   }
-  return audioContext;
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+  return audioCtx;
 };
 
-// Play sound with custom settings
-const playSound = (options: {
-  volume?: number;
-  playbackRate?: number;
+interface ToneOptions {
+  frequency: number;
+  duration: number;
+  volume: number;
+  type?: OscillatorType;
+  fadeIn?: number;
+  fadeOut?: number;
   detune?: number;
-}) => {
-  const { volume = 0.5, playbackRate = 1, detune = 0 } = options;
-  
+}
+
+const playTone = (options: ToneOptions) => {
   try {
-    const audio = new Audio(NOTIFICATION_SOUND);
-    audio.volume = Math.min(Math.max(volume, 0), 1);
-    audio.playbackRate = playbackRate;
-    audio.play().catch((e) => console.log("[Sound] Play error:", e));
-  } catch (error) {
-    console.log("[Sound] Error:", error);
+    const ctx = getCtx();
+    const { frequency, duration, volume, type = "sine", fadeIn = 0.01, fadeOut = 0.08, detune = 0 } = options;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+    if (detune) osc.detune.setValueAtTime(detune, ctx.currentTime);
+
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(Math.min(volume, 0.5), ctx.currentTime + fadeIn);
+    gain.gain.setValueAtTime(Math.min(volume, 0.5), ctx.currentTime + duration - fadeOut);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch (e) {
+    // Silently ignore audio errors
   }
 };
 
-export const useSound = () => {
-  const playNotification = useCallback(() => {
-    playSound({ volume: 0.5, playbackRate: 1.0 });
-  }, []);
-
-  const playClick = useCallback(() => {
-    playSound({ volume: 0.25, playbackRate: 1.6 });
-  }, []);
-
-  const playJoin = useCallback(() => {
-    playSound({ volume: 0.4, playbackRate: 1.25 });
-  }, []);
-
-  const playLeave = useCallback(() => {
-    playSound({ volume: 0.35, playbackRate: 0.75 });
-  }, []);
-
-  const playRingtone = useCallback(() => {
-    playSound({ volume: 0.7, playbackRate: 1.0 });
-  }, []);
-
-  const playMessageSent = useCallback(() => {
-    playSound({ volume: 0.2, playbackRate: 1.8 });
-  }, []);
-
-  const playMessageReceived = useCallback(() => {
-    playSound({ volume: 0.35, playbackRate: 1.4 });
-  }, []);
-
-  const playMute = useCallback(() => {
-    playSound({ volume: 0.25, playbackRate: 0.9 });
-  }, []);
-
-  const playUnmute = useCallback(() => {
-    playSound({ volume: 0.3, playbackRate: 1.3 });
-  }, []);
-
-  const playPttOn = useCallback(() => {
-    playSound({ volume: 0.3, playbackRate: 1.5 });
-  }, []);
-
-  const playPttOff = useCallback(() => {
-    playSound({ volume: 0.25, playbackRate: 1.1 });
-  }, []);
-
-  return { 
-    playNotification, 
-    playClick, 
-    playJoin, 
-    playLeave, 
-    playRingtone,
-    playMessageSent,
-    playMessageReceived,
-    playMute,
-    playUnmute,
-    playPttOn,
-    playPttOff
-  };
+const playChord = (frequencies: number[], duration: number, volume: number, type: OscillatorType = "sine", stagger = 0) => {
+  frequencies.forEach((freq, i) => {
+    setTimeout(() => {
+      playTone({ frequency: freq, duration, volume: volume / frequencies.length, type });
+    }, i * stagger);
+  });
 };
 
-// Standalone functions for use outside of React components
-export const playNotificationSound = () => {
-  playSound({ volume: 0.5, playbackRate: 1.0 });
+// ── Sound Presets ──
+
+/** Gentle ascending chime - notifications */
+const notification = () => {
+  playTone({ frequency: 587, duration: 0.12, volume: 0.15, type: "sine" });
+  setTimeout(() => playTone({ frequency: 784, duration: 0.18, volume: 0.12, type: "sine" }), 100);
+  setTimeout(() => playTone({ frequency: 1047, duration: 0.25, volume: 0.08, type: "sine", fadeOut: 0.15 }), 200);
 };
 
-export const playClickSound = () => {
-  playSound({ volume: 0.2, playbackRate: 1.7 });
+/** Soft pop - button clicks */
+const click = () => {
+  playTone({ frequency: 1200, duration: 0.04, volume: 0.08, type: "sine", fadeIn: 0.003, fadeOut: 0.02 });
 };
 
-export const playJoinSound = () => {
-  playSound({ volume: 0.4, playbackRate: 1.25 });
+/** Warm ascending two-tone - user joining */
+const join = () => {
+  playTone({ frequency: 523, duration: 0.15, volume: 0.12, type: "sine" });
+  setTimeout(() => playTone({ frequency: 659, duration: 0.2, volume: 0.1, type: "sine", fadeOut: 0.12 }), 120);
 };
 
-export const playLeaveSound = () => {
-  playSound({ volume: 0.35, playbackRate: 0.75 });
+/** Soft descending tone - user leaving */
+const leave = () => {
+  playTone({ frequency: 659, duration: 0.15, volume: 0.1, type: "sine" });
+  setTimeout(() => playTone({ frequency: 440, duration: 0.2, volume: 0.08, type: "sine", fadeOut: 0.12 }), 120);
 };
 
-export const playRingtoneSound = () => {
-  playSound({ volume: 0.75, playbackRate: 1.0 });
+/** Quick swoosh up - message sent */
+const messageSent = () => {
+  playTone({ frequency: 880, duration: 0.08, volume: 0.06, type: "sine", fadeIn: 0.005, fadeOut: 0.04 });
+  setTimeout(() => playTone({ frequency: 1100, duration: 0.06, volume: 0.04, type: "sine", fadeIn: 0.005, fadeOut: 0.03 }), 50);
 };
 
-export const playMessageSentSound = () => {
-  playSound({ volume: 0.2, playbackRate: 1.8 });
+/** Gentle ding - message received */
+const messageReceived = () => {
+  playTone({ frequency: 830, duration: 0.12, volume: 0.1, type: "sine", fadeOut: 0.08 });
+  setTimeout(() => playTone({ frequency: 1046, duration: 0.15, volume: 0.07, type: "sine", fadeOut: 0.1 }), 80);
 };
 
-export const playMessageReceivedSound = () => {
-  playSound({ volume: 0.35, playbackRate: 1.4 });
+/** Low click - mute */
+const mute = () => {
+  playTone({ frequency: 350, duration: 0.08, volume: 0.1, type: "sine", fadeIn: 0.005, fadeOut: 0.04 });
 };
 
-export const playMuteSound = () => {
-  playSound({ volume: 0.25, playbackRate: 0.85 });
+/** Higher click - unmute */
+const unmute = () => {
+  playTone({ frequency: 700, duration: 0.08, volume: 0.1, type: "sine", fadeIn: 0.005, fadeOut: 0.04 });
 };
 
-export const playUnmuteSound = () => {
-  playSound({ volume: 0.3, playbackRate: 1.35 });
+/** Push-to-talk on */
+const pttOn = () => {
+  playTone({ frequency: 600, duration: 0.05, volume: 0.08, type: "square", fadeIn: 0.003, fadeOut: 0.02 });
 };
 
-export const playPttOnSound = () => {
-  playSound({ volume: 0.3, playbackRate: 1.5 });
+/** Push-to-talk off */
+const pttOff = () => {
+  playTone({ frequency: 400, duration: 0.05, volume: 0.06, type: "square", fadeIn: 0.003, fadeOut: 0.02 });
 };
 
-export const playPttOffSound = () => {
-  playSound({ volume: 0.25, playbackRate: 1.0 });
+/** Ringtone - pleasant chord pattern */
+const ringtone = () => {
+  playChord([523, 659, 784], 0.3, 0.25, "sine", 60);
+  setTimeout(() => playChord([587, 740, 880], 0.35, 0.2, "sine", 60), 450);
 };
 
-// Ringtone manager for continuous ringing
+// ── React Hook ──
+
+export const useSound = () => ({
+  playNotification: useCallback(notification, []),
+  playClick: useCallback(click, []),
+  playJoin: useCallback(join, []),
+  playLeave: useCallback(leave, []),
+  playRingtone: useCallback(ringtone, []),
+  playMessageSent: useCallback(messageSent, []),
+  playMessageReceived: useCallback(messageReceived, []),
+  playMute: useCallback(mute, []),
+  playUnmute: useCallback(unmute, []),
+  playPttOn: useCallback(pttOn, []),
+  playPttOff: useCallback(pttOff, []),
+});
+
+// ── Standalone exports ──
+
+export const playNotificationSound = notification;
+export const playClickSound = click;
+export const playJoinSound = join;
+export const playLeaveSound = leave;
+export const playRingtoneSound = ringtone;
+export const playMessageSentSound = messageSent;
+export const playMessageReceivedSound = messageReceived;
+export const playMuteSound = mute;
+export const playUnmuteSound = unmute;
+export const playPttOnSound = pttOn;
+export const playPttOffSound = pttOff;
+
+// ── Ringtone Manager ──
+
 export class RingtoneManager {
-  private intervalId: NodeJS.Timeout | null = null;
+  private intervalId: ReturnType<typeof setInterval> | null = null;
   private isPlaying = false;
 
-  start(intervalMs: number = 2500) {
+  start(intervalMs = 3000) {
     if (this.isPlaying) return;
-    
     this.isPlaying = true;
-    playRingtoneSound();
-    
+    ringtone();
     this.intervalId = setInterval(() => {
-      if (this.isPlaying) {
-        playRingtoneSound();
-      }
+      if (this.isPlaying) ringtone();
     }, intervalMs);
   }
 

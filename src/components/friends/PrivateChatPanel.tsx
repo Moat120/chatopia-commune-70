@@ -3,6 +3,7 @@ import { Friend } from "@/hooks/useFriends";
 import { usePrivateChat } from "@/hooks/usePrivateChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
+import { useSound } from "@/hooks/useSound";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ const PrivateChatPanel = ({
 }: PrivateChatPanelProps) => {
   const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = usePrivateChat(friend.id);
+  const { playMessageSent } = useSound();
   const channelId = `private-${[user?.id, friend.id].sort().join("-")}`;
   const { typingUsers, isTyping, startTyping, stopTyping } = useTypingIndicator(channelId);
   const [input, setInput] = useState("");
@@ -57,6 +59,7 @@ const PrivateChatPanel = ({
     stopTyping();
     setSending(true);
     await sendMessage(input);
+    playMessageSent();
     setInput("");
     setSending(false);
   };
