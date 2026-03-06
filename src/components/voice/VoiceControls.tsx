@@ -33,7 +33,7 @@ const VoiceControls = ({
   if (!isConnected) {
     return (
       <Button
-        onClick={onJoin}
+        onClick={handleJoin}
         disabled={isConnecting}
         size="lg"
         className={cn(
