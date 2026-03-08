@@ -36,9 +36,10 @@ export const useVoicePresence = (groupId: string | null) => {
       return;
     }
 
-    // Use a unique observer suffix to never collide with the voice hook's channel
-    const observerSuffix = `obs-${Date.now().toString(36)}`;
-    const rosterChannel = supabase.channel(`voice-status-group-${groupId}-${observerSuffix}`, {
+    // Subscribe to the SAME roster broadcast channel that useWebRTCVoice broadcasts on.
+    // The voice hook broadcasts on `voice-status-group-${groupId}`.
+    // We use a unique config key to avoid channel name collision within this client.
+    const rosterChannel = supabase.channel(`voice-status-group-${groupId}`, {
       config: { broadcast: { self: false } },
     });
     rosterChannelRef.current = rosterChannel;
