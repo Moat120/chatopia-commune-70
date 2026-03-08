@@ -142,7 +142,15 @@ const Index = () => {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="h-screen w-screen overflow-hidden">
-        <div className="h-full w-full flex bg-background">
+      <div className="h-full w-full flex flex-col bg-background">
+        {/* Offline Banner */}
+        {!isOnline && (
+          <div className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-destructive/90 text-destructive-foreground text-sm font-medium animate-fade-in-down">
+            <WifiOff className="h-4 w-4" />
+            Connexion perdue — en attente de reconnexion…
+          </div>
+        )}
+        <div className="flex-1 flex min-h-0">
           {/* Unified Sidebar */}
           <UnifiedSidebar
             tab={viewMode}
