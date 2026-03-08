@@ -172,6 +172,15 @@ const Index = () => {
             icon={<Users className="h-5 w-5" />}
             label="Groupes"
           />
+          
+          <div className="w-8 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent my-2" />
+          
+          <NavButton
+            active={false}
+            onClick={() => setSearchOpen(true)}
+            icon={<Search className="h-5 w-5" />}
+            label="Rechercher (Ctrl+K)"
+          />
         </div>
 
         {/* Sidebar */}
