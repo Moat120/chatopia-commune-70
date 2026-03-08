@@ -246,6 +246,22 @@ const Index = () => {
             onDecline={handleDeclineIncomingCall}
           />
         )}
+
+        {/* Search Palette */}
+        <SearchPalette
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          onSelectFriend={(friend) => {
+            setViewMode("friends");
+            setSelectedGroup(null);
+            setSelectedFriend(friend);
+          }}
+          onSelectGroup={(group) => {
+            setViewMode("groups");
+            setSelectedFriend(null);
+            setSelectedGroup(group);
+          }}
+        />
       </div>
     </TooltipProvider>
   );
