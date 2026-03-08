@@ -1,8 +1,9 @@
 import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { playNotificationSound, playMessageReceivedSound } from "@/hooks/useSound";
 
-/** Request notification permission on mount; send browser notifications for new messages when tab is hidden. */
+/** Request notification permission on mount; send browser notifications + sounds for new messages when tab is hidden. */
 export const useNotifications = () => {
   const { user } = useAuth();
   const permissionRef = useRef<NotificationPermission>("default");
@@ -19,39 +20,51 @@ export const useNotifications = () => {
     }
   }, []);
 
-  const notify = useCallback((title: string, body: string, icon?: string) => {
-    if (document.visibilityState === "visible") return;
+  const notify = useCallback((title: string, body: string, opts?: { icon?: string; sound?: 'message' | 'notification' }) => {
+    // Always play sound if tab is hidden
+    if (document.visibilityState !== "visible") {
+      if (opts?.sound === 'message') {
+        playMessageReceivedSound();
+      } else {
+        playNotificationSound();
+      }
+    }
+
     if (permissionRef.current !== "granted") return;
+    if (document.visibilityState === "visible") return;
 
-    const n = new Notification(title, {
-      body,
-      icon: icon || "/favicon.ico",
-      tag: "chatopia-msg",
-      silent: false,
-    });
+    try {
+      const n = new Notification(title, {
+        body,
+        icon: opts?.icon || "/favicon.ico",
+        badge: "/favicon.ico",
+        tag: `chatopia-${Date.now()}`,
+        silent: true, // We handle sounds ourselves
+        requireInteraction: false,
+      });
 
-    n.onclick = () => {
-      window.focus();
-      n.close();
-    };
+      n.onclick = () => {
+        window.focus();
+        n.close();
+      };
 
-    setTimeout(() => n.close(), 5000);
+      setTimeout(() => n.close(), 6000);
+    } catch {
+      // Notifications may not be supported in all contexts
+    }
   }, []);
 
   // Listen for private messages
   useEffect(() => {
     if (!user) return;
+    const ts = Date.now();
 
     const channel = supabase
-      .channel(`notif-private-${user.id}-${Date.now()}`)
+      .channel(`notif-pm-${user.id}-${ts}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "private_messages",
-          filter: `receiver_id=eq.${user.id}`,
-        },
+        { event: "INSERT", schema: "public", table: "private_messages",
+          filter: `receiver_id=eq.${user.id}` },
         async (payload) => {
           const msg = payload.new as any;
           if (msg.sender_id === user.id) return;
@@ -64,33 +77,26 @@ export const useNotifications = () => {
 
           notify(
             sender?.username || "Nouveau message",
-            msg.content?.substring(0, 100) || "",
-            sender?.avatar_url || undefined
+            msg.content?.substring(0, 120) || "📎 Fichier",
+            { icon: sender?.avatar_url || undefined, sound: 'message' }
           );
         }
       )
-      .subscribe((status, err) => {
-        if (err) console.error("[notif-private] subscription error:", err);
-      });
+      .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [user, notify]);
 
   // Listen for group messages
   useEffect(() => {
     if (!user) return;
+    const ts = Date.now();
 
     const channel = supabase
-      .channel(`notif-group-${user.id}-${Date.now()}`)
+      .channel(`notif-gm-${user.id}-${ts}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "group_messages",
-        },
+        { event: "INSERT", schema: "public", table: "group_messages" },
         async (payload) => {
           const msg = payload.new as any;
           if (msg.sender_id === user.id) return;
@@ -111,34 +117,27 @@ export const useNotifications = () => {
 
           notify(
             `${sender?.username || "Message"} • ${group?.name || "Groupe"}`,
-            msg.content?.substring(0, 100) || "",
-            group?.avatar_url || sender?.avatar_url || undefined
+            msg.content?.substring(0, 120) || "📎 Fichier",
+            { icon: group?.avatar_url || sender?.avatar_url || undefined, sound: 'message' }
           );
         }
       )
-      .subscribe((status, err) => {
-        if (err) console.error("[notif-group] subscription error:", err);
-      });
+      .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [user, notify]);
 
   // Listen for friend requests
   useEffect(() => {
     if (!user) return;
+    const ts = Date.now();
 
     const channel = supabase
-      .channel(`notif-friend-req-${user.id}-${Date.now()}`)
+      .channel(`notif-fr-${user.id}-${ts}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "friendships",
-          filter: `addressee_id=eq.${user.id}`,
-        },
+        { event: "INSERT", schema: "public", table: "friendships",
+          filter: `addressee_id=eq.${user.id}` },
         async (payload) => {
           const req = payload.new as any;
           const { data: sender } = await supabase
@@ -150,16 +149,45 @@ export const useNotifications = () => {
           notify(
             "Demande d'ami",
             `${sender?.username || "Quelqu'un"} vous a envoyé une demande d'ami`,
-            sender?.avatar_url || undefined
+            { icon: sender?.avatar_url || undefined, sound: 'notification' }
           );
         }
       )
-      .subscribe((status, err) => {
-        if (err) console.error("[notif-friend-req] subscription error:", err);
-      });
+      .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
+  }, [user, notify]);
+
+  // Listen for incoming private calls
+  useEffect(() => {
+    if (!user) return;
+    const ts = Date.now();
+
+    const channel = supabase
+      .channel(`notif-call-${user.id}-${ts}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "private_calls",
+          filter: `callee_id=eq.${user.id}` },
+        async (payload) => {
+          const call = payload.new as any;
+          if (call.status !== "ringing") return;
+
+          const { data: caller } = await supabase
+            .from("profiles")
+            .select("username, avatar_url")
+            .eq("id", call.caller_id)
+            .single();
+
+          notify(
+            "📞 Appel entrant",
+            `${caller?.username || "Quelqu'un"} vous appelle`,
+            { icon: caller?.avatar_url || undefined, sound: 'notification' }
+          );
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [user, notify]);
 };
