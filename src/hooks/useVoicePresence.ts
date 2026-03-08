@@ -9,23 +9,51 @@ export interface VoicePresenceUser {
   isMuted: boolean;
 }
 
+const normalizeRoster = (users: unknown[]): VoicePresenceUser[] => {
+  return users
+    .map((u: any) => ({
+      odId: String(u?.odId ?? ""),
+      username: String(u?.username ?? "Utilisateur"),
+      avatarUrl: u?.avatarUrl ? String(u.avatarUrl) : undefined,
+      isSpeaking: Boolean(u?.isSpeaking),
+      isMuted: Boolean(u?.isMuted),
+    }))
+    .filter((u) => !!u.odId && !u.odId.startsWith("observer-"));
+};
+
 /**
- * Passive hook that observes who is in a voice channel
- * WITHOUT joining the call.
- * 
- * Uses a separate "-watch" channel name to avoid conflicts 
- * with the active voice presence channel used by useWebRTCVoice.
- * Both use Supabase presence, so they are independent rooms,
- * but the voice hook broadcasts participant updates to a broadcast
- * channel that observers can listen to.
- * 
- * Fallback: polls the presence state of the voice channel
- * periodically without subscribing to it.
+ * Observe who is in a group voice call without joining audio.
+ *
+ * Uses 2 sources:
+ * 1) presence snapshot/sync on `voice-pres-group-<groupId>` for immediate accuracy
+ * 2) roster broadcasts on `voice-status-group-<groupId>` for faster UI updates
  */
 export const useVoicePresence = (groupId: string | null) => {
   const [participants, setParticipants] = useState<VoicePresenceUser[]>([]);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const rosterChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const syncFromPresence = useCallback(() => {
+    const state = presenceChannelRef.current?.presenceState();
+    if (!state) return;
+
+    const users: VoicePresenceUser[] = [];
+    Object.entries(state).forEach(([key, presences]) => {
+      if (key.startsWith("observer-")) return;
+      (presences as any[]).forEach((presence) => {
+        if (!presence?.odId || presence?._observer) return;
+        users.push({
+          odId: presence.odId,
+          username: presence.username || "Utilisateur",
+          avatarUrl: presence.avatarUrl,
+          isSpeaking: Boolean(presence.isSpeaking),
+          isMuted: Boolean(presence.isMuted),
+        });
+      });
+    });
+
+    setParticipants(users);
+  }, []);
 
   useEffect(() => {
     if (!groupId) {
@@ -33,36 +61,51 @@ export const useVoicePresence = (groupId: string | null) => {
       return;
     }
 
-    // Listen for voice status broadcasts on a dedicated broadcast channel
-    const broadcastChannelName = `voice-status-group-${groupId}`;
-    const channel = supabase.channel(broadcastChannelName, {
+    const observerKey = `observer-${groupId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    const rosterChannel = supabase.channel(`voice-status-group-${groupId}`, {
       config: { broadcast: { self: false } },
     });
-    channelRef.current = channel;
+    rosterChannelRef.current = rosterChannel;
 
-    channel.on("broadcast", { event: "voice-roster" }, ({ payload }) => {
-      if (payload?.users && Array.isArray(payload.users)) {
-        setParticipants(payload.users.map((u: any) => ({
-          odId: u.odId,
-          username: u.username || "Utilisateur",
-          avatarUrl: u.avatarUrl,
-          isSpeaking: u.isSpeaking || false,
-          isMuted: u.isMuted || false,
-        })));
+    rosterChannel.on("broadcast", { event: "voice-roster" }, ({ payload }) => {
+      if (Array.isArray(payload?.users)) {
+        setParticipants(normalizeRoster(payload.users));
       }
     });
 
-    channel.subscribe();
+    rosterChannel.subscribe();
+
+    const presenceChannel = supabase.channel(`voice-pres-group-${groupId}`, {
+      config: { presence: { key: observerKey } },
+    });
+    presenceChannelRef.current = presenceChannel;
+
+    presenceChannel.on("presence", { event: "sync" }, syncFromPresence);
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await presenceChannel.track({
+          odId: observerKey,
+          _observer: true,
+          isSpeaking: false,
+          isMuted: true,
+        });
+        syncFromPresence();
+      }
+    });
 
     return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
+      if (rosterChannelRef.current) {
+        supabase.removeChannel(rosterChannelRef.current);
+        rosterChannelRef.current = null;
+      }
+      if (presenceChannelRef.current) {
+        supabase.removeChannel(presenceChannelRef.current);
+        presenceChannelRef.current = null;
       }
     };
-  }, [groupId]);
+  }, [groupId, syncFromPresence]);
 
   return { participants };
 };

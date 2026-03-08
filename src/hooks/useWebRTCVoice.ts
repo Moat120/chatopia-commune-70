@@ -480,15 +480,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       signalingChannelRef.current = null;
     }
 
-    // Broadcast empty roster to observers, then clean up
     if (rosterChannelRef.current) {
-      try {
-        await rosterChannelRef.current.send({
-          type: "broadcast",
-          event: "voice-roster",
-          payload: { users: [] },
-        });
-      } catch {}
       await supabase.removeChannel(rosterChannelRef.current);
       rosterChannelRef.current = null;
     }

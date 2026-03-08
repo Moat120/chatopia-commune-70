@@ -52,6 +52,20 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   // Observe participants when not connected
   const { participants: presenceParticipants } = useVoicePresence(isConnected ? null : group.id);
 
+  const effectiveConnectedUsers = useMemo(() => {
+    if (connectedUsers.length > 0) return connectedUsers;
+    if (isConnected && user && profile) {
+      return [{
+        odId: user.id,
+        username: profile.username,
+        avatarUrl: profile.avatar_url || undefined,
+        isSpeaking: false,
+        isMuted,
+      }];
+    }
+    return connectedUsers;
+  }, [connectedUsers, isConnected, user, profile, isMuted]);
+
   const {
     isSharing,
     localStream,
@@ -136,7 +150,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
               <h2 className="text-lg font-bold tracking-tight">{group.name}</h2>
               <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
                 {isConnected 
-                  ? `${connectedUsers.length} participant${connectedUsers.length > 1 ? 's' : ''}` 
+                  ? `${effectiveConnectedUsers.length} participant${effectiveConnectedUsers.length > 1 ? 's' : ''}` 
                   : presenceParticipants.length > 0 
                     ? `${presenceParticipants.length} participant${presenceParticipants.length > 1 ? 's' : ''} en vocal`
                     : "Rejoindre l'appel"}
@@ -172,11 +186,11 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary/30 border border-white/[0.03]">
                     <Users className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-semibold text-muted-foreground">
-                      {connectedUsers.length} {connectedUsers.length === 1 ? "participant" : "participants"}
+                      {effectiveConnectedUsers.length} {effectiveConnectedUsers.length === 1 ? "participant" : "participants"}
                     </span>
                   </div>
                   <div className={cn("flex gap-4", hasActiveScreenShare ? "flex-col" : "flex-wrap justify-center")}>
-                    {connectedUsers.map((user, index) => (
+                    {effectiveConnectedUsers.map((user, index) => (
                       <div key={user.odId} className="animate-scale-in" style={{ animationDelay: `${index * 0.08}s` }}>
                         <VoiceUserCard
                           username={user.username}
