@@ -48,14 +48,15 @@ export const usePrivateChat = (friendId: string | null) => {
     setLoading(false);
   }, [user, friendId]);
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, replyToId?: string) => {
     if (!user || !friendId || !content.trim()) return;
 
     const { error } = await supabase.from("private_messages").insert({
       sender_id: user.id,
       receiver_id: friendId,
       content: content.trim(),
-    });
+      reply_to_id: replyToId || null,
+    } as any);
 
     return { error };
   };
