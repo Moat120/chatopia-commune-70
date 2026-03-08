@@ -169,7 +169,7 @@ const PrivateCallPanel = ({
   const setupPeerConnection = (stream: MediaStream) => {
     if (peerConnectionRef.current) peerConnectionRef.current.close();
     iceRestartManagerRef.current.reset();
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection(rtcConfigRef.current);
     peerConnectionRef.current = pc;
 
     stream.getTracks().forEach(track => {
