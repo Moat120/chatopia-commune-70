@@ -10,6 +10,14 @@ import {
 } from "@/components/SettingsDialog";
 import { usePushToTalk, getPushToTalkEnabled } from "@/hooks/usePushToTalk";
 import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
+import { 
+  RTC_CONFIG, 
+  mungeOpusSDP, 
+  configureAudioSender, 
+  getConnectionStats,
+  ICERestartManager,
+  type ConnectionStats 
+} from "@/lib/webrtcUtils";
 
 export interface VoiceUser {
   odId: string;
@@ -32,35 +40,6 @@ interface UseWebRTCVoiceProps {
   channelId: string;
   onError?: (error: string) => void;
 }
-
-// Optimized ICE servers for low latency
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun2.l.google.com:19302" },
-  {
-    urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443?transport=tcp",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-];
-
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: ICE_SERVERS,
-  iceCandidatePoolSize: 10,
-  bundlePolicy: "max-bundle",
-  rtcpMuxPolicy: "require",
-};
 
 // Build audio constraints with FALLBACK for browser compatibility
 const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> => {
@@ -103,19 +82,20 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>("connecting");
   const [audioLevel, setAudioLevel] = useState(0);
   const [isPttActive, setIsPttActive] = useState(false);
-  // Per-user volume control: Map<userId, volume 0-2>
   const [userVolumes, setUserVolumes] = useState<Record<string, number>>({});
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const rawStreamRef = useRef<MediaStream | null>(null);
   const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const iceRestartManagersRef = useRef<Map<string, ICERestartManager>>(new Map());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
+  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -126,7 +106,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const currentUsername = profile?.username || "Utilisateur";
   const currentAvatarUrl = profile?.avatar_url || "";
 
-  // Load saved volume for a user from localStorage
   const getSavedVolume = useCallback((userId: string): number => {
     try {
       const saved = localStorage.getItem(`userVolume_${userId}`);
@@ -136,24 +115,15 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
   }, []);
 
-  // Set volume for a specific user (0-2, where 1 = 100%, 2 = 200%)
   const setUserVolume = useCallback((userId: string, volume: number) => {
     const clampedVolume = Math.max(0, Math.min(2, volume));
-    
-    // Update the audio element volume
     const audio = remoteAudiosRef.current.get(userId);
-    if (audio) {
-      audio.volume = clampedVolume;
-    }
-    
-    // Persist to localStorage
+    if (audio) audio.volume = clampedVolume;
     localStorage.setItem(`userVolume_${userId}`, String(clampedVolume));
-    
-    // Update state
     setUserVolumes(prev => ({ ...prev, [userId]: clampedVolume }));
   }, []);
 
-  // Push-to-Talk handlers
+  // PTT handlers
   const handlePttPush = useCallback(() => {
     if (!localStreamRef.current || !pttEnabledRef.current) return;
     const audioTrack = localStreamRef.current.getAudioTracks()[0];
@@ -186,7 +156,43 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     pttEnabledRef.current = pttEnabled;
   }, [pttEnabled]);
 
-  // Peer connection with per-user volume applied on track received
+  // Connection quality monitoring via getStats()
+  const startStatsMonitoring = useCallback(() => {
+    if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+    
+    statsIntervalRef.current = setInterval(async () => {
+      if (!isConnectedRef.current) return;
+      
+      let worstQuality: ConnectionQuality = 'excellent';
+      
+      for (const [userId, pc] of peerConnectionsRef.current) {
+        if (pc.connectionState !== 'connected') continue;
+        const stats = await getConnectionStats(pc);
+        if (stats) {
+          if (stats.quality === 'poor') worstQuality = 'poor';
+          else if (stats.quality === 'good' && worstQuality === 'excellent') worstQuality = 'good';
+          
+          // Adaptive bitrate: reduce bitrate on poor connection
+          if (stats.packetLoss > 3) {
+            pc.getSenders().forEach(async (sender) => {
+              if (sender.track?.kind === 'audio') {
+                const params = sender.getParameters();
+                if (params.encodings?.[0]) {
+                  // Reduce bitrate when packet loss is high
+                  const newBitrate = stats.packetLoss > 10 ? 32000 : stats.packetLoss > 5 ? 64000 : 96000;
+                  params.encodings[0].maxBitrate = newBitrate;
+                  try { await sender.setParameters(params); } catch {}
+                }
+              }
+            });
+          }
+        }
+      }
+      
+      setConnectionQuality(worstQuality);
+    }, 3000);
+  }, []);
+
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
     const existing = peerConnectionsRef.current.get(remoteUserId);
     if (existing) {
@@ -194,20 +200,20 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       existing.close();
     }
 
+    // Clean up old ICE restart manager
+    const oldIceManager = iceRestartManagersRef.current.get(remoteUserId);
+    if (oldIceManager) oldIceManager.cleanup();
+
     console.log('[Voice] Creating peer connection for:', remoteUserId);
     const pc = new RTCPeerConnection(RTC_CONFIG);
+    const iceManager = new ICERestartManager();
+    iceRestartManagersRef.current.set(remoteUserId, iceManager);
 
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
         const sender = pc.addTrack(track, localStreamRef.current!);
         if (track.kind === 'audio') {
-          const params = sender.getParameters();
-          if (params.encodings && params.encodings.length > 0) {
-            params.encodings[0].maxBitrate = 128000;
-            params.encodings[0].priority = "high";
-            params.encodings[0].networkPriority = "high";
-            sender.setParameters(params).catch(() => {});
-          }
+          configureAudioSender(sender);
         }
       });
     }
@@ -225,7 +231,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         remoteAudiosRef.current.set(remoteUserId, audio);
       }
       
-      // Apply saved volume for this user
       const savedVolume = getSavedVolume(remoteUserId);
       audio.volume = savedVolume;
       setUserVolumes(prev => ({ ...prev, [remoteUserId]: savedVolume }));
@@ -254,18 +259,15 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       console.log('[Voice] Connection state for', remoteUserId, ':', state);
       if (state === "connected") {
         setConnectionQuality("excellent");
+        iceManager.reset();
       } else if (state === "failed") {
         setConnectionQuality("poor");
-        pc.restartIce();
+        iceManager.scheduleRestart(pc);
       } else if (state === "disconnected") {
         setConnectionQuality("poor");
-        // Auto-reconnect after 5s if still disconnected
-        setTimeout(() => {
-          if (pc.connectionState === "disconnected") {
-            console.log('[Voice] Still disconnected after 5s, restarting ICE');
-            pc.restartIce();
-          }
-        }, 5000);
+        iceManager.scheduleRestart(pc, () => {
+          console.log('[Voice] ICE restarted for', remoteUserId);
+        });
       }
     };
 
@@ -286,12 +288,18 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       if (!pc) pc = createPeerConnection(message.from);
 
       try {
-        await pc.setRemoteDescription(new RTCSessionDescription(message.data));
+        // Apply Opus HD SDP munging on received offer
+        const mungeSdp = mungeOpusSDP(message.data.sdp);
+        const mungedOffer = { ...message.data, sdp: mungeSdp };
+        
+        await pc.setRemoteDescription(new RTCSessionDescription(mungedOffer));
         const pending = pendingCandidatesRef.current.get(message.from) || [];
         await Promise.all(pending.map(c => pc!.addIceCandidate(c).catch(() => {})));
         pendingCandidatesRef.current.delete(message.from);
 
         const answer = await pc.createAnswer();
+        // Munge answer SDP for Opus HD
+        answer.sdp = mungeOpusSDP(answer.sdp || '');
         await pc.setLocalDescription(answer);
 
         signalingChannelRef.current?.send({
@@ -310,7 +318,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     } else if (message.type === "voice-answer" && pc) {
       try {
         if (pc.signalingState === "have-local-offer") {
-          await pc.setRemoteDescription(new RTCSessionDescription(message.data));
+          const mungeSdp = mungeOpusSDP(message.data.sdp);
+          const mungedAnswer = { ...message.data, sdp: mungeSdp };
+          await pc.setRemoteDescription(new RTCSessionDescription(mungedAnswer));
           const pending = pendingCandidatesRef.current.get(message.from) || [];
           await Promise.all(pending.map(c => pc!.addIceCandidate(c).catch(() => {})));
           pendingCandidatesRef.current.delete(message.from);
@@ -334,24 +344,30 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 128;
-      analyserRef.current.smoothingTimeConstant = 0.3;
+      analyserRef.current.fftSize = 256;
+      analyserRef.current.smoothingTimeConstant = 0.4;
       source.connect(analyserRef.current);
 
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
       let lastBroadcast = 0;
-      const BROADCAST_INTERVAL = 200;
+      const BROADCAST_INTERVAL = 150; // Faster updates
 
       const detectSpeaking = () => {
         if (!analyserRef.current || !isConnectedRef.current) return;
 
         analyserRef.current.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        const normalizedLevel = Math.min(average / 50, 1);
+        
+        // RMS calculation for better volume detection
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i] * dataArray[i];
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
+        const normalizedLevel = Math.min(rms / 60, 1);
 
         setAudioLevel(normalizedLevel);
 
-        const speaking = average > 15 && !isMutedRef.current;
+        const speaking = rms > 12 && !isMutedRef.current;
         const now = Date.now();
 
         if (speaking !== isSpeakingRef.current || now - lastBroadcast > BROADCAST_INTERVAL) {
@@ -383,6 +399,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     try {
       const offer = await pc.createOffer({ offerToReceiveAudio: true });
+      // Munge offer SDP for Opus HD
+      offer.sdp = mungeOpusSDP(offer.sdp || '');
       await pc.setLocalDescription(offer);
 
       signalingChannelRef.current?.send({
@@ -408,6 +426,15 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       animationRef.current = null;
     }
 
+    if (statsIntervalRef.current) {
+      clearInterval(statsIntervalRef.current);
+      statsIntervalRef.current = null;
+    }
+
+    // Cleanup ICE restart managers
+    iceRestartManagersRef.current.forEach(m => m.cleanup());
+    iceRestartManagersRef.current.clear();
+
     peerConnectionsRef.current.forEach((pc) => pc.close());
     peerConnectionsRef.current.clear();
     pendingCandidatesRef.current.clear();
@@ -417,7 +444,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     });
     remoteAudiosRef.current.clear();
 
-    // Cleanup advanced noise processor
     if (noiseProcessorRef.current) {
       noiseProcessorRef.current.cleanup();
       noiseProcessorRef.current = null;
@@ -546,6 +572,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
             pc.close();
             peerConnectionsRef.current.delete(key);
           }
+          const iceManager = iceRestartManagersRef.current.get(key);
+          if (iceManager) {
+            iceManager.cleanup();
+            iceRestartManagersRef.current.delete(key);
+          }
           const audio = remoteAudiosRef.current.get(key);
           if (audio) {
             audio.srcObject = null;
@@ -567,6 +598,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       });
 
       startVoiceDetection(rawStream);
+      startStatsMonitoring();
 
       isConnectedRef.current = true;
       setIsConnected(true);
@@ -588,6 +620,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     handleSignal,
     initiateConnection,
     startVoiceDetection,
+    startStatsMonitoring,
     cleanup,
     onError,
   ]);
