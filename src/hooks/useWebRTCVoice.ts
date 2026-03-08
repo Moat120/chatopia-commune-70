@@ -582,7 +582,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       if (getNoiseSuppression()) {
         try {
           noiseProcessorRef.current = new AdvancedNoiseProcessor();
-          processedStream = await noiseProcessorRef.current.process(rawStream);
+          processedStream = await withTimeout(
+            noiseProcessorRef.current.process(rawStream),
+            5000,
+            "noise processor"
+          );
           const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
           const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
           const latency = noiseProcessorRef.current.getLatency();
@@ -762,12 +766,14 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       setIsConnected(true);
       setIsConnecting(false);
       setConnectionQuality("good");
+      return true;
 
     } catch (error: any) {
       console.error("[Voice] Join error:", error);
       onError?.(error.message || "Failed to join voice channel");
       setIsConnecting(false);
       cleanup();
+      return false;
     }
   }, [
     channelId,
