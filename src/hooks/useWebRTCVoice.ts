@@ -109,7 +109,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
   const currentUserId = user?.id || "";
   const currentUsername = profile?.username || "Utilisateur";
-  const currentAvatarUrl = profile?.avatar_url || "";
+  const rawAvatarUrl = profile?.avatar_url || "";
+  const currentPresenceAvatar =
+    rawAvatarUrl && !rawAvatarUrl.startsWith("data:") && rawAvatarUrl.length < 1024
+      ? rawAvatarUrl
+      : undefined;
 
   const getSavedVolume = useCallback((userId: string): number => {
     try {
