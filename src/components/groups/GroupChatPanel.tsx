@@ -182,7 +182,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
               <p className="text-muted-foreground/40 text-sm">Commencez la conversation !</p>
             </div>
           ) : (
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {messages.map((msg, idx) => {
                 const isOwn = msg.sender_id === user?.id;
                 const prevMsg = messages[idx - 1];
@@ -197,97 +197,126 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
                 return (
                   <div key={msg.id}>
                     {showDateSep && (
-                      <div className="flex items-center gap-4 my-5">
-                        <div className="flex-1 h-px bg-white/[0.04]" />
-                        <span className="text-[10px] text-muted-foreground/30 font-semibold uppercase tracking-wider">
+                      <div className="flex items-center gap-4 my-6">
+                        <div className="flex-1 h-px bg-white/[0.06]" />
+                        <span className="text-[10px] text-muted-foreground/40 font-semibold uppercase tracking-wider px-2">
                           {dateSeparator(msg.created_at)}
                         </span>
-                        <div className="flex-1 h-px bg-white/[0.04]" />
+                        <div className="flex-1 h-px bg-white/[0.06]" />
                       </div>
                     )}
-                    <div className={cn(
-                      "flex items-end gap-2 group/msg relative",
-                      isOwn && "flex-row-reverse",
-                      isGStart ? "mt-2.5" : "mt-0.5"
-                    )}>
-                      {isGStart && !isOwn ? (
-                        <Avatar className="h-7 w-7 shrink-0">
-                          <AvatarImage src={msg.sender?.avatar_url || ""} className="object-cover" />
-                          <AvatarFallback className="text-[10px] bg-muted/50 font-semibold">
-                            {msg.sender?.username?.[0]?.toUpperCase() || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                      ) : !isOwn ? <div className="w-7 shrink-0" /> : null}
 
-                      <GroupMessageContextMenu message={msg} onReply={handleReply}>
-                        <div className="max-w-[70%]">
-                          {isGStart && (
-                            <div className={cn("flex items-center gap-2 mb-0.5", isOwn && "flex-row-reverse")}>
-                              <span className="text-[11px] font-semibold text-muted-foreground/50">
-                                {isOwn ? "Toi" : msg.sender?.username}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Reply preview */}
-                          {replyMsg && (
-                            <div className={cn(
-                              "flex items-center gap-1.5 mb-0.5 px-2 py-1 rounded-lg bg-white/[0.03] border-l-2 border-primary/30 text-[11px] text-muted-foreground/50 truncate",
-                              isOwn && "ml-auto"
-                            )}>
-                              <Reply className="h-3 w-3 shrink-0 text-primary/40" />
-                              <span className="truncate">
-                                {replyMsg.sender_id === user?.id ? "Toi" : replyMsg.sender?.username}: {replyMsg.content}
-                              </span>
-                            </div>
-                          )}
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className={cn(
-                                "px-3 py-2 transition-all cursor-default",
-                                isOwn
-                                  ? cn("message-own",
-                                      isGStart && isGEnd && "rounded-2xl",
-                                      isGStart && !isGEnd && "rounded-2xl rounded-br-md",
-                                      !isGStart && isGEnd && "rounded-2xl rounded-tr-md",
-                                      !isGStart && !isGEnd && "rounded-lg rounded-r-md")
-                                  : cn("message-other",
-                                      isGStart && isGEnd && "rounded-2xl",
-                                      isGStart && !isGEnd && "rounded-2xl rounded-bl-md",
-                                      !isGStart && isGEnd && "rounded-2xl rounded-tl-md",
-                                      !isGStart && !isGEnd && "rounded-lg rounded-l-md")
-                              )}>
-                                <p className="text-[13.5px] leading-relaxed break-words">
-                                  <MessageContent content={msg.content} />
-                                </p>
-                                {isGEnd && (
-                                  <div className={cn("flex items-center gap-1 mt-0.5", isOwn ? "justify-end" : "justify-start")}>
-                                    {isEdited && <Pencil className="h-2.5 w-2.5 text-foreground/15" />}
-                                    <span className="text-[10px] text-foreground/25">{smartTimestamp(msg.created_at)}</span>
-                                  </div>
-                                )}
+                    {/* Group-style message (Discord-like for others, bubble for own) */}
+                    {isOwn ? (
+                      /* ─── Own messages: right-aligned bubble ─── */
+                      <div className={cn("flex justify-end group/msg relative", isGStart ? "mt-3" : "mt-0.5")}>
+                        <GroupMessageContextMenu message={msg} onReply={handleReply}>
+                          <div className="max-w-[70%]">
+                            {replyMsg && (
+                              <div className="flex items-center gap-1.5 mb-1 px-2.5 py-1 rounded-lg bg-white/[0.03] border-l-2 border-primary/30 text-[11px] text-muted-foreground/50 truncate ml-auto max-w-[90%]">
+                                <Reply className="h-3 w-3 shrink-0 text-primary/40" />
+                                <span className="truncate">
+                                  {replyMsg.sender_id === user?.id ? "Toi" : replyMsg.sender?.username}: {replyMsg.content}
+                                </span>
                               </div>
-                            </TooltipTrigger>
-                            <TooltipContent side={isOwn ? "left" : "right"} className="text-xs">
-                              {format(new Date(msg.created_at), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
-                              {isEdited && " (modifié)"}
-                            </TooltipContent>
-                          </Tooltip>
+                            )}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className={cn(
+                                  "px-3.5 py-2 message-own transition-all cursor-default",
+                                  isGStart && isGEnd && "rounded-2xl",
+                                  isGStart && !isGEnd && "rounded-2xl rounded-br-md",
+                                  !isGStart && isGEnd && "rounded-2xl rounded-tr-md",
+                                  !isGStart && !isGEnd && "rounded-lg rounded-r-md"
+                                )}>
+                                  <p className="text-[13.5px] leading-relaxed break-words">
+                                    <MessageContent content={msg.content} />
+                                  </p>
+                                  {isGEnd && (
+                                    <div className="flex items-center gap-1 mt-0.5 justify-end">
+                                      {isEdited && <Pencil className="h-2.5 w-2.5 text-foreground/15" />}
+                                      <span className="text-[10px] text-foreground/25">{smartTimestamp(msg.created_at)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="text-xs">
+                                {format(new Date(msg.created_at), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
+                                {isEdited && " (modifié)"}
+                              </TooltipContent>
+                            </Tooltip>
+                            <ReactionPills reactions={reactionGroups} onToggle={(emoji) => toggleReaction(msg.id, emoji)} isOwn={true} />
+                          </div>
+                        </GroupMessageContextMenu>
+                        <QuickReactionPicker onSelect={(emoji) => toggleReaction(msg.id, emoji)} side="left" />
+                      </div>
+                    ) : (
+                      /* ─── Others' messages: left-aligned with avatar + name (Discord-style) ─── */
+                      <div className={cn("flex items-start gap-2.5 group/msg relative", isGStart ? "mt-3" : "mt-0.5")}>
+                        {isGStart ? (
+                          <Avatar className="h-8 w-8 shrink-0 mt-0.5 ring-2 ring-background">
+                            <AvatarImage src={msg.sender?.avatar_url || ""} className="object-cover" />
+                            <AvatarFallback className="text-[11px] bg-muted/50 font-bold">
+                              {msg.sender?.username?.[0]?.toUpperCase() || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <div className="w-8 shrink-0" />
+                        )}
 
-                          <ReactionPills
-                            reactions={reactionGroups}
-                            onToggle={(emoji) => toggleReaction(msg.id, emoji)}
-                            isOwn={isOwn}
-                          />
-                        </div>
-                      </GroupMessageContextMenu>
+                        <GroupMessageContextMenu message={msg} onReply={handleReply}>
+                          <div className="max-w-[70%]">
+                            {isGStart && (
+                              <div className="flex items-baseline gap-2 mb-0.5">
+                                <span className="text-[12px] font-semibold text-foreground/70">
+                                  {msg.sender?.username}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground/30">
+                                  {smartTimestamp(msg.created_at)}
+                                </span>
+                              </div>
+                            )}
 
-                      <QuickReactionPicker
-                        onSelect={(emoji) => toggleReaction(msg.id, emoji)}
-                        side={isOwn ? "left" : "right"}
-                      />
-                    </div>
+                            {replyMsg && (
+                              <div className="flex items-center gap-1.5 mb-1 px-2.5 py-1 rounded-lg bg-white/[0.03] border-l-2 border-primary/30 text-[11px] text-muted-foreground/50 truncate max-w-[90%]">
+                                <Reply className="h-3 w-3 shrink-0 text-primary/40" />
+                                <span className="truncate">
+                                  {replyMsg.sender_id === user?.id ? "Toi" : replyMsg.sender?.username}: {replyMsg.content}
+                                </span>
+                              </div>
+                            )}
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className={cn(
+                                  "px-3.5 py-2 message-other transition-all cursor-default",
+                                  isGStart && isGEnd && "rounded-2xl",
+                                  isGStart && !isGEnd && "rounded-2xl rounded-bl-md",
+                                  !isGStart && isGEnd && "rounded-2xl rounded-tl-md",
+                                  !isGStart && !isGEnd && "rounded-lg rounded-l-md"
+                                )}>
+                                  <p className="text-[13.5px] leading-relaxed break-words">
+                                    <MessageContent content={msg.content} />
+                                  </p>
+                                  {isGEnd && !isGStart && (
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      {isEdited && <Pencil className="h-2.5 w-2.5 text-foreground/15" />}
+                                      <span className="text-[10px] text-foreground/25">{smartTimestamp(msg.created_at)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="text-xs">
+                                {format(new Date(msg.created_at), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
+                                {isEdited && " (modifié)"}
+                              </TooltipContent>
+                            </Tooltip>
+                            <ReactionPills reactions={reactionGroups} onToggle={(emoji) => toggleReaction(msg.id, emoji)} isOwn={false} />
+                          </div>
+                        </GroupMessageContextMenu>
+                        <QuickReactionPicker onSelect={(emoji) => toggleReaction(msg.id, emoji)} side="right" />
+                      </div>
+                    )}
                   </div>
                 );
               })}
