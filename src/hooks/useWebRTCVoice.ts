@@ -826,31 +826,14 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         console.warn("[Voice] Presence track delayed, continuing join", trackError);
       }
 
-      // Immediately include self in connected users
-      // (presence sync may not have fired yet)
-      setConnectedUsers(prev => {
-        if (prev.some(u => u.odId === currentUserId)) return prev;
-        return [...prev, {
-          odId: currentUserId,
-          username: currentUsername,
-          avatarUrl: currentPresenceAvatar,
-          isSpeaking: false,
-          isMuted: false,
-        }];
-      });
+      // Immediately sync presence state (ensures self + any existing users are visible)
+      syncPresenceState();
 
-      // Broadcast initial roster to observers
-      const selfUser = {
-        odId: currentUserId,
-        username: currentUsername,
-        avatarUrl: currentPresenceAvatar,
-        isSpeaking: false,
-        isMuted: false,
-      };
+      // Also broadcast initial roster to observers
       rosterChannelRef.current?.send({
         type: "broadcast",
         event: "voice-roster",
-        payload: { users: [selfUser] },
+        payload: { users: [{ odId: currentUserId, username: currentUsername, avatarUrl: currentPresenceAvatar, isSpeaking: false, isMuted: false }] },
       });
 
       startVoiceDetection(rawStream);
