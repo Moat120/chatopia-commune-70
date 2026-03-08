@@ -49,6 +49,9 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     },
   });
 
+  // Observe participants when not connected
+  const { participants: presenceParticipants } = useVoicePresence(isConnected ? null : group.id);
+
   const {
     isSharing,
     localStream,
