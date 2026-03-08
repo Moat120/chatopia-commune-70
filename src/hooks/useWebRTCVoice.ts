@@ -790,7 +790,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       });
 
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
+        if (key.startsWith("observer-")) return;
         if (key !== currentUserId) {
+          console.log('[Voice] Presence leave:', key);
           const pc = peerConnectionsRef.current.get(key);
           if (pc) {
             pc.close();
@@ -806,6 +808,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
             audio.srcObject = null;
             remoteAudiosRef.current.delete(key);
           }
+          // Immediately re-sync to update the user list
+          syncPresenceState();
         }
       });
 
