@@ -96,6 +96,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const rosterChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
@@ -479,6 +480,19 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       signalingChannelRef.current = null;
     }
 
+    // Broadcast empty roster to observers, then clean up
+    if (rosterChannelRef.current) {
+      try {
+        await rosterChannelRef.current.send({
+          type: "broadcast",
+          event: "voice-roster",
+          payload: { users: [] },
+        });
+      } catch {}
+      await supabase.removeChannel(rosterChannelRef.current);
+      rosterChannelRef.current = null;
+    }
+
     setIsConnected(false);
     setIsConnecting(false);
     setIsMuted(false);
@@ -553,6 +567,13 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       await signalingChannel.subscribe();
 
+      // Setup roster broadcast channel for observers (GroupsSidebar)
+      const rosterChannel = supabase.channel(`voice-status-${channelId}`, {
+        config: { broadcast: { self: false } },
+      });
+      rosterChannelRef.current = rosterChannel;
+      await rosterChannel.subscribe();
+
       const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
         config: { presence: { key: currentUserId } },
       });
@@ -562,19 +583,31 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         const state = presenceChannel.presenceState();
         const users: VoiceUser[] = [];
 
-        Object.values(state).forEach((presences: any[]) => {
+        Object.entries(state).forEach(([key, presences]: [string, any[]]) => {
+          // Skip observer keys (from useVoicePresence)
+          if (key.startsWith("observer-")) return;
+
           presences.forEach((presence) => {
-            users.push({
-              odId: presence.odId,
-              username: presence.username,
-              avatarUrl: presence.avatarUrl,
-              isSpeaking: presence.isSpeaking || false,
-              isMuted: presence.isMuted || false,
-            });
+            if (presence.odId && !presence._observer) {
+              users.push({
+                odId: presence.odId,
+                username: presence.username,
+                avatarUrl: presence.avatarUrl,
+                isSpeaking: presence.isSpeaking || false,
+                isMuted: presence.isMuted || false,
+              });
+            }
           });
         });
 
         setConnectedUsers(users);
+
+        // Broadcast roster to observers (GroupsSidebar, etc.)
+        rosterChannelRef.current?.send({
+          type: "broadcast",
+          event: "voice-roster",
+          payload: { users },
+        });
 
         users.forEach((u) => {
           if (u.odId !== currentUserId && currentUserId < u.odId) {
@@ -619,6 +652,33 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
             avatarUrl: currentAvatarUrl,
             isSpeaking: false,
             isMuted: false,
+          });
+
+          // Immediately include self in connected users
+          // (presence sync may not have fired yet)
+          setConnectedUsers(prev => {
+            if (prev.some(u => u.odId === currentUserId)) return prev;
+            return [...prev, {
+              odId: currentUserId,
+              username: currentUsername,
+              avatarUrl: currentAvatarUrl,
+              isSpeaking: false,
+              isMuted: false,
+            }];
+          });
+
+          // Broadcast initial roster to observers
+          const selfUser = {
+            odId: currentUserId,
+            username: currentUsername,
+            avatarUrl: currentAvatarUrl,
+            isSpeaking: false,
+            isMuted: false,
+          };
+          rosterChannelRef.current?.send({
+            type: "broadcast",
+            event: "voice-roster",
+            payload: { users: [selfUser] },
           });
         }
       });
