@@ -238,11 +238,11 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(message.data));
 
-        const pendingCandidates = pendingCandidatesRef.current.get(message.from) || [];
+        const pendingCandidates = pendingCandidatesRef.current.get(`incoming:${message.from}`) || [];
         for (const candidate of pendingCandidates) {
           await pc.addIceCandidate(candidate);
         }
-        pendingCandidatesRef.current.delete(message.from);
+        pendingCandidatesRef.current.delete(`incoming:${message.from}`);
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -266,11 +266,11 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(message.data));
 
-          const pendingCandidates = pendingCandidatesRef.current.get(message.from) || [];
+          const pendingCandidates = pendingCandidatesRef.current.get(`outgoing:${message.from}`) || [];
           for (const candidate of pendingCandidates) {
             await pc.addIceCandidate(candidate);
           }
-          pendingCandidatesRef.current.delete(message.from);
+          pendingCandidatesRef.current.delete(`outgoing:${message.from}`);
         } catch (error) {
           console.error("[ScreenShare] Error setting answer:", error);
         }
@@ -278,19 +278,30 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     } else if (message.type === "screen-ice") {
       const outgoingPc = outgoingConnectionsRef.current.get(message.from);
       const incomingPc = incomingConnectionsRef.current.get(message.from);
-      const pc = outgoingPc || incomingPc;
 
-      if (pc) {
-        if (pc.remoteDescription) {
+      const icePayload = message.data as RTCIceCandidateInit | ScreenIcePayload;
+      const candidateInit = "candidate" in icePayload ? icePayload.candidate : icePayload;
+      const connectionRole = "connectionRole" in icePayload ? icePayload.connectionRole : undefined;
+
+      const targetPc = connectionRole === "outgoing"
+        ? incomingPc
+        : connectionRole === "incoming"
+          ? outgoingPc
+          : incomingPc || outgoingPc;
+
+      const pendingKey = targetPc === incomingPc ? `incoming:${message.from}` : `outgoing:${message.from}`;
+
+      if (targetPc) {
+        if (targetPc.remoteDescription) {
           try {
-            await pc.addIceCandidate(new RTCIceCandidate(message.data));
+            await targetPc.addIceCandidate(new RTCIceCandidate(candidateInit));
           } catch (error) {
             console.error("[ScreenShare] ICE candidate error:", error);
           }
         } else {
-          const pending = pendingCandidatesRef.current.get(message.from) || [];
-          pending.push(new RTCIceCandidate(message.data));
-          pendingCandidatesRef.current.set(message.from, pending);
+          const pending = pendingCandidatesRef.current.get(pendingKey) || [];
+          pending.push(new RTCIceCandidate(candidateInit));
+          pendingCandidatesRef.current.set(pendingKey, pending);
         }
       }
     }
