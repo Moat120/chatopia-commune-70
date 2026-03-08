@@ -411,7 +411,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           presenceChannelRef.current?.track({
             odId: currentUserId,
             username: currentUsername,
-            avatarUrl: currentAvatarUrl,
+            avatarUrl: currentPresenceAvatar,
             isSpeaking: speaking,
             isMuted: isMutedRef.current,
           });
@@ -424,7 +424,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     } catch (error) {
       console.error("[Voice] Detection error:", error);
     }
-  }, [currentUserId, currentUsername, currentAvatarUrl]);
+  }, [currentUserId, currentUsername, currentPresenceAvatar]);
 
   // initiateConnection is now via ref above
 
