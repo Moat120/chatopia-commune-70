@@ -24,6 +24,11 @@ export const QUALITY_PRESETS: Record<ScreenQuality, { width: number; height: num
   "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 25_000_000 },
 };
 
+interface ScreenIcePayload {
+  candidate: RTCIceCandidateInit;
+  connectionRole: "outgoing" | "incoming";
+}
+
 interface SignalMessage {
   type: "screen-offer" | "screen-answer" | "screen-ice";
   from: string;
@@ -94,15 +99,20 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
+        const payload: SignalMessage = {
+          type: "screen-ice",
+          from: currentUserId,
+          to: sharerId,
+          data: {
+            candidate: event.candidate.toJSON(),
+            connectionRole: "incoming",
+          } satisfies ScreenIcePayload,
+        };
+
         signalingChannelRef.current.send({
           type: "broadcast",
           event: "screen-signal",
-          payload: {
-            type: "screen-ice",
-            from: currentUserId,
-            to: sharerId,
-            data: event.candidate.toJSON(),
-          },
+          payload,
         });
       }
     };
@@ -162,15 +172,20 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
+        const payload: SignalMessage = {
+          type: "screen-ice",
+          from: currentUserId,
+          to: viewerId,
+          data: {
+            candidate: event.candidate.toJSON(),
+            connectionRole: "outgoing",
+          } satisfies ScreenIcePayload,
+        };
+
         signalingChannelRef.current.send({
           type: "broadcast",
           event: "screen-signal",
-          payload: {
-            type: "screen-ice",
-            from: currentUserId,
-            to: viewerId,
-            data: event.candidate.toJSON(),
-          },
+          payload,
         });
       }
     };
@@ -223,11 +238,11 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(message.data));
 
-        const pendingCandidates = pendingCandidatesRef.current.get(message.from) || [];
+        const pendingCandidates = pendingCandidatesRef.current.get(`incoming:${message.from}`) || [];
         for (const candidate of pendingCandidates) {
           await pc.addIceCandidate(candidate);
         }
-        pendingCandidatesRef.current.delete(message.from);
+        pendingCandidatesRef.current.delete(`incoming:${message.from}`);
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -251,11 +266,11 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(message.data));
 
-          const pendingCandidates = pendingCandidatesRef.current.get(message.from) || [];
+          const pendingCandidates = pendingCandidatesRef.current.get(`outgoing:${message.from}`) || [];
           for (const candidate of pendingCandidates) {
             await pc.addIceCandidate(candidate);
           }
-          pendingCandidatesRef.current.delete(message.from);
+          pendingCandidatesRef.current.delete(`outgoing:${message.from}`);
         } catch (error) {
           console.error("[ScreenShare] Error setting answer:", error);
         }
@@ -263,19 +278,36 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     } else if (message.type === "screen-ice") {
       const outgoingPc = outgoingConnectionsRef.current.get(message.from);
       const incomingPc = incomingConnectionsRef.current.get(message.from);
-      const pc = outgoingPc || incomingPc;
 
-      if (pc) {
-        if (pc.remoteDescription) {
+      const hasRoleMetadata = typeof message.data === "object" && message.data !== null && "connectionRole" in message.data;
+      const connectionRole = hasRoleMetadata
+        ? (message.data as ScreenIcePayload).connectionRole
+        : undefined;
+      const candidateInit: RTCIceCandidateInit = hasRoleMetadata
+        ? (message.data as ScreenIcePayload).candidate
+        : typeof message.data === "string"
+          ? { candidate: message.data }
+          : (message.data as RTCIceCandidateInit);
+
+      const targetPc = connectionRole === "outgoing"
+        ? incomingPc
+        : connectionRole === "incoming"
+          ? outgoingPc
+          : incomingPc || outgoingPc;
+
+      const pendingKey = targetPc === incomingPc ? `incoming:${message.from}` : `outgoing:${message.from}`;
+
+      if (targetPc) {
+        if (targetPc.remoteDescription) {
           try {
-            await pc.addIceCandidate(new RTCIceCandidate(message.data));
+            await targetPc.addIceCandidate(new RTCIceCandidate(candidateInit));
           } catch (error) {
             console.error("[ScreenShare] ICE candidate error:", error);
           }
         } else {
-          const pending = pendingCandidatesRef.current.get(message.from) || [];
-          pending.push(new RTCIceCandidate(message.data));
-          pendingCandidatesRef.current.set(message.from, pending);
+          const pending = pendingCandidatesRef.current.get(pendingKey) || [];
+          pending.push(new RTCIceCandidate(candidateInit));
+          pendingCandidatesRef.current.set(pendingKey, pending);
         }
       }
     }
