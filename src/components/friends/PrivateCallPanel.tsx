@@ -27,6 +27,7 @@ import { Slider } from "@/components/ui/slider";
 import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
 import { 
   RTC_CONFIG, 
+  getDynamicRtcConfig,
   mungeOpusSDP, 
   configureAudioSender,
   ICERestartManager 
@@ -97,6 +98,7 @@ const PrivateCallPanel = ({
   const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const iceRestartManagerRef = useRef<ICERestartManager>(new ICERestartManager());
+  const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -167,7 +169,7 @@ const PrivateCallPanel = ({
   const setupPeerConnection = (stream: MediaStream) => {
     if (peerConnectionRef.current) peerConnectionRef.current.close();
     iceRestartManagerRef.current.reset();
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection(rtcConfigRef.current);
     peerConnectionRef.current = pc;
 
     stream.getTracks().forEach(track => {
@@ -320,6 +322,11 @@ const PrivateCallPanel = ({
 
   const startAudioAndConnect = async () => {
     try {
+      // Fetch dynamic TURN credentials
+      const dynamicConfig = await getDynamicRtcConfig();
+      rtcConfigRef.current = dynamicConfig;
+      console.log('[PrivateCall] Using ICE config with', dynamicConfig.iceServers?.length, 'servers');
+
       const rawStream = await navigator.mediaDevices.getUserMedia({ audio: getOptimizedAudioConstraints() });
       rawStreamRef.current = rawStream;
 

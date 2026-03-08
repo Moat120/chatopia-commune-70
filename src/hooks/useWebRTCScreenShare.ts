@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   RTC_CONFIG, 
+  getDynamicRtcConfig,
   mungeScreenShareSDP, 
   configureScreenShareSender, 
   ICERestartManager 
@@ -58,6 +59,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
+  const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
 
   const currentUserId = user?.id || "";
   const currentUsername = profile?.username || "Utilisateur";
@@ -71,7 +73,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     const oldIce = iceManagersRef.current.get(`in-${sharerId}`);
     if (oldIce) oldIce.cleanup();
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection(rtcConfigRef.current);
     const iceManager = new ICERestartManager();
     iceManagersRef.current.set(`in-${sharerId}`, iceManager);
 
@@ -146,7 +148,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     const oldIce = iceManagersRef.current.get(`out-${viewerId}`);
     if (oldIce) oldIce.cleanup();
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection(rtcConfigRef.current);
     const iceManager = new ICERestartManager();
     iceManagersRef.current.set(`out-${viewerId}`, iceManager);
 
@@ -465,6 +467,9 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     console.log(`[ScreenShare] Starting with quality: ${quality}`, preset);
 
     try {
+      // Fetch dynamic TURN credentials before screen sharing
+      const dynamicConfig = await getDynamicRtcConfig();
+      rtcConfigRef.current = dynamicConfig;
       // CRITICAL: getDisplayMedia called directly in user gesture handler
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
