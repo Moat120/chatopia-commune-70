@@ -290,7 +290,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     const init = async () => {
       console.log(`[ScreenShare] Initializing channels for ${channelId}`);
 
-      const signalingChannel = supabase.channel(`screen-sig-${channelId}-${Date.now()}`);
+      const signalingChannel = supabase.channel(`screen-sig-${channelId}`);
       signalingChannelRef.current = signalingChannel;
 
       signalingChannel.on("broadcast", { event: "screen-signal" }, ({ payload }) => {
@@ -306,7 +306,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
       await signalingChannel.subscribe();
 
-      const presenceChannel = supabase.channel(`screen-pres-${channelId}-${Date.now()}`, {
+      const presenceChannel = supabase.channel(`screen-pres-${channelId}`, {
         config: { presence: { key: currentUserId } },
       });
       presenceChannelRef.current = presenceChannel;
