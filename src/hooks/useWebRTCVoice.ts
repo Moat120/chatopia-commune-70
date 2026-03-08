@@ -529,6 +529,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       presencePollRef.current = null;
     }
 
+    if (joinWatchdogRef.current) {
+      clearTimeout(joinWatchdogRef.current);
+      joinWatchdogRef.current = null;
+    }
+
     // Cleanup ICE restart managers
     iceRestartManagersRef.current.forEach(m => m.cleanup());
     iceRestartManagersRef.current.clear();
@@ -558,31 +563,32 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
 
     if (audioContextRef.current?.state !== "closed") {
-      await audioContextRef.current?.close().catch(() => {});
+      audioContextRef.current?.close().catch(() => {});
       audioContextRef.current = null;
     }
 
-    if (joinWatchdogRef.current) {
-      clearTimeout(joinWatchdogRef.current);
-      joinWatchdogRef.current = null;
-    }
+    // Untrack presence and remove channels with a hard timeout to NEVER hang
+    const channelCleanup = async () => {
+      if (presenceChannelRef.current) {
+        try { await presenceChannelRef.current.untrack(); } catch {}
+        try { supabase.removeChannel(presenceChannelRef.current); } catch {}
+        presenceChannelRef.current = null;
+      }
+      if (signalingChannelRef.current) {
+        try { supabase.removeChannel(signalingChannelRef.current); } catch {}
+        signalingChannelRef.current = null;
+      }
+      if (rosterChannelRef.current) {
+        try { supabase.removeChannel(rosterChannelRef.current); } catch {}
+        rosterChannelRef.current = null;
+      }
+    };
 
-    // Untrack presence before removing channel
-    if (presenceChannelRef.current) {
-      try { await presenceChannelRef.current.untrack(); } catch {}
-      try { await supabase.removeChannel(presenceChannelRef.current); } catch {}
-      presenceChannelRef.current = null;
-    }
-
-    if (signalingChannelRef.current) {
-      try { await supabase.removeChannel(signalingChannelRef.current); } catch {}
-      signalingChannelRef.current = null;
-    }
-
-    if (rosterChannelRef.current) {
-      try { await supabase.removeChannel(rosterChannelRef.current); } catch {}
-      rosterChannelRef.current = null;
-    }
+    // Hard 2s timeout on channel cleanup — never block leaving
+    await Promise.race([
+      channelCleanup(),
+      new Promise(r => setTimeout(r, 2000)),
+    ]);
 
     setIsConnected(false);
     setIsConnecting(false);
