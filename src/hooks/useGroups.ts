@@ -265,7 +265,7 @@ export const useGroups = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Subscribe to group membership changes
+    // Subscribe to group membership changes (own membership)
     const membershipChannel = supabase
       .channel("groups-membership-changes")
       .on(
@@ -278,6 +278,33 @@ export const useGroups = () => {
         },
         () => {
           fetchGroups();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to ALL group_members changes for member count sync
+    const allMembersChannel = supabase
+      .channel("groups-all-members-sync")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "group_members",
+        },
+        async (payload) => {
+          const groupId = (payload.new as any)?.group_id || (payload.old as any)?.group_id;
+          if (!groupId) return;
+          
+          // Update member count for the affected group
+          const { count } = await supabase
+            .from("group_members")
+            .select("*", { count: "exact", head: true })
+            .eq("group_id", groupId);
+          
+          setGroups(prev => prev.map(g =>
+            g.id === groupId ? { ...g, member_count: count || 0 } : g
+          ));
         }
       )
       .subscribe();
@@ -317,6 +344,7 @@ export const useGroups = () => {
 
     return () => {
       supabase.removeChannel(membershipChannel);
+      supabase.removeChannel(allMembersChannel);
       supabase.removeChannel(groupsChannel);
     };
   }, [user, fetchGroups]);
