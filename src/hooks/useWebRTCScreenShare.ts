@@ -99,15 +99,20 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
+        const payload: SignalMessage = {
+          type: "screen-ice",
+          from: currentUserId,
+          to: sharerId,
+          data: {
+            candidate: event.candidate.toJSON(),
+            connectionRole: "incoming",
+          } satisfies ScreenIcePayload,
+        };
+
         signalingChannelRef.current.send({
           type: "broadcast",
           event: "screen-signal",
-          payload: {
-            type: "screen-ice",
-            from: currentUserId,
-            to: sharerId,
-            data: event.candidate.toJSON(),
-          },
+          payload,
         });
       }
     };
