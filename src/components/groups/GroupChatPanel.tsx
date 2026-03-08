@@ -371,8 +371,8 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           </div>
         )}
 
-        {/* ─── Voice Participants ─── */}
-        <GroupVoiceSidebar groupId={group.id} onJoinCall={onStartCall} />
+
+
 
         {/* ─── Input ─── */}
         <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="px-4 py-3 border-t border-white/[0.06] bg-card/20">
