@@ -403,7 +403,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
 
 
         {/* ─── Input ─── */}
-        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="px-4 py-3 border-t border-white/[0.06] bg-card/20">
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="px-4 py-3 border-t border-border bg-card">
           <div className="flex gap-2 items-center">
             <EmojiPicker onSelect={handleEmojiSelect} />
             <Input
