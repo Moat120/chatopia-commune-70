@@ -141,7 +141,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
     <div className="flex-1 flex h-full">
       <div className="flex-1 flex flex-col h-full bg-background">
         {/* ─── Header ─── */}
-        <header className="h-16 px-4 flex items-center gap-3 border-b border-white/[0.06] bg-card/30 backdrop-blur-xl shrink-0">
+        <header className="h-16 px-4 flex items-center gap-3 border-b border-border bg-card shrink-0">
           <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-lg hover:bg-white/[0.06] md:hidden" silent>
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -385,7 +385,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
 
         {/* ─── Reply preview bar ─── */}
         {replyTo && (
-          <div className="px-4 py-2 border-t border-white/[0.04] bg-card/20 flex items-center gap-2 animate-fade-in">
+          <div className="px-4 py-2 border-t border-border bg-card flex items-center gap-2 animate-fade-in">
             <Reply className="h-4 w-4 text-primary/60 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[11px] text-primary/60 font-medium">
@@ -403,7 +403,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
 
 
         {/* ─── Input ─── */}
-        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="px-4 py-3 border-t border-white/[0.06] bg-card/20">
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="px-4 py-3 border-t border-border bg-card">
           <div className="flex gap-2 items-center">
             <EmojiPicker onSelect={handleEmojiSelect} />
             <Input

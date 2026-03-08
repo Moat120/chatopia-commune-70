@@ -132,10 +132,10 @@ const Index = () => {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="h-screen w-screen p-2 md:p-3 parallax-bg parallax-stars overflow-hidden relative">
+      <div className="h-screen w-screen parallax-bg parallax-stars overflow-hidden relative">
         <div className="stars-layer stars-layer-1 absolute inset-0 pointer-events-none" />
         <div className="stars-layer stars-layer-2 absolute inset-0 pointer-events-none" />
-        <div className="h-full w-full flex rounded-2xl overflow-hidden bg-background/80 backdrop-blur-xl border border-white/[0.08] shadow-2xl shadow-black/40 relative z-10">
+        <div className="h-full w-full flex bg-background relative z-10">
           {/* Unified Sidebar */}
           <UnifiedSidebar
             tab={viewMode}
@@ -218,15 +218,15 @@ const Index = () => {
 
 /* ─── Empty State ─── */
 const EmptyState = ({ viewMode }: { viewMode: ViewMode }) => (
-  <div className="flex-1 flex items-center justify-center h-full bg-background mesh-gradient">
-    <div className="text-center animate-reveal">
-      <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/10 border border-white/[0.04] flex items-center justify-center float-slow">
-        <MessageCircle className="h-9 w-9 text-muted-foreground/12" />
+  <div className="flex-1 flex items-center justify-center h-full bg-background">
+    <div className="text-center">
+      <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/30 border border-border flex items-center justify-center">
+        <MessageCircle className="h-9 w-9 text-muted-foreground/40" />
       </div>
-      <h2 className="text-lg font-semibold mb-1.5 text-foreground/70">
+      <h2 className="text-lg font-semibold mb-1.5 text-foreground">
         {viewMode === "messages" ? "Messages" : "Groupes"}
       </h2>
-      <p className="text-muted-foreground/35 max-w-[260px] text-sm leading-relaxed">
+      <p className="text-muted-foreground max-w-[260px] text-sm leading-relaxed">
         {viewMode === "messages"
           ? "Sélectionne un ami pour démarrer une conversation"
           : "Sélectionne un groupe ou crée-en un nouveau"}

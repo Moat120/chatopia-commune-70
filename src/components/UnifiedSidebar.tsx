@@ -104,7 +104,7 @@ const UnifiedSidebar = ({
   const loading = tab === "messages" ? friendsLoading : groupsLoading;
 
   return (
-    <div className="w-[320px] h-full flex flex-col bg-card/30 backdrop-blur-2xl border-r border-white/[0.04]">
+    <div className="w-[320px] h-full flex flex-col bg-card border-r border-border">
       {/* ─── Header ─── */}
       <div className="px-4 pt-4 pb-2 space-y-3">
         {/* Tab switcher */}
@@ -220,7 +220,7 @@ const UnifiedSidebar = ({
 
       {/* ─── Friend Code (Messages tab only) ─── */}
       {tab === "messages" && (
-        <div className="px-3 py-2 border-t border-white/[0.03]">
+        <div className="px-3 py-2 border-t border-border">
           <button
             onClick={copyFriendCode}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-all duration-200 group"
@@ -242,7 +242,7 @@ const UnifiedSidebar = ({
       )}
 
       {/* ─── User Footer ─── */}
-      <div className="px-3 py-3 border-t border-white/[0.06] bg-card/30">
+      <div className="px-3 py-3 border-t border-border bg-card">
         <div className="flex items-center gap-3">
           <StatusPicker currentStatus={profile?.custom_status}>
             <button className="relative shrink-0 group/avatar">
