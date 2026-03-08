@@ -264,7 +264,7 @@ export const useFriends = () => {
           const updatedProfile = payload.new as any;
           setFriends(prev => prev.map(friend => 
             friend.id === updatedProfile.id 
-              ? { ...friend, status: updatedProfile.status, avatar_url: updatedProfile.avatar_url, username: updatedProfile.username }
+              ? { ...friend, status: updatedProfile.status, avatar_url: updatedProfile.avatar_url, username: updatedProfile.username, custom_status: updatedProfile.custom_status }
               : friend
           ));
         }
