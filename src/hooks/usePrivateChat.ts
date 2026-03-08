@@ -11,6 +11,7 @@ export interface PrivateMessage {
   read_at: string | null;
   created_at: string;
   edited_at: string | null;
+  reply_to_id: string | null;
 }
 
 export const usePrivateChat = (friendId: string | null) => {
