@@ -625,106 +625,77 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }, 20000);
 
     try {
-      // Fetch dynamic TURN credentials first (fallback fast if function is slow)
-      try {
-        const dynamicConfig = await withTimeout(getDynamicRtcConfig(), 8000, "TURN config");
-        rtcConfigRef.current = dynamicConfig;
-        console.log('[Voice] Using ICE config with', dynamicConfig.iceServers?.length, 'servers');
-      } catch (turnError) {
-        console.warn('[Voice] TURN config unavailable, fallback to static RTC config', turnError);
-        rtcConfigRef.current = RTC_CONFIG;
-      }
+      // Parallelize: TURN fetch + getUserMedia + stale channel cleanup all at once
+      const [turnResult, rawStream] = await Promise.all([
+        // TURN credentials (non-critical, fallback to static)
+        withTimeout(getDynamicRtcConfig(), 5000, "TURN config")
+          .then(config => { rtcConfigRef.current = config; console.log('[Voice] Using ICE config with', config.iceServers?.length, 'servers'); return config; })
+          .catch(err => { console.warn('[Voice] TURN config unavailable, using static', err); rtcConfigRef.current = RTC_CONFIG; return RTC_CONFIG; }),
+        // getUserMedia
+        withTimeout(
+          navigator.mediaDevices.getUserMedia({ audio: await getOptimizedAudioConstraints() }),
+          8000,
+          "getUserMedia"
+        ),
+        // Cleanup stale channels in parallel
+        clearOwnVoiceChannels(),
+      ]);
 
-      const audioConstraints = await getOptimizedAudioConstraints();
-      console.log('[Voice] Getting media with constraints:', audioConstraints);
-
-      const rawStream = await withTimeout(
-        navigator.mediaDevices.getUserMedia({
-          audio: audioConstraints,
-        }),
-        10000,
-        "getUserMedia"
-      );
       rawStreamRef.current = rawStream;
 
       const audioTrack = rawStream.getAudioTracks()[0];
       if (audioTrack) {
-        const settings = audioTrack.getSettings();
-        console.log('[Voice] Applied audio settings:', settings);
+        console.log('[Voice] Applied audio settings:', audioTrack.getSettings());
       }
 
-      // Apply AdvancedNoiseProcessor pipeline
+      // Apply noise processor (can run while channels subscribe below)
       let processedStream = rawStream;
-      if (getNoiseSuppression()) {
-        try {
-          noiseProcessorRef.current = new AdvancedNoiseProcessor();
-          processedStream = await withTimeout(
-            noiseProcessorRef.current.process(rawStream),
-            5000,
-            "noise processor"
-          );
-          const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
-          const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
-          const latency = noiseProcessorRef.current.getLatency();
-          
-          const engines = [
-            rnnoiseActive ? 'RNNoise' : null,
-            impulseActive ? 'ImpulseGate' : null,
-          ].filter(Boolean).join('+') || 'Filters';
-          setNoiseEngine(engines);
-          
-          console.log(`[Voice] Noise processing applied | engine=${engines} | latency=${latency}ms`);
-          
-          if (!rnnoiseActive) {
-            console.warn('[Voice] ⚠️ RNNoise failed to load, using fallback noise processing');
-          }
-        } catch (noiseErr) {
-          console.error('[Voice] Noise processor pipeline failed entirely:', noiseErr);
-          setNoiseEngine(null);
-        }
-      } else {
-        console.log('[Voice] Noise suppression disabled in settings');
-        setNoiseEngine(null);
-      }
+      const noisePromise = getNoiseSuppression()
+        ? (async () => {
+            try {
+              noiseProcessorRef.current = new AdvancedNoiseProcessor();
+              processedStream = await withTimeout(noiseProcessorRef.current.process(rawStream), 4000, "noise processor");
+              const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
+              const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
+              const engines = [rnnoiseActive ? 'RNNoise' : null, impulseActive ? 'ImpulseGate' : null].filter(Boolean).join('+') || 'Filters';
+              setNoiseEngine(engines);
+              console.log(`[Voice] Noise processing applied | engine=${engines} | latency=${noiseProcessorRef.current.getLatency()}ms`);
+            } catch (noiseErr) {
+              console.error('[Voice] Noise processor failed:', noiseErr);
+              setNoiseEngine(null);
+            }
+          })()
+        : (() => { setNoiseEngine(null); return Promise.resolve(); })();
 
-      localStreamRef.current = processedStream;
-
-      // Ensure no observer/stale channel is already joined on same realtime topics
-      await clearOwnVoiceChannels();
-
-      // Setup channels
+      // Setup channels in parallel with noise processing
       const signalingChannel = supabase.channel(`voice-sig-${channelId}`, {
         config: { broadcast: { self: false } },
       });
       signalingChannelRef.current = signalingChannel;
-
       signalingChannel.on("broadcast", { event: "voice-signal" }, ({ payload }) => {
         handleSignalRef.current?.(payload as SignalMessage);
       });
 
-      await subscribeChannel(signalingChannel, "signaling");
-
-      // Setup roster broadcast channel (non-critical)
       const rosterChannel = supabase.channel(`voice-status-${channelId}`, {
         config: { broadcast: { self: false } },
       });
       rosterChannelRef.current = rosterChannel;
-      try {
-        await subscribeChannel(rosterChannel, "roster");
-      } catch (rosterError) {
-        console.warn("[Voice] Roster channel unavailable", rosterError);
-      }
 
-      // Setup observer broadcast channel — separate from roster, used by useVoicePresence
       const observerChannel = supabase.channel(`voice-obs-${channelId}`, {
         config: { broadcast: { self: false } },
       });
       observerChannelRef.current = observerChannel;
-      try {
-        await subscribeChannel(observerChannel, "observer");
-      } catch (obsError) {
-        console.warn("[Voice] Observer channel unavailable", obsError);
-      }
+
+      // Subscribe all channels + noise processing in parallel
+      await Promise.all([
+        noisePromise,
+        subscribeChannel(signalingChannel, "signaling"),
+        subscribeChannel(rosterChannel, "roster").catch(e => console.warn("[Voice] Roster unavailable", e)),
+        subscribeChannel(observerChannel, "observer").catch(e => console.warn("[Voice] Observer unavailable", e)),
+      ]);
+
+      // Use the processed stream (noise may have finished above)
+      localStreamRef.current = processedStream;
 
       const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
         config: { presence: { key: currentUserId } },
