@@ -232,6 +232,17 @@ const PrivateCallPanel = ({
     return pc;
   };
 
+  const endCallRef = useRef<() => void>(() => {});
+
+  // Set up the ICE give-up callback: end the call when peer is permanently lost
+  useEffect(() => {
+    iceRestartManagerRef.current.setOnGiveUp(() => {
+      console.warn('[PrivateCall] Peer permanently disconnected, ending call');
+      toast({ title: "Déconnecté", description: "La connexion avec l'autre personne a été perdue", variant: "destructive" });
+      endCallRef.current();
+    });
+  }, [toast]);
+
   const handleSignal = async (payload: any) => {
     if (payload.to !== user?.id) return;
     let pc = peerConnectionRef.current;
@@ -422,6 +433,9 @@ const PrivateCallPanel = ({
     await supabase.from("private_calls").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", callId);
     cleanup(); onEnd();
   };
+
+  // Keep ref up to date for ICE give-up callback
+  useEffect(() => { endCallRef.current = endCall; });
 
   const toggleMute = () => {
     if (localStreamRef.current) {

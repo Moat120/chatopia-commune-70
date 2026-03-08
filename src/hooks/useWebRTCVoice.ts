@@ -266,6 +266,18 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
   }, [channelId]);
 
+  const removePeer = useCallback((remoteUserId: string) => {
+    console.log('[Voice] Removing dead peer:', remoteUserId);
+    const pc = peerConnectionsRef.current.get(remoteUserId);
+    if (pc) { pc.close(); peerConnectionsRef.current.delete(remoteUserId); }
+    const im = iceRestartManagersRef.current.get(remoteUserId);
+    if (im) { im.cleanup(); iceRestartManagersRef.current.delete(remoteUserId); }
+    const audio = remoteAudiosRef.current.get(remoteUserId);
+    if (audio) { audio.srcObject = null; remoteAudiosRef.current.delete(remoteUserId); }
+    pendingCandidatesRef.current.delete(remoteUserId);
+    setConnectedUsers(prev => prev.filter(u => u.odId !== remoteUserId));
+  }, []);
+
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
     const existing = peerConnectionsRef.current.get(remoteUserId);
     if (existing) {
@@ -279,7 +291,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     console.log('[Voice] Creating peer connection for:', remoteUserId);
     const pc = new RTCPeerConnection(rtcConfigRef.current);
-    const iceManager = new ICERestartManager();
+    const iceManager = new ICERestartManager(() => {
+      // Called when all restart attempts exhausted — peer is dead
+      console.warn('[Voice] Peer permanently disconnected:', remoteUserId);
+      removePeer(remoteUserId);
+    });
     iceRestartManagersRef.current.set(remoteUserId, iceManager);
 
     if (localStreamRef.current) {
@@ -350,7 +366,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     peerConnectionsRef.current.set(remoteUserId, pc);
     return pc;
-  }, [currentUserId, getSavedVolume]);
+  }, [currentUserId, getSavedVolume, removePeer]);
 
   const handleSignalRef = useRef<(msg: SignalMessage) => Promise<void>>();
   handleSignalRef.current = async (message: SignalMessage) => {

@@ -261,10 +261,20 @@ export class ICERestartManager {
   private attempts = 0;
   private maxAttempts = 5;
   private timeout: NodeJS.Timeout | null = null;
+  private onGiveUp: (() => void) | null = null;
+  
+  constructor(onGiveUp?: () => void) {
+    this.onGiveUp = onGiveUp || null;
+  }
+
+  setOnGiveUp(cb: () => void) {
+    this.onGiveUp = cb;
+  }
   
   scheduleRestart(pc: RTCPeerConnection, onRestart?: () => void) {
     if (this.attempts >= this.maxAttempts) {
-      console.warn('[ICERestart] Max attempts reached');
+      console.warn('[ICERestart] Max attempts reached, giving up on peer');
+      this.onGiveUp?.();
       return;
     }
     
@@ -291,5 +301,6 @@ export class ICERestartManager {
   
   cleanup() {
     this.reset();
+    this.onGiveUp = null;
   }
 }
