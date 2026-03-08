@@ -101,6 +101,23 @@ export const usePrivateChat = (friendId: string | null) => {
         .on(
           "postgres_changes",
           {
+            event: "UPDATE",
+            schema: "public",
+            table: "private_messages",
+          },
+          (payload) => {
+            const updated = payload.new as PrivateMessage;
+            if (
+              (updated.sender_id === user.id && updated.receiver_id === friendId) ||
+              (updated.sender_id === friendId && updated.receiver_id === user.id)
+            ) {
+              setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
             event: "DELETE",
             schema: "public",
             table: "private_messages",
