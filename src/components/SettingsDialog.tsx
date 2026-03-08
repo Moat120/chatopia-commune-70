@@ -462,6 +462,13 @@ const SettingsDialog = () => {
       animationRef.current = null;
     }
 
+    // Cleanup noise processor
+    if (noiseProcessorRef.current) {
+      noiseProcessorRef.current.cleanup();
+      noiseProcessorRef.current = null;
+    }
+    processedSourceRef.current = null;
+
     // Disconnect loopback
     if (loopbackGainRef.current) {
       loopbackGainRef.current.disconnect();
