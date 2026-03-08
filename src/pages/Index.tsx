@@ -7,11 +7,12 @@ import PrivateCallPanel from "@/components/friends/PrivateCallPanel";
 import GroupsSidebar from "@/components/groups/GroupsSidebar";
 import GroupChatPanel from "@/components/groups/GroupChatPanel";
 import GroupVoiceChannel from "@/components/groups/GroupVoiceChannel";
+import SearchPalette from "@/components/chat/SearchPalette";
 import { Friend } from "@/hooks/useFriends";
 import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Users, Phone, PhoneOff, Sparkles } from "lucide-react";
+import { MessageCircle, Users, Phone, PhoneOff, Sparkles, Search } from "lucide-react";
 import { playNotificationSound, RingtoneManager } from "@/hooks/useSound";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
@@ -49,14 +50,15 @@ const Index = () => {
     friend: Friend;
     callId: string;
   } | null>(null);
-
+  const [searchOpen, setSearchOpen] = useState(false);
   // Keyboard shortcuts
   useKeyboardShortcuts({
     onEscape: useCallback(() => {
-      if (incomingCall) return; // Don't close incoming call with Escape
+      if (incomingCall) return;
       if (selectedFriend) setSelectedFriend(null);
       else if (selectedGroup) setSelectedGroup(null);
     }, [selectedFriend, selectedGroup, incomingCall]),
+    onSearch: useCallback(() => setSearchOpen(true), []),
   });
 
   useEffect(() => {
@@ -170,6 +172,15 @@ const Index = () => {
             icon={<Users className="h-5 w-5" />}
             label="Groupes"
           />
+          
+          <div className="w-8 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent my-2" />
+          
+          <NavButton
+            active={false}
+            onClick={() => setSearchOpen(true)}
+            icon={<Search className="h-5 w-5" />}
+            label="Rechercher (Ctrl+K)"
+          />
         </div>
 
         {/* Sidebar */}
@@ -235,6 +246,22 @@ const Index = () => {
             onDecline={handleDeclineIncomingCall}
           />
         )}
+
+        {/* Search Palette */}
+        <SearchPalette
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          onSelectFriend={(friend) => {
+            setViewMode("friends");
+            setSelectedGroup(null);
+            setSelectedFriend(friend);
+          }}
+          onSelectGroup={(group) => {
+            setViewMode("groups");
+            setSelectedFriend(null);
+            setSelectedGroup(group);
+          }}
+        />
       </div>
     </TooltipProvider>
   );

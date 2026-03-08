@@ -6,6 +6,8 @@ import { useTypingIndicator } from "@/hooks/useTypingIndicator";
 import { useSound } from "@/hooks/useSound";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { smartTimestamp, dateSeparator, shouldShowDateSeparator } from "@/lib/timeUtils";
+import MessageContextMenu from "@/components/chat/MessageContextMenu";
+import EmojiPicker from "@/components/chat/EmojiPicker";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +17,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Phone, X, Send, Loader2, Sparkles, CheckCheck, Check } from "lucide-react";
+import { Phone, X, Send, Loader2, Sparkles, CheckCheck, Check, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -31,11 +33,11 @@ const PrivateChatPanel = ({
   onClose,
   onStartCall,
 }: PrivateChatPanelProps) => {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { messages, loading, sendMessage } = usePrivateChat(friend.id);
   const { playMessageSent } = useSound();
   const channelId = `private-${[user?.id, friend.id].sort().join("-")}`;
-  const { typingUsers, isTyping, startTyping, stopTyping } = useTypingIndicator(channelId);
+  const { isTyping, startTyping, stopTyping } = useTypingIndicator(channelId);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -51,28 +53,29 @@ const PrivateChatPanel = ({
     inputRef.current?.focus();
   }, [friend.id]);
 
-  // Keyboard shortcuts
   useKeyboardShortcuts({
     onEscape: onClose,
   });
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
-    if (e.target.value.trim()) {
-      startTyping();
-    }
+    if (e.target.value.trim()) startTyping();
   }, [startTyping]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || sending) return;
-
     stopTyping();
     setSending(true);
     await sendMessage(input);
     playMessageSent();
     setInput("");
     setSending(false);
+    inputRef.current?.focus();
+  };
+
+  const handleEmojiSelect = (emoji: string) => {
+    setInput((prev) => prev + emoji);
     inputRef.current?.focus();
   };
 
@@ -145,13 +148,7 @@ const PrivateChatPanel = ({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={onClose}
-                className="h-9 w-9 rounded-xl hover:bg-white/[0.06]"
-                silent
-              >
+              <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9 rounded-xl hover:bg-white/[0.06]" silent>
                 <X className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -195,10 +192,10 @@ const PrivateChatPanel = ({
               const isGroupStart = !prevMsg || prevMsg.sender_id !== msg.sender_id || showDateSep;
               const isGroupEnd = !nextMsg || nextMsg.sender_id !== msg.sender_id;
               const isRead = isMe && msg.read_at;
+              const isEdited = !!msg.edited_at;
 
               return (
                 <div key={msg.id}>
-                  {/* Date separator */}
                   {showDateSep && (
                     <div className="flex items-center gap-4 my-6">
                       <div className="flex-1 h-px bg-white/[0.04]" />
@@ -210,12 +207,11 @@ const PrivateChatPanel = ({
                   )}
                   <div
                     className={cn(
-                      "flex items-end gap-2.5",
+                      "flex items-end gap-2.5 group/msg",
                       isMe && "flex-row-reverse",
                       isGroupStart ? "mt-3" : "mt-0.5"
                     )}
                   >
-                    {/* Avatar only on group start */}
                     {isGroupStart && !isMe ? (
                       <Avatar className="h-8 w-8 ring-1 ring-white/5 shrink-0">
                         <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
@@ -227,53 +223,59 @@ const PrivateChatPanel = ({
                       <div className="w-8 shrink-0" />
                     ) : null}
 
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className={cn(
-                            "max-w-[65%] px-3.5 py-2 transition-all",
-                            isMe
-                              ? cn(
-                                  "message-own",
-                                  isGroupStart && isGroupEnd && "rounded-2xl",
-                                  isGroupStart && !isGroupEnd && "rounded-2xl rounded-br-lg",
-                                  !isGroupStart && isGroupEnd && "rounded-2xl rounded-tr-lg",
-                                  !isGroupStart && !isGroupEnd && "rounded-xl rounded-r-lg",
-                                )
-                              : cn(
-                                  "message-other",
-                                  isGroupStart && isGroupEnd && "rounded-2xl",
-                                  isGroupStart && !isGroupEnd && "rounded-2xl rounded-bl-lg",
-                                  !isGroupStart && isGroupEnd && "rounded-2xl rounded-tl-lg",
-                                  !isGroupStart && !isGroupEnd && "rounded-xl rounded-l-lg",
-                                )
-                          )}
-                        >
-                          <p className="text-[14px] leading-relaxed break-words">{msg.content}</p>
-                          {/* Read receipt + time on last message of group */}
-                          {isGroupEnd && (
-                            <div className={cn(
-                              "flex items-center gap-1 mt-1",
-                              isMe ? "justify-end" : "justify-start"
-                            )}>
-                              <span className="text-[10px] text-foreground/30">
-                                {smartTimestamp(msg.created_at)}
-                              </span>
-                              {isMe && (
-                                isRead ? (
-                                  <CheckCheck className="h-3 w-3 text-accent-foreground/50" />
-                                ) : (
-                                  <Check className="h-3 w-3 text-foreground/20" />
-                                )
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side={isMe ? "left" : "right"} className="text-xs">
-                        {format(new Date(msg.created_at), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
-                      </TooltipContent>
-                    </Tooltip>
+                    <MessageContextMenu message={msg}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={cn(
+                              "max-w-[65%] px-3.5 py-2 transition-all cursor-default",
+                              "hover:brightness-110",
+                              isMe
+                                ? cn(
+                                    "message-own",
+                                    isGroupStart && isGroupEnd && "rounded-2xl",
+                                    isGroupStart && !isGroupEnd && "rounded-2xl rounded-br-lg",
+                                    !isGroupStart && isGroupEnd && "rounded-2xl rounded-tr-lg",
+                                    !isGroupStart && !isGroupEnd && "rounded-xl rounded-r-lg",
+                                  )
+                                : cn(
+                                    "message-other",
+                                    isGroupStart && isGroupEnd && "rounded-2xl",
+                                    isGroupStart && !isGroupEnd && "rounded-2xl rounded-bl-lg",
+                                    !isGroupStart && isGroupEnd && "rounded-2xl rounded-tl-lg",
+                                    !isGroupStart && !isGroupEnd && "rounded-xl rounded-l-lg",
+                                  )
+                            )}
+                          >
+                            <p className="text-[14px] leading-relaxed break-words">{msg.content}</p>
+                            {isGroupEnd && (
+                              <div className={cn(
+                                "flex items-center gap-1 mt-1",
+                                isMe ? "justify-end" : "justify-start"
+                              )}>
+                                {isEdited && (
+                                  <Pencil className="h-2.5 w-2.5 text-foreground/20" />
+                                )}
+                                <span className="text-[10px] text-foreground/30">
+                                  {smartTimestamp(msg.created_at)}
+                                </span>
+                                {isMe && (
+                                  isRead ? (
+                                    <CheckCheck className="h-3 w-3 text-accent-foreground/50" />
+                                  ) : (
+                                    <Check className="h-3 w-3 text-foreground/20" />
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side={isMe ? "left" : "right"} className="text-xs">
+                          {format(new Date(msg.created_at), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
+                          {isEdited && " (modifié)"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </MessageContextMenu>
                   </div>
                 </div>
               );
@@ -299,7 +301,8 @@ const PrivateChatPanel = ({
 
       {/* Input */}
       <form onSubmit={handleSend} className="p-4 glass-solid border-t border-white/[0.04]">
-        <div className="flex gap-2.5">
+        <div className="flex gap-2 items-center">
+          <EmojiPicker onSelect={handleEmojiSelect} />
           <Input
             ref={inputRef}
             value={input}

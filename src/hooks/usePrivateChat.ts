@@ -10,6 +10,7 @@ export interface PrivateMessage {
   content: string;
   read_at: string | null;
   created_at: string;
+  edited_at: string | null;
 }
 
 export const usePrivateChat = (friendId: string | null) => {
@@ -94,6 +95,23 @@ export const usePrivateChat = (friendId: string | null) => {
                   .update({ read_at: new Date().toISOString() })
                   .eq("id", msg.id);
               }
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "private_messages",
+          },
+          (payload) => {
+            const updated = payload.new as PrivateMessage;
+            if (
+              (updated.sender_id === user.id && updated.receiver_id === friendId) ||
+              (updated.sender_id === friendId && updated.receiver_id === user.id)
+            ) {
+              setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
             }
           }
         )
