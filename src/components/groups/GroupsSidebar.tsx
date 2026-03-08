@@ -137,58 +137,76 @@ const GroupItem = ({
   onMessage,
   onCall,
 }: GroupItemProps) => {
+  const { participants } = useVoicePresence(group.id);
+
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-300",
+        "group flex flex-col gap-1 p-3 rounded-2xl cursor-pointer transition-all duration-300",
         isSelected
           ? "bg-primary/15 border border-primary/25 shadow-lg shadow-primary/10"
           : "hover:bg-white/[0.04] border border-transparent"
       )}
       onClick={onSelect}
     >
-      <Avatar className={cn(
-        "h-12 w-12 transition-all duration-300",
-        isSelected && "ring-2 ring-primary/30"
-      )}>
-        <AvatarImage src={group.avatar_url || ""} className="object-cover" />
-        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary font-bold text-lg">
-          {group.name[0]?.toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
-      
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate">{group.name}</p>
-        <p className="text-xs text-muted-foreground/70 flex items-center gap-1">
-          <Users className="h-3 w-3" />
-          {group.member_count || 1} membre{(group.member_count || 1) > 1 ? "s" : ""}
-        </p>
+      <div className="flex items-center gap-3">
+        <Avatar className={cn(
+          "h-12 w-12 transition-all duration-300",
+          isSelected && "ring-2 ring-primary/30"
+        )}>
+          <AvatarImage src={group.avatar_url || ""} className="object-cover" />
+          <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary font-bold text-lg">
+            {group.name[0]?.toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate">{group.name}</p>
+          <p className="text-xs text-muted-foreground/70 flex items-center gap-1">
+            <Users className="h-3 w-3" />
+            {group.member_count || 1} membre{(group.member_count || 1) > 1 ? "s" : ""}
+          </p>
+        </div>
+        
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-white/[0.08] transition-all duration-300"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMessage();
+            }}
+          >
+            <MessageCircle className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-success/15 hover:text-success transition-all duration-300"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCall();
+            }}
+          >
+            <Phone className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
-      
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 rounded-lg hover:bg-white/[0.08] transition-all duration-300"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMessage();
-          }}
-        >
-          <MessageCircle className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 rounded-lg hover:bg-success/15 hover:text-success transition-all duration-300"
-          onClick={(e) => {
-            e.stopPropagation();
-            onCall();
-          }}
-        >
-          <Phone className="h-4 w-4" />
-        </Button>
-      </div>
+
+      {/* Voice participants indicator */}
+      {participants.length > 0 && (
+        <div className="ml-[3.75rem] flex items-center gap-1.5 animate-fade-in">
+          <Volume2 className="h-3 w-3 text-success/70 shrink-0" />
+          <div className="flex items-center gap-1 flex-wrap">
+            {participants.map((p) => (
+              <span key={p.odId} className="text-[11px] text-success/60 font-medium">
+                {p.username}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
