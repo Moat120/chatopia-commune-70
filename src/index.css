@@ -3,75 +3,86 @@
 @tailwind utilities;
 
 /* ============================================
-   ULTRA PREMIUM DESIGN SYSTEM
+   iOS-INSPIRED DESIGN SYSTEM
+   Glassmorphism · Precision · Depth
    ============================================ */
 
 @layer base {
   :root {
-    /* Core palette - Open, airy dark */
-    --background: 220 18% 8%;
-    --foreground: 210 20% 96%;
+    /* Core palette — deep, rich, Apple-like dark */
+    --background: 225 20% 6%;
+    --foreground: 210 15% 95%;
 
-    --card: 220 16% 11%;
-    --card-foreground: 210 20% 96%;
+    --card: 225 18% 10%;
+    --card-foreground: 210 15% 95%;
 
-    --popover: 220 16% 11%;
-    --popover-foreground: 210 20% 96%;
+    --popover: 225 18% 12%;
+    --popover-foreground: 210 15% 95%;
 
-    /* Primary - Sky teal (open, fresh) */
-    --primary: 195 85% 55%;
+    /* Primary — iOS Blue */
+    --primary: 211 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary accents */
-    --secondary: 220 14% 14%;
-    --secondary-foreground: 210 20% 96%;
+    /* Secondary */
+    --secondary: 225 14% 14%;
+    --secondary-foreground: 210 15% 95%;
 
-    /* Accent colors */
+    /* Accent spectrum */
     --accent-cyan: 175 80% 50%;
-    --accent-rose: 330 75% 62%;
-    --accent-amber: 42 90% 58%;
-    --accent-emerald: 162 72% 48%;
+    --accent-rose: 340 82% 60%;
+    --accent-amber: 38 92% 55%;
+    --accent-emerald: 160 72% 46%;
 
-    --muted: 220 12% 20%;
-    --muted-foreground: 215 12% 55%;
+    --muted: 225 12% 18%;
+    --muted-foreground: 215 10% 50%;
 
-    --accent: 195 85% 55%;
+    --accent: 211 100% 50%;
     --accent-foreground: 0 0% 100%;
 
-    /* Status colors */
-    --destructive: 0 75% 55%;
+    /* Status */
+    --destructive: 0 72% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 162 72% 48%;
+    --success: 160 72% 46%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 42 90% 58%;
-    --warning-foreground: 220 18% 10%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 225 20% 8%;
 
-    /* Borders & inputs */
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
-    --ring: 195 85% 55%;
+    /* Structure */
+    --border: 225 12% 16%;
+    --input: 225 14% 16%;
+    --ring: 211 100% 50%;
 
-    --radius: 1rem;
+    --radius: 0.875rem;
 
-    /* Layout colors */
-    --server-sidebar: 220 18% 6%;
-    --channel-sidebar: 220 16% 10%;
-    --chat-background: 220 18% 8%;
+    /* Layout */
+    --server-sidebar: 225 22% 5%;
+    --channel-sidebar: 225 18% 8%;
+    --chat-background: 225 20% 6%;
     
-    --hover-bg: 220 14% 16%;
-    --active-channel: 195 85% 55%;
+    --hover-bg: 225 14% 14%;
+    --active-channel: 211 100% 50%;
 
-    /* Voice specific */
-    --voice-speaking: 162 72% 48%;
-    --voice-muted: 0 75% 55%;
-    --voice-connected: 162 72% 48%;
+    /* Voice */
+    --voice-speaking: 160 72% 46%;
+    --voice-muted: 0 72% 52%;
+    --voice-connected: 160 72% 46%;
 
-    /* Glow effects */
-    --glow-primary: 195 85% 55%;
-    --glow-success: 162 72% 48%;
+    /* Glow */
+    --glow-primary: 211 100% 50%;
+    --glow-success: 160 72% 46%;
     --glow-cyan: 175 80% 50%;
+
+    /* Sidebar */
+    --sidebar-background: 225 22% 5%;
+    --sidebar-foreground: 210 15% 95%;
+    --sidebar-primary: 211 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 14% 14%;
+    --sidebar-accent-foreground: 210 15% 95%;
+    --sidebar-border: 225 12% 14%;
+    --sidebar-ring: 211 100% 50%;
   }
 }
 
@@ -86,8 +97,11 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.01em;
   }
 
   /* Ultra-thin scrollbar with smooth fade */
