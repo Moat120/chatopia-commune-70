@@ -385,7 +385,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
 
         {/* ─── Reply preview bar ─── */}
         {replyTo && (
-          <div className="px-4 py-2 border-t border-white/[0.04] bg-card/20 flex items-center gap-2 animate-fade-in">
+          <div className="px-4 py-2 border-t border-border bg-card flex items-center gap-2 animate-fade-in">
             <Reply className="h-4 w-4 text-primary/60 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[11px] text-primary/60 font-medium">
