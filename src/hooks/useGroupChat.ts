@@ -86,7 +86,7 @@ export const useGroupChat = (groupId: string | null) => {
     pollRef.current = setInterval(fetchMessages, 10000);
 
     const channel = supabase
-      .channel(`group-messages-${user.id}-${groupId}-${Date.now()}`)
+      .channel(`group-messages-${groupId}`)
       .on(
         "postgres_changes",
         {
