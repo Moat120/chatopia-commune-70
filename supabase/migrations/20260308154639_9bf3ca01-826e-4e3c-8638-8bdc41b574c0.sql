@@ -1,0 +1,3 @@
+ALTER TABLE public.private_calls REPLICA IDENTITY FULL;
+ALTER TABLE public.group_calls REPLICA IDENTITY FULL;
+ALTER TABLE public.message_reactions REPLICA IDENTITY FULL;
