@@ -59,8 +59,18 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
     return map;
   }, [messages]);
 
-  // Smart scroll: only auto-scroll if user is near bottom
+  const prevMsgCountRef = useRef(messages.length);
+
+  // Smart scroll + incoming message sound
   useEffect(() => {
+    const newCount = messages.length;
+    const isNewIncoming = newCount > prevMsgCountRef.current && messages[newCount - 1]?.sender_id !== user?.id;
+    prevMsgCountRef.current = newCount;
+
+    if (isNewIncoming) {
+      playMessageReceived();
+    }
+
     if (isNearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
