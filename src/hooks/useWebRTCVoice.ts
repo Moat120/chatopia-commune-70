@@ -518,17 +518,25 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
           const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
           const latency = noiseProcessorRef.current.getLatency();
-          console.log(`[Voice] Noise processing applied | RNNoise=${rnnoiseActive} | ImpulseGate=${impulseActive} | latency=${latency}ms`);
+          
+          const engines = [
+            rnnoiseActive ? 'RNNoise' : null,
+            impulseActive ? 'ImpulseGate' : null,
+          ].filter(Boolean).join('+') || 'Filters';
+          setNoiseEngine(engines);
+          
+          console.log(`[Voice] Noise processing applied | engine=${engines} | latency=${latency}ms`);
           
           if (!rnnoiseActive) {
             console.warn('[Voice] ⚠️ RNNoise failed to load, using fallback noise processing');
           }
         } catch (noiseErr) {
           console.error('[Voice] Noise processor pipeline failed entirely:', noiseErr);
-          // processedStream stays as rawStream
+          setNoiseEngine(null);
         }
       } else {
         console.log('[Voice] Noise suppression disabled in settings');
+        setNoiseEngine(null);
       }
 
       localStreamRef.current = processedStream;
