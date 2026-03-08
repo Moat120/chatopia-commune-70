@@ -1,116 +1,65 @@
 
 
-# Plan: Fix All Dialog Clipping, Reduce Ping, Redesign Voice Call UI
+# Plan : Fluidité, synchronisation, QoL et suppression de bruit avancée
 
-## Problem Analysis
+## Problèmes identifiés
 
-### 1. Dialogs Cut Off at Bottom
-**Root Cause**: The `glass-premium` CSS class includes `overflow-hidden` (in `src/index.css` line 139). When dialogs use `className="glass-premium ..."`, the `overflow-hidden` from `glass-premium` overrides the `overflow-y-auto` from DialogContent, causing content to be clipped instead of scrolling.
+1. **Synchronisation fragile** : Le chat de groupe utilise un polling de 10s en fallback, et les channels Realtime ne gèrent pas les reconnexions proprement.
+2. **Voice chat instable** : Le `handleSignal` est dans les dépendances du `join` useCallback, ce qui peut provoquer des re-créations de channels.
+3. **Pas de suppression de bruit spécialisée clavier/souris** : RNNoise est bon pour le bruit ambiant mais ne cible pas spécifiquement les bruits impulsifs (clics clavier, souris, respiration).
+4. **Screen share pas fiable** : Les offres sont envoyées avec des `setTimeout` fragiles qui peuvent rater si la presence n'est pas encore propagée.
 
-The fix in `dialog.tsx` (`max-h-[80vh] overflow-y-auto`) is correct, but gets cancelled by `glass-premium`'s `overflow: hidden`.
+## Plan d'implémentation
 
-### 2. Ping Too High
-The `useSimpleLatency` hook measures latency by sending an HTTP HEAD request to the Supabase REST API every 5 seconds. This measures server round-trip, NOT actual WebRTC peer-to-peer latency. Real voice latency is much lower. The fix: use WebRTC `RTCPeerConnection.getStats()` where available, and cap the simple fallback display.
+### 1. Créer un AudioWorklet dédié aux bruits impulsifs (clavier, souris, respiration)
 
-### 3. Voice Call UI Needs Redesign
-Current layout is spread out with large avatars and unclear hierarchy. Will reorganize into a clean, structured layout inspired by Discord/FaceTime.
+Nouveau fichier `public/audio-worklet/impulse-noise-gate.js` :
+- Détection de **transitoires** (variation soudaine d'amplitude sur 1-3ms) typiques des clics clavier/souris
+- Analyse spectrale simplifiée : les clics ont une signature large bande (énergie répartie sur toutes les fréquences), contrairement à la voix (concentrée 100-4000Hz)
+- **Blanking** des transitoires détectés avec crossfade pour éviter les artefacts
+- Détection de respiration : énergie concentrée sous 300Hz avec faible énergie dans les formants vocaux (800-3000Hz) = respiration → atténuation
+- Paramètres ajustables : sensibilité, temps de blanking
 
----
+### 2. Intégrer le processeur impulsif dans le pipeline audio
 
-## Implementation Steps
+Dans `useNoiseProcessor.ts` :
+- Ajouter le worklet `impulse-noise-gate` **après** RNNoise et **avant** les filtres biquad
+- RNNoise gère le bruit continu (ventilateur, ambiance), le nouveau worklet gère les bruits impulsifs
+- Pipeline final : `Mic → RNNoise → ImpulseGate → Filters → Compressor → Output`
 
-### Step 1: Fix `glass-premium` overflow conflict (index.css)
-- Remove `overflow-hidden` from `.glass-premium` class
-- Replace with `overflow-hidden` only on the `::before` pseudo-element (which is the only reason it was there -- to contain the gradient overlay)
-- This single change fixes ALL dialogs globally (Settings, Add Friend, Friend Requests, Screen Share Quality, Create Group, Add Member, etc.)
+### 3. Stabiliser la synchronisation voice/screen share
 
-### Step 2: Ensure DialogContent base is bulletproof (dialog.tsx)
-- Keep `max-h-[80vh] overflow-y-auto` on DialogContent
-- Add `pb-6` safe bottom padding
-- Ensure z-index is high enough (`z-50` already set)
+Dans `useWebRTCVoice.ts` :
+- Utiliser `useRef` pour `handleSignal` et `initiateConnection` (comme déjà fait dans screen share) pour éviter les re-renders qui cassent les channels
+- Supprimer ces callbacks des dépendances du `join`
 
-### Step 3: Fix individual dialog overflow safety
-- **SettingsDialog.tsx**: Remove redundant `overflow-hidden` from DialogContent className, keep flex layout with ScrollArea
-- **AddFriendDialog.tsx**: Already correct, just benefits from Step 1
-- **FriendRequestsDialog.tsx**: Already correct
-- **ScreenShareQualityDialog.tsx**: Already correct
-- **CreateGroupDialog.tsx**: Verify no overflow-hidden
-- **AddMemberDialog.tsx**: Verify no overflow-hidden
+Dans `useWebRTCScreenShare.ts` :
+- Remplacer les `setTimeout` de retry par un pattern basé sur les events : écouter `presence.join` pour déclencher les offres immédiatement plutôt qu'attendre arbitrairement
+- Ajouter un mécanisme de heartbeat pour détecter les déconnexions silencieuses
 
-### Step 4: Fix ping measurement (useConnectionLatency.ts)
-- In `useSimpleLatency`: reduce the displayed ping to show a more realistic estimate by subtracting server processing overhead, or better yet, measure with `performance.now()` and `navigator.connection` API
-- Cap displayed ping: if the HTTP round-trip is e.g. 150ms, the actual voice P2P latency is likely ~30-60ms. Apply a correction factor
-- Alternative: show "~Xms" to indicate it's an estimate
+### 4. Améliorer la réactivité du chat de groupe
 
-### Step 5: Redesign VoiceChannel UI (Server voice channels)
-- Restructure into 3 clear zones: **Header** (channel name + quality), **Participants** (grid), **Controls** (bottom bar)
-- Use a more compact layout with participants in a horizontal/grid arrangement
-- Move connection quality indicator to the header bar
-- Controls at the bottom in a centered bar with clear labeling
+Dans `useGroupChat.ts` :
+- Réduire le polling fallback de 10s à 5s
+- Ajouter un optimistic update : le message apparaît immédiatement dans l'UI avant la confirmation serveur
+- Dédupliquer proprement les messages (éviter le double affichage quand le realtime et le polling arrivent en même temps)
 
-### Step 6: Redesign GroupVoiceChannel UI
-- Same 3-zone layout as VoiceChannel
-- Better separation between screen share area and participants panel
-- Cleaner header with group info and participant count
+### 5. Améliorations QoL
 
-### Step 7: Redesign PrivateCallPanel UI
-- Reorganize into: **Top bar** (quality + duration), **Center** (avatars side-by-side with clear labels), **Bottom bar** (controls)
-- Use a flex column layout with `justify-between` to prevent overflow
-- Reduce avatar sizes on small screens
-- Add clear visual hierarchy for call status
+- **Reconnexion automatique voice** : dans `useWebRTCVoice`, détecter quand tous les peers sont `disconnected` et tenter une reconnexion automatique après 3s
+- **Indicateur de latence amélioré** : afficher le ping en temps réel dans le header des appels (déjà partiellement implémenté)
+- **Son de connexion/déconnexion** : jouer un son quand un utilisateur rejoint ou quitte l'appel vocal
+- **Scroll automatique intelligent** dans le chat : ne scroll vers le bas que si l'utilisateur est déjà en bas (pas de scroll forcé quand on lit l'historique)
 
----
+## Fichiers concernés
 
-## Technical Details
-
-### CSS Fix (index.css)
-```css
-.glass-premium {
-  position: relative;
-  /* REMOVED: overflow-hidden -- was clipping dialog content */
-  background: linear-gradient(...);
-  backdrop-filter: blur(40px) saturate(1.5);
-  border: 1px solid hsl(var(--foreground) / 0.08);
-}
-
-.glass-premium::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden; /* Contain the gradient here instead */
-  background: linear-gradient(...);
-}
-```
-
-### Ping Correction (useConnectionLatency.ts)
-```typescript
-// Instead of raw HTTP latency, estimate voice latency:
-// Voice P2P is typically 30-60% of HTTP round-trip
-const estimatedVoiceLatency = Math.max(1, Math.round(httpLatency * 0.4));
-```
-
-### Voice UI Structure
-```text
-+----------------------------------+
-| Channel Name    | Quality | Ping |  <- Header bar
-+----------------------------------+
-|                                  |
-|   [Avatar] [Avatar] [Avatar]     |  <- Participants grid
-|   User1     User2     User3      |
-|                                  |
-+----------------------------------+
-|  [Mute] [Deafen] [Share] [Leave] |  <- Controls bar
-+----------------------------------+
-```
-
-### Files to modify:
-1. `src/index.css` -- Remove overflow-hidden from glass-premium
-2. `src/components/ui/dialog.tsx` -- Add safe padding
-3. `src/components/SettingsDialog.tsx` -- Remove redundant overflow-hidden
-4. `src/hooks/useConnectionLatency.ts` -- Fix ping estimation
-5. `src/components/VoiceChannel.tsx` -- Redesign layout
-6. `src/components/groups/GroupVoiceChannel.tsx` -- Redesign layout
-7. `src/components/friends/PrivateCallPanel.tsx` -- Redesign layout
-8. `src/components/voice/ConnectionQualityIndicator.tsx` -- Minor tweaks
+| Fichier | Action |
+|---------|--------|
+| `public/audio-worklet/impulse-noise-gate.js` | Créer - AudioWorklet anti-clavier/souris/respiration |
+| `src/hooks/useNoiseProcessor.ts` | Modifier - Intégrer le worklet impulsif dans le pipeline |
+| `src/hooks/useWebRTCVoice.ts` | Modifier - Stabiliser avec refs, reconnexion auto, sons |
+| `src/hooks/useWebRTCScreenShare.ts` | Modifier - Retry basé sur events au lieu de setTimeout |
+| `src/hooks/useGroupChat.ts` | Modifier - Optimistic updates, meilleur polling |
+| `src/components/groups/GroupChatPanel.tsx` | Modifier - Smart scroll |
+| `src/components/friends/PrivateChatPanel.tsx` | Modifier - Smart scroll |
 
