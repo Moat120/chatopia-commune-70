@@ -385,13 +385,20 @@ const SettingsDialog = () => {
       }
 
       // Loopback: route processed audio to speakers (muted by default)
+      // Use a stereo merger to fix mono-only-left issue
       loopbackDelayRef.current = audioContextRef.current.createDelay(1.0);
-      loopbackDelayRef.current.delayTime.value = 0.04; // 40ms
+      loopbackDelayRef.current.delayTime.value = 0.04;
       loopbackGainRef.current = audioContextRef.current.createGain();
       loopbackGainRef.current.gain.value = 0;
 
       const loopbackSource = processedSourceRef.current || source;
-      loopbackSource.connect(loopbackDelayRef.current);
+      // Merge mono to both L+R channels
+      const merger = audioContextRef.current.createChannelMerger(2);
+      const splitter = audioContextRef.current.createChannelSplitter(1);
+      loopbackSource.connect(splitter);
+      splitter.connect(merger, 0, 0); // mono → left
+      splitter.connect(merger, 0, 1); // mono → right
+      merger.connect(loopbackDelayRef.current);
       loopbackDelayRef.current.connect(loopbackGainRef.current);
       loopbackGainRef.current.connect(audioContextRef.current.destination);
 
@@ -561,7 +568,7 @@ const SettingsDialog = () => {
           <Settings className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] glass-premium border-white/[0.08] rounded-3xl p-0 flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-lg glass-premium border-white/[0.08] rounded-3xl p-0 flex flex-col" style={{ maxHeight: '85vh' }}>
         <DialogHeader className="p-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-3 text-xl">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
@@ -574,7 +581,7 @@ const SettingsDialog = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 px-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6">
           <div className="space-y-6 pb-6">
             {/* Avatar Section */}
             <div className="space-y-4">
@@ -902,7 +909,7 @@ const SettingsDialog = () => {
               </div>
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         <div className="p-6 pt-4 shrink-0 border-t border-white/[0.04]">
           <Button onClick={handleSave} className="w-full h-12 rounded-2xl btn-premium text-base font-semibold" disabled={uploading}>
