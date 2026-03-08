@@ -144,6 +144,8 @@ const SettingsDialog = () => {
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const processedSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const spectrumAnimRef = useRef<number | null>(null);
   const { toast } = useToast();
 
   // Load microphones
