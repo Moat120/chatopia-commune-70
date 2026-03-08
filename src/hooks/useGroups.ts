@@ -235,8 +235,9 @@ export const useGroups = () => {
 
     pollRef.current = setInterval(fetchGroups, 15000);
 
+    // Single channel for group_members changes (filtered to current user)
     const membershipChannel = supabase
-      .channel(`groups-membership-${user.id}-${Date.now()}`)
+      .channel(`groups-membership-${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -250,38 +251,14 @@ export const useGroups = () => {
         }
       )
       .subscribe((status, err) => {
-        if (err) console.error("[groups-membership] subscription error:", err);
-      });
-
-    const allMembersChannel = supabase
-      .channel(`groups-all-members-${user.id}-${Date.now()}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "group_members",
-        },
-        async (payload) => {
-          const groupId = (payload.new as any)?.group_id || (payload.old as any)?.group_id;
-          if (!groupId) return;
-          
-          const { count } = await supabase
-            .from("group_members")
-            .select("*", { count: "exact", head: true })
-            .eq("group_id", groupId);
-          
-          setGroups(prev => prev.map(g =>
-            g.id === groupId ? { ...g, member_count: count || 0 } : g
-          ));
+        if (status === 'CHANNEL_ERROR' && err) {
+          console.warn("[groups-membership] subscription error, relying on polling");
         }
-      )
-      .subscribe((status, err) => {
-        if (err) console.error("[groups-all-members] subscription error:", err);
       });
 
+    // Group metadata changes (name, avatar, deletion)
     const groupsChannel = supabase
-      .channel(`groups-updates-${user.id}-${Date.now()}`)
+      .channel(`groups-updates-${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -311,13 +288,14 @@ export const useGroups = () => {
         }
       )
       .subscribe((status, err) => {
-        if (err) console.error("[groups-updates] subscription error:", err);
+        if (status === 'CHANNEL_ERROR' && err) {
+          console.warn("[groups-updates] subscription error, relying on polling");
+        }
       });
 
     return () => {
       clearInterval(pollRef.current);
       supabase.removeChannel(membershipChannel);
-      supabase.removeChannel(allMembersChannel);
       supabase.removeChannel(groupsChannel);
     };
   }, [user, fetchGroups]);
