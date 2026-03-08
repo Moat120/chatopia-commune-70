@@ -94,7 +94,7 @@ export class AdvancedNoiseProcessor {
         const rnnoiseModule = await import('@sapphi-red/web-noise-suppressor');
         const { RnnoiseWorkletNode, loadRnnoise } = rnnoiseModule;
 
-        let wasmBinary: ArrayBuffer;
+        let wasmBinary: any;
         let rnnoiseSource = 'public/rnnoise';
 
         try {
