@@ -10,6 +10,7 @@ export interface Friend {
   avatar_url: string | null;
   status: string;
   friend_code: string;
+  custom_status: string | null;
 }
 
 export interface FriendRequest {
