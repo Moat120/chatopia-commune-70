@@ -142,6 +142,8 @@ const SettingsDialog = () => {
   const loopbackGainRef = useRef<GainNode | null>(null);
   const loopbackDelayRef = useRef<DelayNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
+  const processedSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const { toast } = useToast();
 
   // Load microphones
