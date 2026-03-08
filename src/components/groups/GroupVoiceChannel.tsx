@@ -190,13 +190,46 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
                   </div>
                 </div>
               ) : (
-                <div className="h-full flex items-center justify-center">
-                  <div className="text-center space-y-4 animate-fade-in-up">
-                    <div className="mx-auto w-20 h-20 rounded-2xl bg-secondary/30 flex items-center justify-center border border-white/[0.04]">
-                      <Users className="h-10 w-10 text-muted-foreground/25" />
+                <div className="h-full flex flex-col">
+                  {presenceParticipants.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary/30 border border-white/[0.03]">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-semibold text-muted-foreground">
+                          {presenceParticipants.length} {presenceParticipants.length === 1 ? "participant" : "participants"}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-4">
+                        {presenceParticipants.map((p, index) => (
+                          <div key={p.odId} className="animate-scale-in flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/20 border border-white/[0.04]" style={{ animationDelay: `${index * 0.08}s` }}>
+                            <div className="relative">
+                              <Avatar className={cn("h-14 w-14 ring-2", p.isSpeaking ? "ring-success/50" : "ring-transparent")}>
+                                <AvatarImage src={p.avatarUrl || ""} className="object-cover" />
+                                <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
+                                  {p.username[0]?.toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              {p.isMuted && (
+                                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-destructive/80 flex items-center justify-center border-2 border-background">
+                                  <MicOff className="h-2.5 w-2.5 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-xs font-medium text-muted-foreground/70">{p.username}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <p className="text-muted-foreground/50 text-sm">Rejoins l'appel pour voir les participants</p>
-                  </div>
+                  ) : (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center space-y-4 animate-fade-in-up">
+                        <div className="mx-auto w-20 h-20 rounded-2xl bg-secondary/30 flex items-center justify-center border border-white/[0.04]">
+                          <Users className="h-10 w-10 text-muted-foreground/25" />
+                        </div>
+                        <p className="text-muted-foreground/50 text-sm">Aucun participant dans l'appel</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
