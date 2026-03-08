@@ -28,6 +28,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     connectionQuality,
     audioLevel,
     userVolumes,
+    noiseEngine,
     setUserVolume,
     join,
     leave,
