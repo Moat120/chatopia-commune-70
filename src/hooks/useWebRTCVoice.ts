@@ -601,14 +601,14 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         handleSignalRef.current?.(payload as SignalMessage);
       });
 
-      await signalingChannel.subscribe();
+      await subscribeChannel(signalingChannel, "signaling");
 
       // Setup roster broadcast channel for observers (GroupsSidebar)
       const rosterChannel = supabase.channel(`voice-status-${channelId}`, {
         config: { broadcast: { self: false } },
       });
       rosterChannelRef.current = rosterChannel;
-      await rosterChannel.subscribe();
+      await subscribeChannel(rosterChannel, "roster");
 
       const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
         config: { presence: { key: currentUserId } },
@@ -652,12 +652,19 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         });
       });
 
-      presenceChannel.on("presence", { event: "join" }, ({ key }) => {
-        if (key !== currentUserId) {
-          if (currentUserId < key) {
-            initiateConnectionRef.current?.(key);
+      presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
+        const joinedUserIds = [
+          key,
+          ...(Array.isArray(newPresences)
+            ? newPresences.map((p: any) => String(p?.odId || "")).filter(Boolean)
+            : []),
+        ];
+
+        joinedUserIds.forEach((joinedUserId) => {
+          if (joinedUserId !== currentUserId && currentUserId < joinedUserId) {
+            initiateConnectionRef.current?.(joinedUserId);
           }
-        }
+        });
       });
 
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
@@ -680,43 +687,41 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         }
       });
 
-      await presenceChannel.subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await presenceChannel.track({
-            odId: currentUserId,
-            username: currentUsername,
-            avatarUrl: currentPresenceAvatar,
-            isSpeaking: false,
-            isMuted: false,
-          });
+      await subscribeChannel(presenceChannel, "presence");
 
-          // Immediately include self in connected users
-          // (presence sync may not have fired yet)
-          setConnectedUsers(prev => {
-            if (prev.some(u => u.odId === currentUserId)) return prev;
-            return [...prev, {
-              odId: currentUserId,
-              username: currentUsername,
-              avatarUrl: currentPresenceAvatar,
-              isSpeaking: false,
-              isMuted: false,
-            }];
-          });
+      await presenceChannel.track({
+        odId: currentUserId,
+        username: currentUsername,
+        avatarUrl: currentPresenceAvatar,
+        isSpeaking: false,
+        isMuted: false,
+      });
 
-          // Broadcast initial roster to observers
-          const selfUser = {
-            odId: currentUserId,
-            username: currentUsername,
-            avatarUrl: currentPresenceAvatar,
-            isSpeaking: false,
-            isMuted: false,
-          };
-          rosterChannelRef.current?.send({
-            type: "broadcast",
-            event: "voice-roster",
-            payload: { users: [selfUser] },
-          });
-        }
+      // Immediately include self in connected users
+      // (presence sync may not have fired yet)
+      setConnectedUsers(prev => {
+        if (prev.some(u => u.odId === currentUserId)) return prev;
+        return [...prev, {
+          odId: currentUserId,
+          username: currentUsername,
+          avatarUrl: currentPresenceAvatar,
+          isSpeaking: false,
+          isMuted: false,
+        }];
+      });
+
+      // Broadcast initial roster to observers
+      const selfUser = {
+        odId: currentUserId,
+        username: currentUsername,
+        avatarUrl: currentPresenceAvatar,
+        isSpeaking: false,
+        isMuted: false,
+      };
+      rosterChannelRef.current?.send({
+        type: "broadcast",
+        event: "voice-roster",
+        payload: { users: [selfUser] },
       });
 
       startVoiceDetection(rawStream);
