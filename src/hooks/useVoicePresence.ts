@@ -11,11 +11,16 @@ export interface VoicePresenceUser {
 
 /**
  * Passive hook that observes who is in a voice channel
- * WITHOUT joining the call. Read-only presence subscription.
+ * WITHOUT joining the call. Uses a separate channel name suffix
+ * to avoid collisions with the active voice presence channel.
+ * 
+ * Calls track() with an observer flag so Supabase presence
+ * fully syncs, but filters out observers from the participant list.
  */
 export const useVoicePresence = (groupId: string | null) => {
   const [participants, setParticipants] = useState<VoicePresenceUser[]>([]);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const observerIdRef = useRef(`observer-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
     if (!groupId) {
@@ -23,11 +28,17 @@ export const useVoicePresence = (groupId: string | null) => {
       return;
     }
 
+    // Use a DIFFERENT channel name than the voice hook to avoid conflicts.
+    // The voice hook uses: voice-pres-group-${groupId}
+    // The observer uses:   voice-obs-group-${groupId}-${observerId}
+    // BUT we need to listen to the SAME presence room.
+    // Supabase channels with different names are separate rooms.
+    // So we must subscribe to the SAME channel name but with a unique presence key.
     const channelName = `voice-pres-group-${groupId}`;
+    const observerId = observerIdRef.current;
 
-    // Subscribe as observer (no track() call = read-only)
     const channel = supabase.channel(channelName, {
-      config: { presence: { key: `observer-${Math.random().toString(36).slice(2)}` } },
+      config: { presence: { key: observerId } },
     });
     channelRef.current = channel;
 
@@ -35,10 +46,12 @@ export const useVoicePresence = (groupId: string | null) => {
       const state = channel.presenceState();
       const users: VoicePresenceUser[] = [];
 
-      Object.values(state).forEach((presences: any[]) => {
+      Object.entries(state).forEach(([key, presences]: [string, any[]]) => {
+        // Skip observer keys
+        if (key.startsWith("observer-")) return;
+
         presences.forEach((p) => {
-          // Only include actual voice participants (not observers)
-          if (p.odId && !String(p.odId).startsWith("observer-")) {
+          if (p.odId) {
             users.push({
               odId: p.odId,
               username: p.username || "Utilisateur",
@@ -53,7 +66,15 @@ export const useVoicePresence = (groupId: string | null) => {
       setParticipants(users);
     });
 
-    channel.subscribe();
+    channel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        // Track as observer so we receive sync events
+        await channel.track({
+          _observer: true,
+          odId: observerId,
+        });
+      }
+    });
 
     return () => {
       supabase.removeChannel(channel);
