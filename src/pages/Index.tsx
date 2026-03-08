@@ -50,7 +50,7 @@ const Index = () => {
     friend: Friend;
     callId: string;
   } | null>(null);
-
+  const [searchOpen, setSearchOpen] = useState(false);
   // Keyboard shortcuts
   useKeyboardShortcuts({
     onEscape: useCallback(() => {
