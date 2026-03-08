@@ -368,8 +368,10 @@ const SettingsDialog = () => {
       const source = audioContextRef.current.createMediaStreamSource(stream);
       sourceNodeRef.current = source;
       analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      analyserRef.current.smoothingTimeConstant = 0.5;
+      analyserRef.current.fftSize = 512;
+      analyserRef.current.smoothingTimeConstant = 0.65;
+      analyserRef.current.minDecibels = -90;
+      analyserRef.current.maxDecibels = -10;
       source.connect(analyserRef.current);
 
       // Apply AdvancedNoiseProcessor for loopback (RNNoise + filters)
