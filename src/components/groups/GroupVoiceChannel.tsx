@@ -135,7 +135,11 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
             <div>
               <h2 className="text-lg font-bold tracking-tight">{group.name}</h2>
               <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
-                {isConnected ? `${connectedUsers.length} participant${connectedUsers.length > 1 ? 's' : ''}` : "Rejoindre l'appel"}
+                {isConnected 
+                  ? `${connectedUsers.length} participant${connectedUsers.length > 1 ? 's' : ''}` 
+                  : presenceParticipants.length > 0 
+                    ? `${presenceParticipants.length} participant${presenceParticipants.length > 1 ? 's' : ''} en vocal`
+                    : "Rejoindre l'appel"}
                 {isConnected && noiseEngine && (
                   <span className="text-[10px] text-success/70">• {noiseEngine}</span>
                 )}
