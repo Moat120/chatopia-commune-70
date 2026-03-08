@@ -53,7 +53,7 @@ export const useGroupChat = (groupId: string | null) => {
   }, [groupId, user]);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, replyToId?: string) => {
       if (!groupId || !user || !content.trim()) return false;
 
       try {
@@ -61,7 +61,8 @@ export const useGroupChat = (groupId: string | null) => {
           group_id: groupId,
           sender_id: user.id,
           content: content.trim(),
-        });
+          reply_to_id: replyToId || null,
+        } as any);
 
         if (error) throw error;
         return true;
