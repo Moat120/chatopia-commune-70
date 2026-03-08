@@ -483,7 +483,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       if (getNoiseSuppression()) {
         noiseProcessorRef.current = new AdvancedNoiseProcessor();
         processedStream = await noiseProcessorRef.current.process(rawStream);
-        console.log('[Voice] Advanced noise processing applied, latency:', noiseProcessorRef.current.getLatency(), 'ms');
+        const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
+        console.log('[Voice] Advanced noise processing applied | rnnoiseActive=', rnnoiseActive, '| latency=', noiseProcessorRef.current.getLatency(), 'ms');
       }
 
       localStreamRef.current = processedStream;
