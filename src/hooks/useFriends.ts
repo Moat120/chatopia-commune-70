@@ -78,7 +78,7 @@ export const useFriends = () => {
         .select(`
           id,
           created_at,
-          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code)
+          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code, custom_status)
         `)
         .eq("addressee_id", user.id)
         .eq("status", "pending");
