@@ -186,7 +186,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
         <AddMemberDialog open={addMemberOpen} onOpenChange={setAddMemberOpen} groupId={group.id} existingMemberIds={members.map((m) => m.user_id)} />
 
         {/* ─── Messages ─── */}
-        <ScrollArea className="flex-1 px-4 py-4">
+        <ScrollArea className="flex-1 px-4 py-4" ref={scrollAreaRef}>
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-8 h-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />

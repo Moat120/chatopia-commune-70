@@ -535,28 +535,15 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         isSharing: true,
       });
 
-      // Send offers to existing users — retry to ensure presence has propagated
-      const broadcastOffers = () => {
-        const state = presenceChannelRef.current?.presenceState() || {};
-        let sentCount = 0;
-        Object.values(state).forEach((presences: any[]) => {
-          presences.forEach((presence) => {
-            if (presence.odId !== currentUserId) {
-              sendOfferRef.current(presence.odId);
-              sentCount++;
-            }
-          });
+      // Send offers to existing users immediately
+      const state = presenceChannelRef.current?.presenceState() || {};
+      Object.values(state).forEach((presences: any[]) => {
+        presences.forEach((presence) => {
+          if (presence.odId !== currentUserId) {
+            sendOfferRef.current(presence.odId);
+          }
         });
-        return sentCount;
-      };
-
-      // First attempt after short delay, retry after 1s if no peers found
-      setTimeout(() => {
-        const count = broadcastOffers();
-        if (count === 0) {
-          setTimeout(broadcastOffers, 1000);
-        }
-      }, 500);
+      });
 
       return stream;
     } catch (error: any) {
