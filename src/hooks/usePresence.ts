@@ -2,99 +2,104 @@ import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-const HEARTBEAT_INTERVAL = 30000; // 30 seconds
-const OFFLINE_THRESHOLD = 60000; // 60 seconds - if no heartbeat for this long, user is offline
+const HEARTBEAT_INTERVAL = 20000; // 20s
+const IDLE_THRESHOLD = 3 * 60 * 1000; // 3 min → away
+const DEEP_IDLE_THRESHOLD = 15 * 60 * 1000; // 15 min → offline-ish (still tracked but "away")
 
 export const usePresence = () => {
   const { user, profile } = useAuth();
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const idleCheckRef = useRef<NodeJS.Timeout | null>(null);
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
-  const isActiveRef = useRef(true);
+  const currentStatusRef = useRef<"online" | "away" | "offline">("online");
+  const isTabVisibleRef = useRef(!document.hidden);
+  const isWindowFocusedRef = useRef(document.hasFocus());
+  const mouseMoveThrottleRef = useRef<number>(0);
 
-  // Update status in database
   const updateStatus = useCallback(async (status: "online" | "away" | "offline") => {
-    if (!user) return;
-    
+    if (!user || currentStatusRef.current === status) return;
+    currentStatusRef.current = status;
+
     try {
       await supabase
         .from("profiles")
-        .update({ 
-          status, 
-          updated_at: new Date().toISOString() 
-        })
+        .update({ status, updated_at: new Date().toISOString() })
         .eq("id", user.id);
     } catch (err) {
       console.error("[Presence] Status update error:", err);
     }
   }, [user]);
 
-  // Track user activity
+  // Debounced activity tracker
   const trackActivity = useCallback(() => {
-    lastActivityRef.current = Date.now();
-    if (!isActiveRef.current) {
-      isActiveRef.current = true;
+    const now = Date.now();
+    lastActivityRef.current = now;
+
+    // Only trigger status change if we were away
+    if (currentStatusRef.current !== "online") {
       updateStatus("online");
     }
   }, [updateStatus]);
 
-  // Check if user is idle (no activity for 5 minutes)
-  const checkIdleStatus = useCallback(() => {
-    const idleThreshold = 5 * 60 * 1000; // 5 minutes
-    const timeSinceLastActivity = Date.now() - lastActivityRef.current;
-    
-    if (timeSinceLastActivity > idleThreshold && isActiveRef.current) {
-      isActiveRef.current = false;
+  // Throttled mouse move (every 2s max)
+  const trackMouseMove = useCallback(() => {
+    const now = Date.now();
+    if (now - mouseMoveThrottleRef.current < 2000) return;
+    mouseMoveThrottleRef.current = now;
+    lastActivityRef.current = now;
+
+    if (currentStatusRef.current !== "online") {
+      updateStatus("online");
+    }
+  }, [updateStatus]);
+
+  // Periodic idle check (every 15s)
+  const checkIdle = useCallback(() => {
+    const elapsed = Date.now() - lastActivityRef.current;
+    const tabVisible = isTabVisibleRef.current;
+    const windowFocused = isWindowFocusedRef.current;
+
+    // If tab is hidden AND no recent activity → away faster (1.5 min)
+    const effectiveThreshold = (!tabVisible || !windowFocused)
+      ? Math.min(IDLE_THRESHOLD, 90_000)
+      : IDLE_THRESHOLD;
+
+    if (elapsed >= effectiveThreshold && currentStatusRef.current === "online") {
       updateStatus("away");
     }
   }, [updateStatus]);
 
-  // Heartbeat to keep presence alive
   const sendHeartbeat = useCallback(() => {
     if (!user || !presenceChannelRef.current) return;
-    
+
     presenceChannelRef.current.track({
       odId: user.id,
       username: profile?.username || "User",
       online_at: new Date().toISOString(),
-      status: isActiveRef.current ? "online" : "away",
+      status: currentStatusRef.current,
     });
-    
-    checkIdleStatus();
-  }, [user, profile, checkIdleStatus]);
 
-  // Setup presence channel and heartbeat
+    checkIdle();
+  }, [user, profile, checkIdle]);
+
   useEffect(() => {
     if (!user) return;
 
-    // Set online immediately
     updateStatus("online");
 
-    // Create presence channel
+    // Presence channel
     const presenceChannel = supabase.channel("global-presence", {
       config: { presence: { key: user.id } },
     });
     presenceChannelRef.current = presenceChannel;
 
-    // Handle presence sync to detect other users
     presenceChannel.on("presence", { event: "sync" }, () => {
-      const state = presenceChannel.presenceState();
-      
-      // Get all online user IDs from presence
-      const onlineUserIds = new Set<string>();
-      Object.values(state).forEach((presences: any[]) => {
-        presences.forEach((presence) => {
-          if (presence.odId) {
-            onlineUserIds.add(presence.odId);
-          }
-        });
-      });
+      // Presence state synced
     });
 
-    presenceChannel.on("presence", { event: "leave" }, async ({ key, leftPresences }) => {
-      // When a user leaves, mark them offline in database
+    presenceChannel.on("presence", { event: "leave" }, async ({ key }) => {
       if (key && key !== user.id) {
-        // Small delay to avoid race conditions
         setTimeout(async () => {
           try {
             await supabase
@@ -104,13 +109,12 @@ export const usePresence = () => {
           } catch (err) {
             console.error("[Presence] Error marking user offline:", err);
           }
-        }, 1000);
+        }, 2000);
       }
     });
 
     presenceChannel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
-        // Track our presence
         await presenceChannel.track({
           odId: user.id,
           username: profile?.username || "User",
@@ -120,25 +124,52 @@ export const usePresence = () => {
       }
     });
 
-    // Start heartbeat
+    // Heartbeat
     heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
 
-    // Track user activity events
-    const activityEvents = ["mousedown", "keydown", "touchstart", "scroll", "mousemove"];
-    activityEvents.forEach((event) => {
-      window.addEventListener(event, trackActivity, { passive: true });
+    // Idle check every 15s
+    idleCheckRef.current = setInterval(checkIdle, 15000);
+
+    // ─── Activity event listeners ───
+    const immediateEvents = ["mousedown", "keydown", "touchstart", "pointerdown", "wheel"];
+    immediateEvents.forEach((ev) => {
+      window.addEventListener(ev, trackActivity, { passive: true });
     });
 
-    // Handle visibility change (tab switch)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+    // Throttled mousemove
+    window.addEventListener("mousemove", trackMouseMove, { passive: true });
+
+    // Scroll (throttled naturally by browsers)
+    window.addEventListener("scroll", trackActivity, { passive: true, capture: true });
+
+    // ─── Visibility API ───
+    const handleVisibility = () => {
+      isTabVisibleRef.current = !document.hidden;
+      if (!document.hidden) {
+        // Tab became visible → instant re-engage
         trackActivity();
         sendHeartbeat();
+      } else {
+        // Tab hidden → start faster idle countdown
+        // Don't immediately set away, let the idle checker handle it
       }
     };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibility);
 
-    // Handle online/offline events
+    // ─── Window focus/blur ───
+    const handleFocus = () => {
+      isWindowFocusedRef.current = true;
+      trackActivity();
+      sendHeartbeat();
+    };
+    const handleBlur = () => {
+      isWindowFocusedRef.current = false;
+      // Don't set away immediately on blur, just note it for idle calculation
+    };
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+
+    // ─── Network status ───
     const handleOnline = () => {
       updateStatus("online");
       sendHeartbeat();
@@ -149,77 +180,88 @@ export const usePresence = () => {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Handle page unload
+    // ─── Page unload (sendBeacon for reliable offline) ───
     const handleBeforeUnload = () => {
-      // Use sendBeacon for reliable offline status update
       const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}`;
-      const headers = {
-        "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      const headers = new Headers({
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         "Content-Type": "application/json",
-        "Prefer": "return=minimal"
-      };
-      
-      navigator.sendBeacon(
-        url,
-        new Blob([JSON.stringify({ status: "offline", updated_at: new Date().toISOString() })], { 
-          type: "application/json" 
-        })
-      );
+        Prefer: "return=minimal",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      });
+
+      // sendBeacon doesn't support custom headers, use fetch keepalive
+      try {
+        fetch(url, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ status: "offline", updated_at: new Date().toISOString() }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        // Fallback to sendBeacon (no auth headers but better than nothing)
+        navigator.sendBeacon(
+          url,
+          new Blob(
+            [JSON.stringify({ status: "offline", updated_at: new Date().toISOString() })],
+            { type: "application/json" }
+          )
+        );
+      }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
+    // ─── Page hide (mobile browsers) ───
+    const handlePageHide = () => {
+      handleBeforeUnload();
+    };
+    window.addEventListener("pagehide", handlePageHide);
+
     // Cleanup
     return () => {
-      // Clear heartbeat
-      if (heartbeatRef.current) {
-        clearInterval(heartbeatRef.current);
-        heartbeatRef.current = null;
-      }
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      if (idleCheckRef.current) clearInterval(idleCheckRef.current);
 
-      // Remove presence channel
       if (presenceChannelRef.current) {
         supabase.removeChannel(presenceChannelRef.current);
         presenceChannelRef.current = null;
       }
 
-      // Remove event listeners
-      activityEvents.forEach((event) => {
-        window.removeEventListener(event, trackActivity);
-      });
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      immediateEvents.forEach((ev) => window.removeEventListener(ev, trackActivity));
+      window.removeEventListener("mousemove", trackMouseMove);
+      window.removeEventListener("scroll", trackActivity);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
 
-      // Set offline on cleanup
       updateStatus("offline");
     };
-  }, [user?.id, profile?.username, updateStatus, trackActivity, sendHeartbeat]);
+  }, [user?.id, profile?.username, updateStatus, trackActivity, trackMouseMove, sendHeartbeat, checkIdle]);
 
-  return {
-    trackActivity,
-  };
+  return { trackActivity };
 };
 
 // Standalone hook for tracking online users in real-time
 export const useOnlineUsers = () => {
   const onlineUsersRef = useRef<Set<string>>(new Set());
-  
+
   useEffect(() => {
     const presenceChannel = supabase.channel("global-presence-watcher");
-    
+
     presenceChannel.on("presence", { event: "sync" }, () => {
       const state = presenceChannel.presenceState();
       const onlineIds = new Set<string>();
-      
+
       Object.values(state).forEach((presences: any[]) => {
         presences.forEach((presence) => {
-          if (presence.odId) {
-            onlineIds.add(presence.odId);
-          }
+          if (presence.odId) onlineIds.add(presence.odId);
         });
       });
-      
+
       onlineUsersRef.current = onlineIds;
     });
 

@@ -27,12 +27,14 @@ import {
   Plus,
   Settings,
   Hash,
+  Smile,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AddFriendDialog from "@/components/friends/AddFriendDialog";
 import FriendRequestsDialog from "@/components/friends/FriendRequestsDialog";
 import CreateGroupDialog from "@/components/groups/CreateGroupDialog";
 import SettingsDialog from "@/components/SettingsDialog";
+import StatusPicker from "@/components/StatusPicker";
 import { useToast } from "@/hooks/use-toast";
 
 type Tab = "messages" | "groups";
@@ -242,18 +244,27 @@ const UnifiedSidebar = ({
       {/* ─── User Footer ─── */}
       <div className="px-3 py-3 border-t border-white/[0.06] bg-card/30">
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <Avatar className="h-9 w-9">
-              <AvatarImage src={profile?.avatar_url || ""} className="object-cover" />
-              <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
-                {profile?.username?.[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-card" />
-          </div>
+          <StatusPicker currentStatus={profile?.custom_status}>
+            <button className="relative shrink-0 group/avatar">
+              <Avatar className="h-9 w-9">
+                <AvatarImage src={profile?.avatar_url || ""} className="object-cover" />
+                <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
+                  {profile?.username?.[0]?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-card" />
+              <span className="absolute inset-0 rounded-full bg-black/0 group-hover/avatar:bg-black/20 transition-colors flex items-center justify-center">
+                <Smile className="h-3.5 w-3.5 text-white opacity-0 group-hover/avatar:opacity-100 transition-opacity" />
+              </span>
+            </button>
+          </StatusPicker>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate">{profile?.username}</p>
-            <p className="text-[10px] text-success font-medium">En ligne</p>
+            {profile?.custom_status ? (
+              <p className="text-[10px] text-muted-foreground truncate">{profile.custom_status}</p>
+            ) : (
+              <p className="text-[10px] text-success font-medium">En ligne</p>
+            )}
           </div>
           <div className="flex gap-0.5">
             <Tooltip>
@@ -520,12 +531,18 @@ const FriendRow = ({
         )}>
           {friend.username}
         </p>
-        <p className={cn(
-          "text-[11px]",
-          isOnline ? "text-success/80" : isAway ? "text-warning/80" : "text-muted-foreground/40"
-        )}>
-          {isOnline ? "En ligne" : isAway ? "Absent" : "Hors ligne"}
-        </p>
+        {friend.custom_status ? (
+          <p className="text-[11px] text-muted-foreground/60 truncate">
+            {friend.custom_status}
+          </p>
+        ) : (
+          <p className={cn(
+            "text-[11px]",
+            isOnline ? "text-success/80" : isAway ? "text-warning/80" : "text-muted-foreground/40"
+          )}>
+            {isOnline ? "En ligne" : isAway ? "Absent" : "Hors ligne"}
+          </p>
+        )}
       </div>
 
       {unreadCount > 0 && (

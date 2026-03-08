@@ -10,6 +10,7 @@ export interface Friend {
   avatar_url: string | null;
   status: string;
   friend_code: string;
+  custom_status: string | null;
 }
 
 export interface FriendRequest {
@@ -41,8 +42,8 @@ export const useFriends = () => {
           requester_id,
           addressee_id,
           status,
-          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code),
-          addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url, status, friend_code)
+          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code, custom_status),
+          addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url, status, friend_code, custom_status)
         `)
         .eq("status", "accepted")
         .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
@@ -77,7 +78,7 @@ export const useFriends = () => {
         .select(`
           id,
           created_at,
-          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code)
+          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code, custom_status)
         `)
         .eq("addressee_id", user.id)
         .eq("status", "pending");
@@ -263,7 +264,7 @@ export const useFriends = () => {
           const updatedProfile = payload.new as any;
           setFriends(prev => prev.map(friend => 
             friend.id === updatedProfile.id 
-              ? { ...friend, status: updatedProfile.status, avatar_url: updatedProfile.avatar_url, username: updatedProfile.username }
+              ? { ...friend, status: updatedProfile.status, avatar_url: updatedProfile.avatar_url, username: updatedProfile.username, custom_status: updatedProfile.custom_status }
               : friend
           ));
         }
