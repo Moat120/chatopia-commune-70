@@ -17,6 +17,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { usePresence } from "@/hooks/usePresence";
 import { useCallCleanup } from "@/hooks/useCallCleanup";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useTabTitle } from "@/hooks/useTabTitle";
 import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
@@ -30,6 +31,7 @@ const Index = () => {
   usePresence();
   useCallCleanup();
   useNotifications();
+  useTabTitle();
 
   const ringtoneRef = useRef(new RingtoneManager());
 
