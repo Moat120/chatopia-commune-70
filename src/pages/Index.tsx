@@ -61,6 +61,11 @@ const Index = () => {
       else if (selectedGroup) setSelectedGroup(null);
     }, [selectedFriend, selectedGroup, incomingCall]),
     onSearch: useCallback(() => setSearchOpen(true), []),
+    onShowShortcuts: useCallback(() => setShortcutsOpen(prev => !prev), []),
+    onSwitchTab: useCallback((tab: number) => {
+      if (tab === 1) setViewMode("messages");
+      else if (tab === 2) setViewMode("groups");
+    }, []),
   });
 
   // Incoming calls listener
