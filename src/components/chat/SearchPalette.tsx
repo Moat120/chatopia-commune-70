@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, MessageCircle, Users, User } from "lucide-react";
+import { Search, MessageCircle, Users, User, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SearchResult {
@@ -32,6 +32,7 @@ const SearchPalette = ({ open, onOpenChange, onSelectFriend, onSelectGroup }: Se
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -49,6 +50,7 @@ const SearchPalette = ({ open, onOpenChange, onSelectFriend, onSelectGroup }: Se
       return;
     }
 
+    setLoading(true);
     const searchResults: SearchResult[] = [];
 
     // Search friends
@@ -112,7 +114,7 @@ const SearchPalette = ({ open, onOpenChange, onSelectFriend, onSelectGroup }: Se
         searchResults.push({
           type: "message",
           id: msg.id,
-          title: msg.content.substring(0, 60) + (msg.content.length > 60 ? "..." : ""),
+          title: msg.content.substring(0, 60) + (msg.content.length > 60 ? "…" : ""),
           subtitle: new Date(msg.created_at).toLocaleDateString("fr-FR"),
           data: msg,
         });
@@ -121,6 +123,7 @@ const SearchPalette = ({ open, onOpenChange, onSelectFriend, onSelectGroup }: Se
 
     setResults(searchResults);
     setSelectedIndex(0);
+    setLoading(false);
   }, [user]);
 
   useEffect(() => {
@@ -157,18 +160,27 @@ const SearchPalette = ({ open, onOpenChange, onSelectFriend, onSelectGroup }: Se
     }
   };
 
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "friend": return "Ami";
+      case "group": return "Groupe";
+      case "message": return "Message";
+      default: return "";
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="glass-premium border-white/[0.08] rounded-2xl sm:max-w-lg p-0 gap-0 overflow-hidden">
         <DialogTitle className="sr-only">Recherche</DialogTitle>
         <div className="flex items-center gap-3 px-4 border-b border-white/[0.06]">
-          <Search className="h-5 w-5 text-muted-foreground shrink-0" />
+          <Search className={cn("h-5 w-5 shrink-0 transition-colors", loading ? "text-primary animate-pulse" : "text-muted-foreground")} />
           <Input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Rechercher amis, groupes, messages..."
+            placeholder="Rechercher amis, groupes, messages…"
             className="border-0 bg-transparent h-14 text-base focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
           />
           <kbd className="hidden sm:inline-flex h-6 px-2 items-center gap-1 rounded-md bg-muted/50 text-[11px] text-muted-foreground font-mono border border-white/[0.06]">
@@ -182,10 +194,11 @@ const SearchPalette = ({ open, onOpenChange, onSelectFriend, onSelectGroup }: Se
               <button
                 key={`${result.type}-${result.id}`}
                 onClick={() => handleSelect(result)}
+                onMouseEnter={() => setSelectedIndex(idx)}
                 className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all",
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150",
                   idx === selectedIndex
-                    ? "bg-primary/15 text-foreground"
+                    ? "bg-primary/10 text-foreground"
                     : "hover:bg-white/[0.04] text-foreground/80"
                 )}
               >
@@ -201,21 +214,42 @@ const SearchPalette = ({ open, onOpenChange, onSelectFriend, onSelectGroup }: Se
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{result.title}</p>
-                  {result.subtitle && <p className="text-xs text-muted-foreground truncate">{result.subtitle}</p>}
+                  {result.subtitle && <p className="text-xs text-muted-foreground/50 truncate">{result.subtitle}</p>}
                 </div>
-                <span className="text-[10px] text-muted-foreground/50 uppercase font-semibold tracking-wider">
-                  {result.type === "friend" ? "Ami" : result.type === "group" ? "Groupe" : "Message"}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] text-muted-foreground/40 uppercase font-semibold tracking-wider">
+                    {getTypeLabel(result.type)}
+                  </span>
+                  {idx === selectedIndex && (
+                    <ArrowRight className="h-3 w-3 text-primary/50 animate-fade-in" />
+                  )}
+                </div>
               </button>
             ))}
           </div>
         ) : query.trim() ? (
-          <div className="p-8 text-center text-muted-foreground/50 text-sm">
-            Aucun résultat pour "{query}"
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground/40 text-sm">
+              {loading ? "Recherche en cours…" : `Aucun résultat pour "${query}"`}
+            </p>
           </div>
         ) : (
-          <div className="p-8 text-center text-muted-foreground/40 text-sm">
-            Tapez pour rechercher...
+          <div className="p-6 text-center space-y-3">
+            <p className="text-muted-foreground/30 text-sm">Tapez pour rechercher…</p>
+            <div className="flex justify-center gap-4 text-[10px] text-muted-foreground/25 font-mono">
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/30 border border-white/[0.04]">↑↓</kbd>
+                naviguer
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/30 border border-white/[0.04]">⏎</kbd>
+                sélectionner
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/30 border border-white/[0.04]">esc</kbd>
+                fermer
+              </span>
+            </div>
           </div>
         )}
       </DialogContent>
