@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import AddMemberDialog from "./AddMemberDialog";
+import GroupVoiceSidebar from "./GroupVoiceSidebar";
 import GroupMembersPanel from "./GroupMembersPanel";
 
 interface GroupChatPanelProps {
@@ -370,6 +371,9 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
             </Button>
           </div>
         )}
+
+        {/* ─── Voice Participants ─── */}
+        <GroupVoiceSidebar groupId={group.id} onJoinCall={onStartCall} />
 
         {/* ─── Input ─── */}
         <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="px-4 py-3 border-t border-white/[0.06] bg-card/20">
