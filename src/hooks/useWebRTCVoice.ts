@@ -603,12 +603,16 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       await subscribeChannel(signalingChannel, "signaling");
 
-      // Setup roster broadcast channel for observers (GroupsSidebar)
+      // Setup roster broadcast channel for observers (non-critical)
       const rosterChannel = supabase.channel(`voice-status-${channelId}`, {
         config: { broadcast: { self: false } },
       });
       rosterChannelRef.current = rosterChannel;
-      await subscribeChannel(rosterChannel, "roster");
+      try {
+        await subscribeChannel(rosterChannel, "roster");
+      } catch (rosterError) {
+        console.warn("[Voice] Roster channel unavailable, continuing without observer roster sync", rosterError);
+      }
 
       const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
         config: { presence: { key: currentUserId } },
