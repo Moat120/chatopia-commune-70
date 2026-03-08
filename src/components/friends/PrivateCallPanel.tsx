@@ -7,32 +7,32 @@ import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/us
 import { useSimpleLatency } from "@/hooks/useConnectionLatency";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Phone, PhoneOff, MicOff, Loader2, Radio, Volume2, VolumeX, VolumeOff } from "lucide-react";
+import { Phone, PhoneOff, MicOff, Loader2, Radio, Volume2, VolumeX, VolumeOff, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-import { 
-  getSelectedMicrophone, 
-  getNoiseSuppression, 
-  getEchoCancellation, 
-  getAutoGain 
+import {
+  getSelectedMicrophone,
+  getNoiseSuppression,
+  getEchoCancellation,
+  getAutoGain,
 } from "@/components/SettingsDialog";
 import { usePushToTalk, getPushToTalkEnabled, getKeyDisplayName, getPushToTalkKey } from "@/hooks/usePushToTalk";
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
 import VoiceControlsWithScreenShare from "@/components/voice/VoiceControlsWithScreenShare";
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 
 import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
-import { 
-  RTC_CONFIG, 
+import {
+  RTC_CONFIG,
   getDynamicRtcConfig,
-  mungeOpusSDP, 
+  mungeOpusSDP,
   configureAudioSender,
-  ICERestartManager 
+  ICERestartManager,
 } from "@/lib/webrtcUtils";
 
 interface PrivateCallPanelProps {
@@ -42,6 +42,7 @@ interface PrivateCallPanelProps {
   callId?: string;
 }
 
+/* ─── Audio constraints helper ─── */
 const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
   const selectedMic = getSelectedMicrophone();
   const noiseSuppression = getNoiseSuppression();
@@ -74,6 +75,19 @@ const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
     } as any),
   };
 };
+
+/*
+ * Call status flow:
+ *   Outgoing: "ringing" → "connecting" → "active" → "ended"
+ *   Incoming: "ringing" → "connecting" → "active" → "ended"
+ *
+ *   "ringing"    = waiting for the other party to accept / decline
+ *   "connecting" = accepted, setting up WebRTC audio
+ *   "active"     = audio connected, call in progress
+ *   "ended"      = call terminated
+ */
+type CallStatus = "ringing" | "connecting" | "active" | "ended";
+
 const PrivateCallPanel = ({
   friend,
   onEnd,
@@ -82,10 +96,11 @@ const PrivateCallPanel = ({
 }: PrivateCallPanelProps) => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
-  const [callStatus, setCallStatus] = useState<
-    "ringing" | "connecting" | "active" | "ended"
-  >(isIncoming ? "ringing" : "connecting");
+
+  // ── State ──
+  const [callStatus, setCallStatus] = useState<CallStatus>("ringing");
   const [isMuted, setIsMuted] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
   const [duration, setDuration] = useState(0);
   const [callId, setCallId] = useState(initialCallId);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -94,7 +109,9 @@ const PrivateCallPanel = ({
   const [isPttActive, setIsPttActive] = useState(false);
   const [friendVolume, setFriendVolume] = useState(1);
   const [friendPopoverOpen, setFriendPopoverOpen] = useState(false);
-  
+  const [noiseEngine, setNoiseEngine] = useState<string | null>(null);
+
+  // ── Refs ──
   const localStreamRef = useRef<MediaStream | null>(null);
   const rawStreamRef = useRef<MediaStream | null>(null);
   const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
@@ -107,41 +124,53 @@ const PrivateCallPanel = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
-  
   const pttEnabledRef = useRef(getPushToTalkEnabled());
   const isMutedRef = useRef(false);
-  const callStatusRef = useRef(callStatus);
+  const callStatusRef = useRef<CallStatus>(callStatus);
+  const endCallRef = useRef<() => void>(() => {});
 
-  // PTT handlers
+  // ── PTT ──
   const handlePttPush = useCallback(() => {
     if (!localStreamRef.current || !pttEnabledRef.current) return;
-    const audioTrack = localStreamRef.current.getAudioTracks()[0];
-    if (audioTrack) { audioTrack.enabled = true; setIsPttActive(true); setIsMuted(false); }
+    const t = localStreamRef.current.getAudioTracks()[0];
+    if (t) { t.enabled = true; setIsPttActive(true); setIsMuted(false); }
   }, []);
-
   const handlePttRelease = useCallback(() => {
     if (!localStreamRef.current || !pttEnabledRef.current) return;
-    const audioTrack = localStreamRef.current.getAudioTracks()[0];
-    if (audioTrack) { audioTrack.enabled = false; setIsPttActive(false); setIsMuted(true); }
+    const t = localStreamRef.current.getAudioTracks()[0];
+    if (t) { t.enabled = false; setIsPttActive(false); setIsMuted(true); }
   }, []);
-
   const { isPushing, pttEnabled } = usePushToTalk({
     onPush: handlePttPush,
     onRelease: handlePttRelease,
     isEnabled: callStatus === "active",
   });
 
+  // Sync refs
   useEffect(() => { pttEnabledRef.current = pttEnabled; }, [pttEnabled]);
   useEffect(() => { callStatusRef.current = callStatus; }, [callStatus]);
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+
+  // Friend volume
   useEffect(() => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.volume = Math.min(friendVolume, 1);
-    }
+    if (remoteAudioRef.current) remoteAudioRef.current.volume = Math.min(friendVolume, 1);
   }, [friendVolume]);
 
-  const channelId = useMemo(() => `private-call-${[user?.id, friend.id].sort().join('-')}`, [user?.id, friend.id]);
+  // Deafen
+  const handleToggleDeafen = useCallback(() => {
+    setIsDeafened(prev => {
+      const next = !prev;
+      document.querySelectorAll('audio').forEach(a => { if (a.srcObject) a.muted = next; });
+      return next;
+    });
+  }, []);
 
+  const channelId = useMemo(
+    () => `private-call-${[user?.id, friend.id].sort().join("-")}`,
+    [user?.id, friend.id]
+  );
+
+  // ── Screen share ──
   const {
     isSharing,
     localStream: screenStream,
@@ -152,15 +181,13 @@ const PrivateCallPanel = ({
     cleanup: cleanupScreenShare,
   } = useWebRTCScreenShare({
     channelId,
-    onError: (error) => {
-      toast({ title: "Erreur de partage", description: error, variant: "destructive" });
-    },
+    onError: (error) => toast({ title: "Erreur de partage", description: error, variant: "destructive" }),
   });
 
   const activeScreens = useMemo(() => {
-    const screens = [];
+    const screens: { odId: string; username: string; stream: MediaStream; isLocal: boolean }[] = [];
     if (isSharing && screenStream) {
-      screens.push({ odId: user?.id || '', username: profile?.username || "Toi", stream: screenStream, isLocal: true });
+      screens.push({ odId: user?.id || "", username: profile?.username || "Toi", stream: screenStream, isLocal: true });
     }
     remoteStreams.forEach((stream, odId) => {
       screens.push({ odId, username: friend.username, stream, isLocal: false });
@@ -168,17 +195,16 @@ const PrivateCallPanel = ({
     return screens;
   }, [isSharing, screenStream, remoteStreams, user?.id, profile?.username, friend.username]);
 
+  // ── WebRTC peer connection ──
   const setupPeerConnection = (stream: MediaStream) => {
     if (peerConnectionRef.current) peerConnectionRef.current.close();
     iceRestartManagerRef.current.reset();
     const pc = new RTCPeerConnection(rtcConfigRef.current);
     peerConnectionRef.current = pc;
 
-    stream.getTracks().forEach(track => {
+    stream.getTracks().forEach((track) => {
       const sender = pc.addTrack(track, stream);
-      if (track.kind === 'audio') {
-        configureAudioSender(sender);
-      }
+      if (track.kind === "audio") configureAudioSender(sender);
     });
 
     pc.ontrack = (event) => {
@@ -191,42 +217,46 @@ const PrivateCallPanel = ({
       remoteAudioRef.current.srcObject = remoteStream;
       remoteAudioRef.current.play().catch(console.error);
 
+      // Detect friend speaking
       try {
-        const remoteAudioContext = new AudioContext({ sampleRate: 48000 });
-        const source = remoteAudioContext.createMediaStreamSource(remoteStream);
-        const analyser = remoteAudioContext.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.4;
-        source.connect(analyser);
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const detectFriendSpeaking = () => {
-          if (callStatusRef.current === "ended") { remoteAudioContext.close(); return; }
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
-          const rms = Math.sqrt(sum / dataArray.length);
-          setFriendSpeaking(rms > 12);
-          requestAnimationFrame(detectFriendSpeaking);
+        const ctx = new AudioContext({ sampleRate: 48000 });
+        const src = ctx.createMediaStreamSource(remoteStream);
+        const an = ctx.createAnalyser();
+        an.fftSize = 256;
+        an.smoothingTimeConstant = 0.4;
+        src.connect(an);
+        const buf = new Uint8Array(an.frequencyBinCount);
+        const detect = () => {
+          if (callStatusRef.current === "ended") { ctx.close(); return; }
+          an.getByteFrequencyData(buf);
+          let s = 0;
+          for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+          setFriendSpeaking(Math.sqrt(s / buf.length) > 12);
+          requestAnimationFrame(detect);
         };
-        detectFriendSpeaking();
-      } catch (e) { console.error('[PrivateCall] Error setting up friend speaking detection:', e); }
+        detect();
+      } catch (e) {
+        console.error("[PrivateCall] Friend speaking detection error:", e);
+      }
     };
 
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
         signalingChannelRef.current.send({
-          type: 'broadcast', event: 'webrtc-signal',
-          payload: { type: 'ice-candidate', from: user?.id, to: friend.id, data: event.candidate }
+          type: "broadcast",
+          event: "webrtc-signal",
+          payload: { type: "ice-candidate", from: user?.id, to: friend.id, data: event.candidate },
         });
       }
     };
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      console.log('[PrivateCall] Connection state:', state);
-      if (state === 'connected') {
+      console.log("[PrivateCall] Connection state:", state);
+      if (state === "connected") {
         iceRestartManagerRef.current.reset();
-      } else if (state === 'failed' || state === 'disconnected') {
+        setCallStatus("active");
+      } else if (state === "failed" || state === "disconnected") {
         iceRestartManagerRef.current.scheduleRestart(pc);
       }
     };
@@ -234,111 +264,135 @@ const PrivateCallPanel = ({
     return pc;
   };
 
-  const endCallRef = useRef<() => void>(() => {});
-
-  // Set up the ICE give-up callback: end the call when peer is permanently lost
+  // ICE give-up callback
   useEffect(() => {
     iceRestartManagerRef.current.setOnGiveUp(() => {
-      console.warn('[PrivateCall] Peer permanently disconnected, ending call');
-      toast({ title: "Déconnecté", description: "La connexion avec l'autre personne a été perdue", variant: "destructive" });
+      console.warn("[PrivateCall] Peer permanently disconnected, ending call");
+      toast({ title: "Déconnecté", description: "La connexion a été perdue", variant: "destructive" });
       endCallRef.current();
     });
   }, [toast]);
 
+  // Handle signaling messages
   const handleSignal = async (payload: any) => {
     if (payload.to !== user?.id) return;
     let pc = peerConnectionRef.current;
 
-    if (payload.type === 'offer') {
+    if (payload.type === "offer") {
       try {
         if (!localStreamRef.current) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: getOptimizedAudioConstraints() });
           localStreamRef.current = stream;
-          audioContextRef.current = new AudioContext({ sampleRate: 48000 });
-          analyserRef.current = audioContextRef.current.createAnalyser();
-          const source = audioContextRef.current.createMediaStreamSource(stream);
-          source.connect(analyserRef.current);
-          analyserRef.current.fftSize = 256;
-          analyserRef.current.smoothingTimeConstant = 0.4;
-          const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-          const detectVoice = () => {
-            if (!analyserRef.current || callStatusRef.current === "ended") return;
-            analyserRef.current.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
-            const rms = Math.sqrt(sum / dataArray.length);
-            setIsSpeaking(rms > 12 && !isMutedRef.current);
-            animationRef.current = requestAnimationFrame(detectVoice);
-          };
-          detectVoice();
+          setupLocalAudioDetection(stream);
         }
         if (!pc) pc = setupPeerConnection(localStreamRef.current);
-        // Munge incoming offer SDP for Opus HD
         const mungedOffer = { ...payload.data, sdp: mungeOpusSDP(payload.data.sdp) };
         await pc.setRemoteDescription(new RTCSessionDescription(mungedOffer));
         const answer = await pc.createAnswer();
-        // Munge answer SDP
-        answer.sdp = mungeOpusSDP(answer.sdp || '');
+        answer.sdp = mungeOpusSDP(answer.sdp || "");
         await pc.setLocalDescription(answer);
         signalingChannelRef.current?.send({
-          type: 'broadcast', event: 'webrtc-signal',
-          payload: { type: 'answer', from: user?.id, to: friend.id, data: answer }
+          type: "broadcast",
+          event: "webrtc-signal",
+          payload: { type: "answer", from: user?.id, to: friend.id, data: answer },
         });
-      } catch (error) { console.error('[PrivateCall] Error handling offer:', error); }
-    } else if (payload.type === 'answer') {
+      } catch (error) {
+        console.error("[PrivateCall] Error handling offer:", error);
+      }
+    } else if (payload.type === "answer") {
       if (pc) {
         const mungedAnswer = { ...payload.data, sdp: mungeOpusSDP(payload.data.sdp) };
         await pc.setRemoteDescription(new RTCSessionDescription(mungedAnswer));
       }
-    } else if (payload.type === 'ice-candidate') {
-      if (pc) { try { await pc.addIceCandidate(new RTCIceCandidate(payload.data)); } catch (error) { console.error('[PrivateCall] ICE error:', error); } }
+    } else if (payload.type === "ice-candidate") {
+      if (pc) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(payload.data)); } catch (e) { console.error("[PrivateCall] ICE error:", e); }
+      }
     }
   };
 
+  const setupLocalAudioDetection = (stream: MediaStream) => {
+    audioContextRef.current = new AudioContext({ sampleRate: 48000 });
+    analyserRef.current = audioContextRef.current.createAnalyser();
+    const source = audioContextRef.current.createMediaStreamSource(stream);
+    source.connect(analyserRef.current);
+    analyserRef.current.fftSize = 128;
+    analyserRef.current.smoothingTimeConstant = 0.3;
+    const buf = new Uint8Array(analyserRef.current.frequencyBinCount);
+    const detect = () => {
+      if (!analyserRef.current || callStatusRef.current === "ended") return;
+      analyserRef.current.getByteFrequencyData(buf);
+      let s = 0;
+      for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+      setIsSpeaking(Math.sqrt(s / buf.length) > 12 && !isMutedRef.current);
+      animationRef.current = requestAnimationFrame(detect);
+    };
+    detect();
+  };
+
+  // ── Create call record (outgoing) ──
   useEffect(() => {
     if (!isIncoming && user && !callId) {
-      const startCall = async () => {
+      (async () => {
         const { data, error } = await supabase
           .from("private_calls")
           .insert({ caller_id: user.id, callee_id: friend.id, status: "ringing" })
-          .select().single();
-        if (error) { toast({ title: "Erreur", description: "Impossible de démarrer l'appel", variant: "destructive" }); onEnd(); return; }
+          .select()
+          .single();
+        if (error) {
+          toast({ title: "Erreur", description: "Impossible de démarrer l'appel", variant: "destructive" });
+          onEnd();
+          return;
+        }
         setCallId(data.id);
-      };
-      startCall();
+      })();
     }
   }, [isIncoming, user, friend.id, callId]);
 
+  // ── Signaling channel ──
   useEffect(() => {
     if (!user) return;
-    const signalingChannel = supabase.channel(`private-signaling-${channelId}`);
-    signalingChannelRef.current = signalingChannel;
-    signalingChannel.on('broadcast', { event: 'webrtc-signal' }, ({ payload }) => { handleSignal(payload); });
-    signalingChannel.subscribe();
-    return () => { supabase.removeChannel(signalingChannel); };
+    const ch = supabase.channel(`private-signaling-${channelId}`);
+    signalingChannelRef.current = ch;
+    ch.on("broadcast", { event: "webrtc-signal" }, ({ payload }) => handleSignal(payload));
+    ch.subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [user, channelId]);
 
+  // ── Watch call status changes in DB ──
   useEffect(() => {
     if (!callId) return;
-    const channel = supabase.channel(`call-${callId}`).on("postgres_changes", { event: "UPDATE", schema: "public", table: "private_calls", filter: `id=eq.${callId}` }, (payload) => {
-      const newStatus = payload.new.status as string;
-      if (newStatus === "active") { setCallStatus("active"); startAudioAndConnect(); }
-      else if (newStatus === "ended" || newStatus === "declined" || newStatus === "missed") { setCallStatus("ended"); cleanup(); setTimeout(onEnd, 1000); }
-    }).subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const ch = supabase
+      .channel(`call-${callId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "private_calls", filter: `id=eq.${callId}` }, (payload) => {
+        const newStatus = payload.new.status as string;
+        if (newStatus === "active") {
+          setCallStatus("connecting");
+          startAudioAndConnect();
+        } else if (newStatus === "ended" || newStatus === "declined" || newStatus === "missed") {
+          setCallStatus("ended");
+          cleanup();
+          setTimeout(onEnd, 1000);
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [callId]);
 
+  // ── Duration timer ──
   useEffect(() => {
-    if (callStatus === "active") { durationInterval.current = setInterval(() => { setDuration((d) => d + 1); }, 1000); }
+    if (callStatus === "active") {
+      durationInterval.current = setInterval(() => setDuration((d) => d + 1), 1000);
+    }
     return () => { if (durationInterval.current) clearInterval(durationInterval.current); };
   }, [callStatus]);
 
+  // ── Start audio + WebRTC ──
   const startAudioAndConnect = async () => {
     try {
-      // Fetch dynamic TURN credentials
       const dynamicConfig = await getDynamicRtcConfig();
       rtcConfigRef.current = dynamicConfig;
-      console.log('[PrivateCall] Using ICE config with', dynamicConfig.iceServers?.length, 'servers');
+      console.log("[PrivateCall] Using ICE config with", dynamicConfig.iceServers?.length, "servers");
 
       const rawStream = await navigator.mediaDevices.getUserMedia({ audio: getOptimizedAudioConstraints() });
       rawStreamRef.current = rawStream;
@@ -350,74 +404,57 @@ const PrivateCallPanel = ({
           processedStream = await noiseProcessorRef.current.process(rawStream);
           const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
           const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
+          const engineName = rnnoiseActive
+            ? impulseActive ? "RNNoise+ImpulseGate" : "RNNoise"
+            : impulseActive ? "ImpulseGate" : null;
+          setNoiseEngine(engineName);
           console.log(`[PrivateCall] Noise processing applied | RNNoise=${rnnoiseActive} | ImpulseGate=${impulseActive} | latency=${noiseProcessorRef.current.getLatency()}ms`);
-          if (!rnnoiseActive) {
-            console.warn('[PrivateCall] ⚠️ RNNoise failed to load, using fallback');
-          }
         } catch (noiseErr) {
-          console.error('[PrivateCall] Noise processor failed:', noiseErr);
+          console.error("[PrivateCall] Noise processor failed:", noiseErr);
         }
-      } else {
-        console.log('[PrivateCall] Noise suppression disabled in settings');
       }
-      
+
       localStreamRef.current = processedStream;
-
-      audioContextRef.current = new AudioContext({ sampleRate: 48000 });
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      const source = audioContextRef.current.createMediaStreamSource(rawStream);
-      source.connect(analyserRef.current);
-      analyserRef.current.fftSize = 128;
-      analyserRef.current.smoothingTimeConstant = 0.3;
-
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-      const detectVoice = () => {
-        if (!analyserRef.current || callStatusRef.current === "ended") return;
-        analyserRef.current.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
-        const rms = Math.sqrt(sum / dataArray.length);
-        setIsSpeaking(rms > 12 && !isMutedRef.current);
-        animationRef.current = requestAnimationFrame(detectVoice);
-      };
-      detectVoice();
+      setupLocalAudioDetection(rawStream);
 
       const pc = setupPeerConnection(processedStream);
 
       if (pttEnabled) {
-        const audioTrack = processedStream.getAudioTracks()[0];
-        if (audioTrack) { audioTrack.enabled = false; setIsMuted(true); isMutedRef.current = true; }
+        const t = processedStream.getAudioTracks()[0];
+        if (t) { t.enabled = false; setIsMuted(true); isMutedRef.current = true; }
       }
 
       if (!isIncoming) {
         const offer = await pc.createOffer({ offerToReceiveAudio: true });
-        // Munge offer SDP for Opus HD
-        offer.sdp = mungeOpusSDP(offer.sdp || '');
+        offer.sdp = mungeOpusSDP(offer.sdp || "");
         await pc.setLocalDescription(offer);
         signalingChannelRef.current?.send({
-          type: 'broadcast', event: 'webrtc-signal',
-          payload: { type: 'offer', from: user?.id, to: friend.id, data: offer }
+          type: "broadcast",
+          event: "webrtc-signal",
+          payload: { type: "offer", from: user?.id, to: friend.id, data: offer },
         });
       }
-    } catch (error) {
+    } catch {
       toast({ title: "Erreur", description: "Impossible d'accéder au microphone", variant: "destructive" });
     }
   };
 
+  // ── Cleanup ──
   const cleanup = () => {
     callStatusRef.current = "ended";
     iceRestartManagerRef.current.cleanup();
     if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
     if (noiseProcessorRef.current) { noiseProcessorRef.current.cleanup(); noiseProcessorRef.current = null; }
-    if (rawStreamRef.current) { rawStreamRef.current.getTracks().forEach((track) => track.stop()); rawStreamRef.current = null; }
-    if (localStreamRef.current) { localStreamRef.current.getTracks().forEach((track) => track.stop()); localStreamRef.current = null; }
-    if (audioContextRef.current?.state !== 'closed') { audioContextRef.current?.close(); }
+    if (rawStreamRef.current) { rawStreamRef.current.getTracks().forEach((t) => t.stop()); rawStreamRef.current = null; }
+    if (localStreamRef.current) { localStreamRef.current.getTracks().forEach((t) => t.stop()); localStreamRef.current = null; }
+    if (audioContextRef.current?.state !== "closed") audioContextRef.current?.close();
     if (peerConnectionRef.current) { peerConnectionRef.current.close(); peerConnectionRef.current = null; }
-    if (remoteAudioRef.current) { remoteAudioRef.current.srcObject = null; }
-    if (isSharing) { stopScreenShare(); }
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    if (isSharing) stopScreenShare();
     cleanupScreenShare();
   };
 
+  // ── Call actions ──
   const acceptCall = async () => {
     if (!callId) return;
     setCallStatus("connecting");
@@ -427,21 +464,22 @@ const PrivateCallPanel = ({
   const declineCall = async () => {
     if (!callId) return;
     await supabase.from("private_calls").update({ status: "declined", ended_at: new Date().toISOString() }).eq("id", callId);
-    cleanup(); onEnd();
+    cleanup();
+    onEnd();
   };
 
   const endCall = async () => {
     if (!callId) return;
     await supabase.from("private_calls").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", callId);
-    cleanup(); onEnd();
+    cleanup();
+    onEnd();
   };
 
-  // Keep ref up to date for ICE give-up callback
   useEffect(() => { endCallRef.current = endCall; });
 
   const toggleMute = () => {
     if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach((track) => { track.enabled = isMuted; });
+      localStreamRef.current.getAudioTracks().forEach((t) => { t.enabled = isMuted; });
       const newMuted = !isMuted;
       setIsMuted(newMuted);
       isMutedRef.current = newMuted;
@@ -449,146 +487,113 @@ const PrivateCallPanel = ({
   };
 
   const handleToggleScreenShare = () => {
-    if (isSharing) { stopScreenShare(); } else { setQualityDialogOpen(true); }
+    if (isSharing) stopScreenShare();
+    else setQualityDialogOpen(true);
   };
 
   const handleSelectQuality = async (quality: ScreenQuality) => {
     const preset = QUALITY_PRESETS[quality];
     const stream = await startScreenShare(quality);
-    if (stream) { toast({ title: "Partage d'écran", description: `Tu partages ton écran en ${preset.height}p ${preset.frameRate}fps` }); }
+    if (stream) toast({ title: "Partage d'écran", description: `${preset.height}p ${preset.frameRate}fps` });
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  const formatDuration = (s: number) => {
+    const m = Math.floor(s / 60);
+    return `${m.toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
   };
 
   const hasScreenShare = activeScreens.length > 0;
   const { ping, quality: latencyQuality } = useSimpleLatency();
-  
-  const connectionQuality = callStatus === 'active' 
-    ? (latencyQuality === 'fair' ? 'good' : latencyQuality === 'excellent' ? 'excellent' : latencyQuality === 'good' ? 'good' : 'poor') as 'excellent' | 'good' | 'poor' | 'connecting'
-    : 'connecting' as const;
+  const connectionQuality = callStatus === "active"
+    ? (latencyQuality === "excellent" ? "excellent" : latencyQuality === "fair" ? "good" : latencyQuality === "good" ? "good" : "poor") as "excellent" | "good" | "poor" | "connecting"
+    : ("connecting" as const);
 
+  /* ─── Status label helper ─── */
+  const getStatusLabel = (): string => {
+    switch (callStatus) {
+      case "ringing":
+        return isIncoming ? "Appel entrant..." : "Ça sonne...";
+      case "connecting":
+        return "Connexion en cours...";
+      case "active":
+        return formatDuration(duration);
+      case "ended":
+        return "Appel terminé";
+    }
+  };
+
+  const isWaiting = callStatus === "ringing" || callStatus === "connecting";
+
+  // ── Render ──
   const callUI = (
     <TooltipProvider delayDuration={200}>
-      <div className="fixed inset-0 z-[9999] flex flex-col bg-background" style={{ isolation: 'isolate' }}>
-        <div className="absolute inset-0 call-bg" />
-        <div className="absolute inset-0 noise pointer-events-none" />
-
-        {/* Header */}
-        <div className={cn(
-          "shrink-0 px-5 py-4 flex items-center justify-between relative z-10",
-          "border-b border-white/[0.04] glass-solid"
-        )}>
+      <div className="fixed inset-0 z-[9999] flex flex-col bg-background animate-fade-in" style={{ isolation: "isolate" }}>
+        {/* ── Header ── */}
+        <header className="shrink-0 h-16 px-5 flex items-center justify-between border-b border-border bg-card">
           <div className="flex items-center gap-3">
-            <Avatar className={cn(
-              "h-10 w-10 ring-2 ring-offset-1 ring-offset-background",
-              friendSpeaking ? "ring-success" : "ring-white/10"
+            <div className={cn(
+              "w-9 h-9 rounded-xl flex items-center justify-center border transition-colors",
+              callStatus === "active"
+                ? "bg-success/10 border-success/20"
+                : "bg-primary/10 border-primary/20"
             )}>
-              <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
-              <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold">
-                {friend.username[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+              <Phone className={cn("h-4 w-4", callStatus === "active" ? "text-success" : "text-primary")} />
+            </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight">{friend.username}</h2>
-              <p className="text-xs text-muted-foreground/50">
-                {callStatus === "ringing" && (isIncoming ? "Appel entrant..." : "Appel en cours...")}
-                {callStatus === "connecting" && "Connexion..."}
-                {callStatus === "active" && formatDuration(duration)}
-                {callStatus === "ended" && "Appel terminé"}
+              <h2 className="text-base font-bold">{friend.username}</h2>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                {getStatusLabel()}
+                {callStatus === "active" && noiseEngine && (
+                  <span className="text-[10px] text-success/70 flex items-center gap-1">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    {noiseEngine}
+                  </span>
+                )}
               </p>
             </div>
           </div>
-
           {callStatus === "active" && (
             <ConnectionQualityIndicator quality={connectionQuality} ping={ping} showPing={true} />
           )}
-        </div>
+        </header>
 
-        {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden min-h-0 relative z-10">
-          {/* Screen Share */}
+        {/* ── Main Content ── */}
+        <div className="flex-1 flex overflow-hidden min-h-0">
           {hasScreenShare && (
-            <div className="flex-1 min-w-0 bg-black/30">
+            <div className="flex-1 min-w-0 bg-black/20">
               <MultiScreenShareView screens={activeScreens} onStopLocal={stopScreenShare} />
             </div>
           )}
 
-          {/* Avatars Area */}
+          {/* Avatars / Users Panel */}
           <div className={cn(
-            "flex flex-col items-center justify-center",
-            hasScreenShare ? "w-80 border-l border-white/[0.04] glass-subtle shrink-0" : "flex-1"
+            "flex flex-col items-center justify-center shrink-0",
+            hasScreenShare ? "w-72 border-l border-border bg-card" : "flex-1"
           )}>
-            <div className="flex items-center justify-center gap-12 animate-reveal">
+            <div className="flex items-center justify-center gap-12">
               {/* My Avatar */}
-              <div className="relative flex flex-col items-center">
-                {callStatus === "active" && isSpeaking && (
-                  <>
-                    <div className="absolute inset-0 rounded-full border-2 border-success/40 animate-speaking-ring" />
-                    <div className="absolute inset-0 rounded-full border-2 border-success/20 animate-speaking-ring" style={{ animationDelay: '0.5s' }} />
-                  </>
-                )}
-                <div className={cn("absolute -inset-6 rounded-full blur-2xl transition-all duration-500", isSpeaking ? "bg-success/25" : "bg-primary/10")} />
-                <Avatar className={cn(
-                  "relative transition-all duration-300 ring-[3px] ring-offset-2 ring-offset-background shadow-2xl",
-                  isSpeaking ? "ring-success shadow-success/20" : "ring-white/10",
-                  hasScreenShare ? "h-16 w-16" : "h-24 w-24"
-                )}>
-                  <AvatarImage src={profile?.avatar_url || ""} className="object-cover" />
-                  <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-2xl">
-                    {profile?.username?.[0]?.toUpperCase() || "?"}
-                  </AvatarFallback>
-                </Avatar>
-                <p className="text-xs text-muted-foreground/60 mt-3 font-medium">Vous</p>
-                {isMuted && (
-                  <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-destructive/90 flex items-center justify-center ring-2 ring-background">
-                    <MicOff className="h-3.5 w-3.5 text-destructive-foreground" />
-                  </div>
-                )}
-                {isSpeaking && !isMuted && (
-                  <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-success flex items-center justify-center ring-2 ring-background speaking-glow">
-                    <Volume2 className="h-3.5 w-3.5 text-success-foreground" />
-                  </div>
-                )}
-              </div>
+              <UserAvatar
+                username={profile?.username || "?"}
+                avatarUrl={profile?.avatar_url}
+                isSpeaking={isSpeaking && !isMuted && callStatus === "active"}
+                isMuted={isMuted}
+                label="Vous"
+                compact={hasScreenShare}
+              />
 
-              {/* Friend's Avatar — clickable for volume control */}
+              {/* Friend Avatar — clickable for volume */}
               <Popover open={friendPopoverOpen} onOpenChange={setFriendPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <div className="relative flex flex-col items-center cursor-pointer">
-                    {callStatus === "active" && friendSpeaking && friendVolume > 0 && (
-                      <>
-                        <div className="absolute inset-0 rounded-full border-2 border-success/40 animate-speaking-ring" />
-                        <div className="absolute inset-0 rounded-full border-2 border-success/20 animate-speaking-ring" style={{ animationDelay: '0.5s' }} />
-                      </>
-                    )}
-                    <div className={cn("absolute -inset-6 rounded-full blur-2xl transition-all duration-500", friendSpeaking && friendVolume > 0 ? "bg-success/25" : "bg-primary/10")} />
-                    <Avatar className={cn(
-                      "relative transition-all duration-300 ring-[3px] ring-offset-2 ring-offset-background shadow-2xl",
-                      friendVolume === 0 ? "ring-amber-500 opacity-60" : friendSpeaking ? "ring-success shadow-success/20" : "ring-white/10",
-                      hasScreenShare ? "h-16 w-16" : "h-24 w-24"
-                    )}>
-                      <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
-                      <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-2xl">
-                        {friend.username[0]?.toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <p className="text-xs text-muted-foreground/60 mt-3 font-medium">{friend.username}</p>
-                    {friendVolume === 0 ? (
-                      <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center ring-2 ring-background">
-                        <VolumeOff className="h-3.5 w-3.5 text-white" />
-                      </div>
-                    ) : friendSpeaking ? (
-                      <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-success flex items-center justify-center ring-2 ring-background speaking-glow">
-                        <Volume2 className="h-3.5 w-3.5 text-success-foreground" />
-                      </div>
-                    ) : null}
-                    {friendVolume === 0 && (
-                      <p className="text-[10px] text-amber-500/80 font-medium mt-0.5">Son coupé</p>
-                    )}
+                  <div className="cursor-pointer">
+                    <UserAvatar
+                      username={friend.username}
+                      avatarUrl={friend.avatar_url}
+                      isSpeaking={friendSpeaking && friendVolume > 0 && callStatus === "active"}
+                      isMuted={friendVolume === 0}
+                      label={friend.username}
+                      compact={hasScreenShare}
+                      dimmed={friendVolume === 0}
+                    />
                   </div>
                 </PopoverTrigger>
                 <PopoverContent side="bottom" align="center" className="w-56 p-3 space-y-3 bg-card border-border shadow-xl">
@@ -613,16 +618,6 @@ const PrivateCallPanel = ({
                       <Slider value={[friendVolume]} min={0} max={2} step={0.05} onValueChange={([v]) => setFriendVolume(v)} className="flex-1" />
                     </div>
                   </div>
-                  <button
-                    onClick={() => setFriendVolume(friendVolume === 0 ? 1 : 0)}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                      friendVolume === 0 ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "hover:bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {friendVolume === 0 ? <VolumeOff className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-                    {friendVolume === 0 ? "Rétablir le son" : "Couper le son"}
-                  </button>
                 </PopoverContent>
               </Popover>
             </div>
@@ -631,36 +626,33 @@ const PrivateCallPanel = ({
             {callStatus === "active" && pttEnabled && (
               <div className={cn(
                 "mt-6 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300",
-                isPttActive 
-                  ? "bg-success/20 text-success border border-success/30" 
-                  : "bg-secondary/50 text-muted-foreground border border-white/[0.04]"
+                isPttActive
+                  ? "bg-success/20 text-success border border-success/30"
+                  : "bg-secondary/50 text-muted-foreground border border-border"
               )}>
                 <Radio className={cn("h-4 w-4", isPttActive && "animate-pulse")} />
                 <span>{isPttActive ? "Vous parlez..." : `Appuyez sur ${getKeyDisplayName(getPushToTalkKey())} pour parler`}</span>
               </div>
             )}
 
-            {/* Loading */}
-            {(callStatus === "connecting" || (callStatus === "ringing" && !isIncoming)) && (
+            {/* Loading indicator */}
+            {isWaiting && (
               <div className="mt-6 flex items-center gap-2 animate-pulse">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">Connexion en cours...</span>
+                <span className="text-sm text-muted-foreground">{getStatusLabel()}</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Controls Bar */}
-        <div className={cn(
-          "shrink-0 px-6 py-5 flex items-center justify-center gap-4 relative z-10",
-          "border-t border-white/[0.04] glass-solid"
-        )}>
+        {/* ── Controls Bar ── */}
+        <div className="shrink-0 px-6 py-4 flex justify-center border-t border-border bg-card">
           {callStatus === "ringing" && isIncoming ? (
             <div className="flex items-center gap-3">
               <Button
                 size="lg"
                 variant="destructive"
-                className="h-12 rounded-xl px-4"
+                className="h-12 rounded-xl px-5 font-semibold"
                 onClick={declineCall}
               >
                 <PhoneOff className="h-5 w-5 mr-2" />
@@ -668,7 +660,7 @@ const PrivateCallPanel = ({
               </Button>
               <Button
                 size="lg"
-                className="h-12 rounded-xl px-4 bg-success text-success-foreground hover:bg-success/90"
+                className="h-12 rounded-xl px-5 font-semibold bg-success text-success-foreground hover:bg-success/90"
                 onClick={acceptCall}
               >
                 <Phone className="h-5 w-5 mr-2" />
@@ -681,22 +673,25 @@ const PrivateCallPanel = ({
               isConnecting={false}
               isMuted={isMuted}
               isScreenSharing={isSharing}
+              isDeafened={isDeafened}
               onJoin={() => {}}
               onLeave={endCall}
               onToggleMute={toggleMute}
               onToggleScreenShare={handleToggleScreenShare}
+              onToggleDeafen={handleToggleDeafen}
             />
-          ) : callStatus === "connecting" || (callStatus === "ringing" && !isIncoming) ? (
+          ) : (
+            /* ringing (outgoing) or connecting */
             <Button
               size="lg"
               variant="destructive"
-              className="h-12 rounded-xl px-4"
+              className="h-12 rounded-xl px-5 font-semibold"
               onClick={endCall}
             >
               <PhoneOff className="h-5 w-5 mr-2" />
-              Annuler l'appel
+              Annuler
             </Button>
-          ) : null}
+          )}
         </div>
 
         <ScreenShareQualityDialog open={qualityDialogOpen} onOpenChange={setQualityDialogOpen} onSelectQuality={handleSelectQuality} />
@@ -706,5 +701,55 @@ const PrivateCallPanel = ({
 
   return createPortal(callUI, document.body);
 };
+
+/* ─── Reusable Avatar sub-component ─── */
+const UserAvatar = ({
+  username,
+  avatarUrl,
+  isSpeaking,
+  isMuted,
+  label,
+  compact = false,
+  dimmed = false,
+}: {
+  username: string;
+  avatarUrl?: string | null;
+  isSpeaking: boolean;
+  isMuted: boolean;
+  label: string;
+  compact?: boolean;
+  dimmed?: boolean;
+}) => (
+  <div className="relative flex flex-col items-center">
+    {isSpeaking && (
+      <>
+        <div className="absolute inset-0 rounded-full border-2 border-success/40 animate-speaking-ring" />
+        <div className="absolute inset-0 rounded-full border-2 border-success/20 animate-speaking-ring" style={{ animationDelay: "0.5s" }} />
+      </>
+    )}
+    <Avatar className={cn(
+      "relative transition-all duration-300 ring-[3px] ring-offset-2 ring-offset-background shadow-2xl",
+      dimmed && "opacity-60",
+      isSpeaking ? "ring-success shadow-success/20" : "ring-transparent",
+      compact ? "h-16 w-16" : "h-24 w-24"
+    )}>
+      <AvatarImage src={avatarUrl || ""} className="object-cover" />
+      <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
+        {username[0]?.toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
+    <p className="text-xs text-muted-foreground/60 mt-3 font-medium">{label}</p>
+    {isMuted && (
+      <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-destructive/90 flex items-center justify-center ring-2 ring-background">
+        <MicOff className="h-3.5 w-3.5 text-destructive-foreground" />
+      </div>
+    )}
+    {isSpeaking && !isMuted && (
+      <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-success flex items-center justify-center ring-2 ring-background">
+        <Volume2 className="h-3.5 w-3.5 text-success-foreground" />
+      </div>
+    )}
+  </div>
+);
 
 export default PrivateCallPanel;
