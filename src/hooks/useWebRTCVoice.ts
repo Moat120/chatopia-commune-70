@@ -143,6 +143,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const joinWatchdogRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -518,6 +519,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       audioContextRef.current = null;
     }
 
+    if (joinWatchdogRef.current) {
+      clearTimeout(joinWatchdogRef.current);
+      joinWatchdogRef.current = null;
+    }
+
     if (presenceChannelRef.current) {
       await supabase.removeChannel(presenceChannelRef.current);
       presenceChannelRef.current = null;
@@ -547,6 +553,19 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     setIsConnecting(true);
     setConnectionQuality("connecting");
+
+    if (joinWatchdogRef.current) {
+      clearTimeout(joinWatchdogRef.current);
+      joinWatchdogRef.current = null;
+    }
+
+    joinWatchdogRef.current = setTimeout(() => {
+      if (!isConnectedRef.current) {
+        console.error("[Voice] Join watchdog timeout");
+        onError?.("Connexion vocale expirée, réessaie.");
+        cleanup();
+      }
+    }, 20000);
 
     try {
       // Fetch dynamic TURN credentials first (fallback fast if function is slow)
@@ -762,6 +781,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       startVoiceDetection(rawStream);
       startStatsMonitoring();
 
+      if (joinWatchdogRef.current) {
+        clearTimeout(joinWatchdogRef.current);
+        joinWatchdogRef.current = null;
+      }
+
       isConnectedRef.current = true;
       setIsConnected(true);
       setIsConnecting(false);
@@ -771,6 +795,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     } catch (error: any) {
       console.error("[Voice] Join error:", error);
       onError?.(error.message || "Failed to join voice channel");
+      if (joinWatchdogRef.current) {
+        clearTimeout(joinWatchdogRef.current);
+        joinWatchdogRef.current = null;
+      }
       setIsConnecting(false);
       cleanup();
       return false;
