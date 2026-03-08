@@ -47,6 +47,8 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
   const [members, setMembers] = useState<{ user_id: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isNearBottomRef = useRef(true);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const { toggleReaction, getReactionGroups } = useReactions("group", messageIds);
@@ -57,9 +59,25 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
     return map;
   }, [messages]);
 
+  // Smart scroll: only auto-scroll if user is near bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, isTyping]);
+
+  // Track scroll position
+  useEffect(() => {
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (!viewport) return;
+    const handleScroll = () => {
+      const el = viewport as HTMLElement;
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      isNearBottomRef.current = distFromBottom < 100;
+    };
+    viewport.addEventListener('scroll', handleScroll);
+    return () => viewport.removeEventListener('scroll', handleScroll);
+  }, [loading]);
 
   useEffect(() => { inputRef.current?.focus(); }, [group.id]);
 
