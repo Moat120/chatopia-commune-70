@@ -27,7 +27,7 @@ interface GroupMessageContextMenuProps {
   onReply?: (message: GroupMessage) => void;
 }
 
-const GroupMessageContextMenu = ({ message, children }: GroupMessageContextMenuProps) => {
+const GroupMessageContextMenu = ({ message, children, onReply }: GroupMessageContextMenuProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
