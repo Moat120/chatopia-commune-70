@@ -52,19 +52,29 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   // Observe participants when not connected
   const { participants: presenceParticipants } = useVoicePresence(isConnected ? null : group.id);
 
+  // Override local user's isSpeaking with real-time audioLevel (presence sync is too slow)
+  const localSpeaking = audioLevel > 0.08 && !isMuted;
+
   const effectiveConnectedUsers = useMemo(() => {
-    if (connectedUsers.length > 0) return connectedUsers;
-    if (isConnected && user && profile) {
-      return [{
-        odId: user.id,
-        username: profile.username,
-        avatarUrl: profile.avatar_url || undefined,
-        isSpeaking: false,
-        isMuted,
-      }];
-    }
-    return connectedUsers;
-  }, [connectedUsers, isConnected, user, profile, isMuted]);
+    const users = connectedUsers.length > 0 
+      ? connectedUsers 
+      : isConnected && user && profile
+        ? [{
+            odId: user.id,
+            username: profile.username,
+            avatarUrl: profile.avatar_url || undefined,
+            isSpeaking: false,
+            isMuted,
+          }]
+        : connectedUsers;
+
+    // Patch local user's speaking state with real-time audio level
+    return users.map(u => 
+      u.odId === currentUserId 
+        ? { ...u, isSpeaking: localSpeaking, isMuted } 
+        : u
+    );
+  }, [connectedUsers, isConnected, user, profile, isMuted, currentUserId, localSpeaking]);
 
   const {
     isSharing,
