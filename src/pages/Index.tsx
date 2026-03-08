@@ -35,6 +35,8 @@ const Index = () => {
   useNotifications();
   useTabTitle();
 
+  const { isOnline } = useOnlineStatus();
+
   const ringtoneRef = useRef(new RingtoneManager());
 
   const [viewMode, setViewMode] = useState<ViewMode>("messages");
