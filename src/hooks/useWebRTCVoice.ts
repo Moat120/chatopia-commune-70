@@ -582,7 +582,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       if (getNoiseSuppression()) {
         try {
           noiseProcessorRef.current = new AdvancedNoiseProcessor();
-          processedStream = await noiseProcessorRef.current.process(rawStream);
+          processedStream = await withTimeout(
+            noiseProcessorRef.current.process(rawStream),
+            5000,
+            "noise processor"
+          );
           const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
           const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
           const latency = noiseProcessorRef.current.getLatency();
