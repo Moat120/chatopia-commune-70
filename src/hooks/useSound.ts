@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 
 // ══════════════════════════════════════════════
-//  PREMIUM SOUND ENGINE v2
-//  Warmer, more musical, satisfying UI sounds
-//  Web Audio API with filters & layered harmonics
+//  AIRY SOUND ENGINE v3
+//  Bright, open, spacious UI sounds
+//  Higher frequencies, more reverb-like tails
 // ══════════════════════════════════════════════
 
 let audioCtx: AudioContext | null = null;
@@ -46,7 +46,7 @@ const tone = (opts: ToneOpts) => {
     } = opts;
 
     const t = ctx.currentTime + delay;
-    const v = Math.min(vol, 0.35);
+    const v = Math.min(vol, 0.3);
 
     const osc = ctx.createOscillator();
     osc.type = type;
@@ -59,11 +59,10 @@ const tone = (opts: ToneOpts) => {
     gain.gain.setValueAtTime(v, t + dur - fadeOut);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
-    // Compressor for consistent volume
     const compressor = ctx.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-24, t);
-    compressor.knee.setValueAtTime(12, t);
-    compressor.ratio.setValueAtTime(4, t);
+    compressor.threshold.setValueAtTime(-20, t);
+    compressor.knee.setValueAtTime(15, t);
+    compressor.ratio.setValueAtTime(3, t);
 
     osc.connect(gain);
 
@@ -71,7 +70,7 @@ const tone = (opts: ToneOpts) => {
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
       filter.frequency.setValueAtTime(lpf, t);
-      filter.Q.setValueAtTime(0.5, t);
+      filter.Q.setValueAtTime(0.3, t);
       gain.connect(filter);
       filter.connect(compressor);
     } else {
@@ -87,7 +86,7 @@ const tone = (opts: ToneOpts) => {
   }
 };
 
-/** Play a warm chord with optional stagger and filter */
+/** Play a bright chord with stagger */
 const chord = (
   freqs: number[],
   dur: number,
@@ -104,7 +103,7 @@ const chord = (
       type,
       delay: i * stagger / 1000,
       lpf,
-      fadeOut: dur * 0.35,
+      fadeOut: dur * 0.4,
     });
   });
 };
@@ -121,7 +120,7 @@ const slide = (
   try {
     const ctx = getCtx();
     const t = ctx.currentTime;
-    const v = Math.min(vol, 0.3);
+    const v = Math.min(vol, 0.25);
 
     const osc = ctx.createOscillator();
     osc.type = type;
@@ -130,7 +129,7 @@ const slide = (
 
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(v, t + 0.008);
+    gain.gain.linearRampToValueAtTime(v, t + 0.005);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
     osc.connect(gain);
@@ -139,7 +138,7 @@ const slide = (
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
       filter.frequency.setValueAtTime(lpf, t);
-      filter.Q.setValueAtTime(0.4, t);
+      filter.Q.setValueAtTime(0.3, t);
       gain.connect(filter);
       filter.connect(ctx.destination);
     } else {
@@ -154,108 +153,100 @@ const slide = (
 };
 
 // ══════════════════════════════════════════════
-//  SOUND PRESETS — warmer, rounder, more musical
+//  SOUND PRESETS — bright, airy, open
 // ══════════════════════════════════════════════
 
-/** ✨ Crystalline chime — notifications (warmer, less piercing) */
+/** ✨ Bright wind-chime — notification */
 const notification = () => {
-  tone({ freq: 493, dur: 0.18, vol: 0.05, type: "sine", fadeOut: 0.14, lpf: 3200 });
-  tone({ freq: 622, dur: 0.22, vol: 0.04, type: "sine", fadeOut: 0.16, delay: 0.1, lpf: 3000 });
-  tone({ freq: 740, dur: 0.32, vol: 0.035, type: "sine", fadeOut: 0.25, delay: 0.2, lpf: 2800 });
-  // Warm sub-harmonic body
-  tone({ freq: 247, dur: 0.25, vol: 0.015, type: "sine", fadeOut: 0.2, delay: 0.1, lpf: 600 });
+  tone({ freq: 587, dur: 0.2, vol: 0.04, type: "sine", fadeOut: 0.16, lpf: 4500 });
+  tone({ freq: 784, dur: 0.25, vol: 0.035, type: "sine", fadeOut: 0.2, delay: 0.1, lpf: 4200 });
+  tone({ freq: 988, dur: 0.35, vol: 0.025, type: "sine", fadeOut: 0.3, delay: 0.2, lpf: 3800 });
 };
 
-/** 🖱️ Subtle haptic pop — button clicks (softer, more tactile) */
+/** 🖱️ Light tap — button click */
 const click = () => {
-  tone({ freq: 680, dur: 0.02, vol: 0.025, type: "triangle", fadeIn: 0.001, fadeOut: 0.015, lpf: 2000 });
-  tone({ freq: 1400, dur: 0.01, vol: 0.008, type: "sine", fadeIn: 0.001, fadeOut: 0.007, delay: 0.004, lpf: 2500 });
+  tone({ freq: 880, dur: 0.015, vol: 0.02, type: "sine", fadeIn: 0.001, fadeOut: 0.01, lpf: 3500 });
+  tone({ freq: 1760, dur: 0.008, vol: 0.006, type: "sine", fadeIn: 0.001, fadeOut: 0.005, delay: 0.003, lpf: 4000 });
 };
 
-/** 🟢 Warm ascending fifth — user join (more melodic) */
+/** 🟢 Bright ascending — user join */
 const join = () => {
-  tone({ freq: 392, dur: 0.16, vol: 0.045, type: "sine", fadeOut: 0.12, lpf: 2800 });
-  tone({ freq: 523, dur: 0.22, vol: 0.04, type: "sine", fadeOut: 0.16, delay: 0.12, lpf: 2800 });
-  tone({ freq: 659, dur: 0.28, vol: 0.035, type: "sine", fadeOut: 0.2, delay: 0.24, lpf: 2500 });
-  // Sub body
-  tone({ freq: 196, dur: 0.2, vol: 0.015, type: "sine", fadeOut: 0.16, lpf: 500 });
+  tone({ freq: 523, dur: 0.14, vol: 0.035, type: "sine", fadeOut: 0.11, lpf: 4000 });
+  tone({ freq: 659, dur: 0.18, vol: 0.03, type: "sine", fadeOut: 0.14, delay: 0.1, lpf: 3800 });
+  tone({ freq: 880, dur: 0.28, vol: 0.025, type: "sine", fadeOut: 0.22, delay: 0.2, lpf: 3500 });
 };
 
-/** 🔴 Gentle descending — user leave (softer, less abrupt) */
+/** 🔴 Soft descending — user leave */
 const leave = () => {
-  tone({ freq: 587, dur: 0.15, vol: 0.035, type: "sine", fadeOut: 0.12, lpf: 2200 });
-  tone({ freq: 440, dur: 0.22, vol: 0.03, type: "sine", fadeOut: 0.18, delay: 0.12, lpf: 2000 });
+  tone({ freq: 698, dur: 0.14, vol: 0.03, type: "sine", fadeOut: 0.11, lpf: 3000 });
+  tone({ freq: 523, dur: 0.2, vol: 0.025, type: "sine", fadeOut: 0.16, delay: 0.1, lpf: 2800 });
 };
 
-/** ✉️ Satisfying whoosh up — message sent (smoother glide) */
+/** ✉️ Airy whoosh — message sent */
 const messageSent = () => {
-  slide(420, 880, 0.09, 0.025, "triangle", 2500);
-  tone({ freq: 1000, dur: 0.025, vol: 0.01, type: "sine", fadeIn: 0.002, fadeOut: 0.018, delay: 0.05, lpf: 3000 });
+  slide(550, 1100, 0.08, 0.02, "sine", 4000);
+  tone({ freq: 1320, dur: 0.03, vol: 0.008, type: "sine", fadeIn: 0.002, fadeOut: 0.02, delay: 0.05, lpf: 4500 });
 };
 
-/** 📩 Soft bubble pop — message received (rounder, warmer) */
+/** 📩 Crystal drop — message received */
 const messageReceived = () => {
-  tone({ freq: 523, dur: 0.12, vol: 0.04, type: "sine", fadeOut: 0.09, lpf: 2800 });
-  tone({ freq: 698, dur: 0.16, vol: 0.03, type: "sine", fadeOut: 0.12, delay: 0.07, lpf: 2500 });
-  tone({ freq: 262, dur: 0.14, vol: 0.012, type: "sine", fadeOut: 0.11, lpf: 500 });
+  tone({ freq: 659, dur: 0.1, vol: 0.035, type: "sine", fadeOut: 0.08, lpf: 4000 });
+  tone({ freq: 880, dur: 0.15, vol: 0.025, type: "sine", fadeOut: 0.12, delay: 0.06, lpf: 3500 });
 };
 
-/** 🔇 Soft thud down — mute */
+/** 🔇 Soft fade down — mute */
 const mute = () => {
-  slide(440, 250, 0.08, 0.03, "triangle", 1500);
+  slide(550, 330, 0.07, 0.025, "sine", 2200);
 };
 
-/** 🔊 Airy pop up — unmute */
+/** 🔊 Breeze up — unmute */
 const unmute = () => {
-  slide(320, 640, 0.07, 0.03, "triangle", 2200);
-  tone({ freq: 960, dur: 0.035, vol: 0.01, type: "sine", fadeOut: 0.025, delay: 0.04, lpf: 2500 });
+  slide(400, 800, 0.06, 0.025, "sine", 3500);
+  tone({ freq: 1100, dur: 0.03, vol: 0.008, type: "sine", fadeOut: 0.02, delay: 0.04, lpf: 4000 });
 };
 
 /** 🎙️ PTT on */
 const pttOn = () => {
-  tone({ freq: 550, dur: 0.03, vol: 0.03, type: "sine", fadeIn: 0.002, fadeOut: 0.02, lpf: 2000 });
-  tone({ freq: 825, dur: 0.025, vol: 0.015, type: "sine", fadeIn: 0.002, fadeOut: 0.015, delay: 0.02, lpf: 2500 });
+  tone({ freq: 700, dur: 0.025, vol: 0.025, type: "sine", fadeIn: 0.002, fadeOut: 0.018, lpf: 3000 });
+  tone({ freq: 1050, dur: 0.02, vol: 0.012, type: "sine", fadeIn: 0.002, fadeOut: 0.012, delay: 0.015, lpf: 3500 });
 };
 
 /** 🎙️ PTT off */
 const pttOff = () => {
-  tone({ freq: 650, dur: 0.025, vol: 0.025, type: "sine", fadeIn: 0.002, fadeOut: 0.018, lpf: 1800 });
-  tone({ freq: 400, dur: 0.035, vol: 0.02, type: "sine", fadeIn: 0.002, fadeOut: 0.025, delay: 0.015, lpf: 1500 });
+  tone({ freq: 800, dur: 0.02, vol: 0.02, type: "sine", fadeIn: 0.002, fadeOut: 0.015, lpf: 2500 });
+  tone({ freq: 500, dur: 0.03, vol: 0.015, type: "sine", fadeIn: 0.002, fadeOut: 0.02, delay: 0.012, lpf: 2000 });
 };
 
-/** 📞 Musical ringtone — warmer arpeggiated chords */
+/** 📞 Airy ringtone — bright arpeggiated chords */
 const ringtone = () => {
-  chord([349, 440, 523, 659], 0.35, 0.07, "sine", 45, 2800);
+  chord([523, 659, 784, 988], 0.35, 0.06, "sine", 40, 4000);
   setTimeout(() => {
-    chord([330, 392, 494, 587], 0.4, 0.06, "sine", 45, 2500);
+    chord([494, 622, 740, 880], 0.4, 0.05, "sine", 40, 3800);
   }, 450);
-  setTimeout(() => {
-    tone({ freq: 1047, dur: 0.3, vol: 0.008, type: "sine", fadeOut: 0.25, lpf: 1800 });
-  }, 350);
 };
 
-/** 🎉 Success — bright ascending major arpeggio */
+/** 🎉 Success — bright ascending */
 const success = () => {
-  tone({ freq: 440, dur: 0.12, vol: 0.04, type: "sine", fadeOut: 0.09, lpf: 3000 });
-  tone({ freq: 554, dur: 0.12, vol: 0.035, type: "sine", fadeOut: 0.09, delay: 0.08, lpf: 3000 });
-  tone({ freq: 659, dur: 0.14, vol: 0.03, type: "sine", fadeOut: 0.11, delay: 0.16, lpf: 3000 });
-  tone({ freq: 880, dur: 0.3, vol: 0.025, type: "sine", fadeOut: 0.25, delay: 0.24, lpf: 2500 });
+  tone({ freq: 523, dur: 0.1, vol: 0.035, type: "sine", fadeOut: 0.08, lpf: 4000 });
+  tone({ freq: 659, dur: 0.1, vol: 0.03, type: "sine", fadeOut: 0.08, delay: 0.07, lpf: 4000 });
+  tone({ freq: 784, dur: 0.12, vol: 0.025, type: "sine", fadeOut: 0.1, delay: 0.14, lpf: 3800 });
+  tone({ freq: 1047, dur: 0.3, vol: 0.02, type: "sine", fadeOut: 0.25, delay: 0.21, lpf: 3500 });
 };
 
-/** ❌ Error — soft dissonant buzz (less harsh) */
+/** ❌ Error — gentle dissonance */
 const error = () => {
-  tone({ freq: 260, dur: 0.14, vol: 0.04, type: "triangle", fadeOut: 0.1, lpf: 1200 });
-  tone({ freq: 245, dur: 0.18, vol: 0.03, type: "triangle", fadeOut: 0.14, delay: 0.08, lpf: 1000 });
+  tone({ freq: 330, dur: 0.12, vol: 0.03, type: "triangle", fadeOut: 0.09, lpf: 1500 });
+  tone({ freq: 310, dur: 0.16, vol: 0.025, type: "triangle", fadeOut: 0.12, delay: 0.07, lpf: 1200 });
 };
 
-/** 🔔 Tab switch — minimal tick (barely there) */
+/** 🔔 Tab switch — light tick */
 const tabSwitch = () => {
-  tone({ freq: 800, dur: 0.018, vol: 0.018, type: "triangle", fadeIn: 0.001, fadeOut: 0.012, lpf: 2200 });
+  tone({ freq: 1000, dur: 0.015, vol: 0.015, type: "sine", fadeIn: 0.001, fadeOut: 0.01, lpf: 3500 });
 };
 
-/** 📎 Hover — barely-there presence */
+/** 📎 Hover — whisper */
 const hover = () => {
-  tone({ freq: 1000, dur: 0.012, vol: 0.006, type: "sine", fadeIn: 0.001, fadeOut: 0.008, lpf: 1800 });
+  tone({ freq: 1200, dur: 0.01, vol: 0.005, type: "sine", fadeIn: 0.001, fadeOut: 0.007, lpf: 2500 });
 };
 
 // ══════════════════════════════════════════════
