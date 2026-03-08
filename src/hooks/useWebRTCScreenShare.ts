@@ -385,29 +385,24 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         });
       });
 
-      // Also handle join events — when a new sharer joins, request their stream immediately
       presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
         if (!mounted) return;
         newPresences.forEach((presence: any) => {
           if (presence.isSharing && presence.odId !== currentUserId) {
-            console.log(`[ScreenShare] New sharer joined: ${presence.username}`);
-            setTimeout(() => {
-              signalingChannel.send({
-                type: "broadcast",
-                event: "request-screen",
-                payload: {
-                  broadcasterId: presence.odId,
-                  viewerId: currentUserId,
-                },
-              });
-            }, 500);
+            console.log(`[ScreenShare] New sharer joined: ${presence.username}, requesting stream`);
+            signalingChannel.send({
+              type: "broadcast",
+              event: "request-screen",
+              payload: {
+                broadcasterId: presence.odId,
+                viewerId: currentUserId,
+              },
+            });
           }
-          // If WE are sharing and someone new joins, send them an offer
+          // If WE are sharing and someone new joins, send them an offer immediately
           if (isSharingRef.current && presence.odId !== currentUserId) {
             console.log(`[ScreenShare] New viewer joined: ${presence.odId}, sending offer`);
-            setTimeout(() => {
-              sendOfferRef.current(presence.odId);
-            }, 500);
+            sendOfferRef.current(presence.odId);
           }
         });
       });
