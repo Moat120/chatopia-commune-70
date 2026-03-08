@@ -36,14 +36,7 @@ export const RTC_CONFIG: RTCConfiguration = {
 };
 
 /**
- * Munge SDP for Opus HD voice:
- * - Force stereo=1, sprop-stereo=1
- * - useinbandfec=1 (Forward Error Correction)
- * - usedtx=1 (Discontinuous Transmission - saves bandwidth in silence)
- * - maxaveragebitrate=128000 (128kbps for high quality)
- * - cbr=0 (Variable Bitrate for efficiency)
- * - maxplaybackrate=48000
- * - ptime=20 (20ms frames for low latency)
+ * Munge SDP for Opus HD voice
  */
 export function mungeOpusSDP(sdp: string): string {
   const lines = sdp.split('\r\n');
@@ -52,9 +45,7 @@ export function mungeOpusSDP(sdp: string): string {
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
     
-    // Find Opus fmtpline and enhance it
     if (line.startsWith('a=fmtp:') && line.includes('opus')) {
-      // Remove existing params we want to override
       const existingParams = [
         'stereo', 'sprop-stereo', 'maxaveragebitrate', 'useinbandfec',
         'usedtx', 'cbr', 'maxplaybackrate', 'ptime', 'minptime', 'maxptime'
@@ -64,16 +55,13 @@ export function mungeOpusSDP(sdp: string): string {
         line = line.replace(new RegExp(`;?${param}=\\d+`, 'g'), '');
       }
       
-      // Add optimized params
       line += ';stereo=1;sprop-stereo=1;maxaveragebitrate=128000;useinbandfec=1;usedtx=1;cbr=0;maxplaybackrate=48000;ptime=20;minptime=10;maxptime=40';
     }
     
-    // Prefer Opus codec by moving it to first position
     if (line.startsWith('m=audio')) {
       const parts = line.split(' ');
       const opusPayload = findOpusPayload(lines);
       if (opusPayload && parts.length > 3) {
-        // Move opus payload to first position after port and proto
         const payloads = parts.slice(3).filter(p => p !== opusPayload);
         line = `${parts[0]} ${parts[1]} ${parts[2]} ${opusPayload} ${payloads.join(' ')}`;
       }
@@ -94,9 +82,7 @@ function findOpusPayload(lines: string[]): string | null {
 }
 
 /**
- * Munge SDP for screen sharing video:
- * - High bitrate for crisp screen content
- * - Prefer VP9/H264 for screen content
+ * Munge SDP for screen sharing video - very high bitrate ceiling
  */
 export function mungeScreenShareSDP(sdp: string): string {
   const lines = sdp.split('\r\n');
@@ -110,9 +96,9 @@ export function mungeScreenShareSDP(sdp: string): string {
     
     result.push(line);
     
-    // After video m-line, add high bandwidth
+    // After video m-line, add very high bandwidth ceiling
     if (line.startsWith('m=video')) {
-      result.push('b=AS:20000'); // 20 Mbps max for screen share
+      result.push('b=AS:50000'); // 50 Mbps ceiling — browser will self-regulate
     }
   }
   
@@ -131,8 +117,6 @@ export async function configureAudioSender(sender: RTCRtpSender): Promise<void> 
   params.encodings[0].maxBitrate = 128000;
   params.encodings[0].priority = "high";
   params.encodings[0].networkPriority = "high";
-  
-  // Enable DTX (Discontinuous Transmission) at encoding level
   (params.encodings[0] as any).dtx = true;
   
   try {
@@ -143,41 +127,40 @@ export async function configureAudioSender(sender: RTCRtpSender): Promise<void> 
 }
 
 /**
- * Configure video sender parameters for screen sharing
+ * Configure video sender for screen sharing — maintain resolution, never degrade
  */
 export async function configureScreenShareSender(
   sender: RTCRtpSender, 
-  quality: { width: number; height: number; frameRate: number }
+  quality: { width: number; height: number; frameRate: number; bitrate?: number }
 ): Promise<void> {
-  const params = sender.getParameters();
-  if (!params.encodings || params.encodings.length === 0) {
-    params.encodings = [{}];
-  }
-  
-  // Much higher bitrate for crisp screen content
-  const pixels = quality.width * quality.height;
-  let baseBitrate: number;
-  if (pixels > 2073600) {
-    baseBitrate = 15000000; // 15Mbps for 1440p
-  } else if (pixels > 921600) {
-    baseBitrate = 10000000; // 10Mbps for 1080p
-  } else {
-    baseBitrate = 6000000; // 6Mbps for 720p
-  }
-  const framerateMultiplier = quality.frameRate > 60 ? 1.5 : quality.frameRate > 30 ? 1.2 : 1;
-  
-  params.encodings[0].maxBitrate = Math.round(baseBitrate * framerateMultiplier);
-  params.encodings[0].priority = "high";
-  params.encodings[0].networkPriority = "high";
-  (params.encodings[0] as any).maxFramerate = quality.frameRate;
-  
-  // Content hint for screen content optimization
+  // Set content hint FIRST before touching parameters
   try {
     const track = sender.track;
     if (track && 'contentHint' in track) {
       (track as any).contentHint = 'detail';
     }
   } catch {}
+
+  const params = sender.getParameters();
+  if (!params.encodings || params.encodings.length === 0) {
+    params.encodings = [{}];
+  }
+  
+  // Use provided bitrate or compute from resolution
+  const bitrate = quality.bitrate || (() => {
+    const pixels = quality.width * quality.height;
+    if (pixels > 2073600) return 20_000_000;
+    if (pixels > 921600) return 12_000_000;
+    return 6_000_000;
+  })();
+  
+  params.encodings[0].maxBitrate = bitrate;
+  params.encodings[0].priority = "high";
+  params.encodings[0].networkPriority = "high";
+  (params.encodings[0] as any).maxFramerate = quality.frameRate;
+  
+  // CRITICAL: prevent the browser from reducing resolution when bandwidth is tight
+  params.degradationPreference = "maintain-resolution";
   
   try {
     await sender.setParameters(params);
@@ -188,13 +171,12 @@ export async function configureScreenShareSender(
 
 /**
  * Monitor connection quality via getStats()
- * Returns packet loss %, jitter, RTT
  */
 export interface ConnectionStats {
-  packetLoss: number; // 0-100%
-  jitter: number; // ms
-  rtt: number; // ms
-  bitrate: number; // kbps
+  packetLoss: number;
+  jitter: number;
+  rtt: number;
+  bitrate: number;
   quality: 'excellent' | 'good' | 'poor';
 }
 
@@ -211,7 +193,7 @@ export async function getConnectionStats(pc: RTCPeerConnection): Promise<Connect
       if (report.type === 'inbound-rtp' && report.kind === 'audio') {
         packetsReceived = report.packetsReceived || 0;
         packetsLost = report.packetsLost || 0;
-        jitter = (report.jitter || 0) * 1000; // Convert to ms
+        jitter = (report.jitter || 0) * 1000;
       }
       if (report.type === 'candidate-pair' && report.state === 'succeeded') {
         rtt = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
@@ -255,7 +237,7 @@ export class ICERestartManager {
       return;
     }
     
-    const delay = Math.min(1000 * Math.pow(2, this.attempts), 30000); // 1s, 2s, 4s, 8s, 16s, max 30s
+    const delay = Math.min(1000 * Math.pow(2, this.attempts), 30000);
     this.attempts++;
     
     console.log(`[ICERestart] Scheduling restart attempt ${this.attempts} in ${delay}ms`);

@@ -17,13 +17,13 @@ interface MultiScreenShareViewProps {
 
 const ScreenTile = ({ 
   screen, 
-  isExpanded, 
-  onExpand, 
+  isMain,
+  onSelect,
   onStopLocal 
 }: { 
   screen: ScreenStream;
-  isExpanded: boolean;
-  onExpand: () => void;
+  isMain: boolean;
+  onSelect: () => void;
   onStopLocal?: () => void;
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -40,42 +40,44 @@ const ScreenTile = ({
       videoRef.current.srcObject = screen.stream;
       videoRef.current.muted = isMuted;
       
-      // Check if stream has audio tracks
       const audioTracks = screen.stream.getAudioTracks();
       setHasAudio(audioTracks.length > 0);
+
+      // Re-attach if tracks change (prevents frozen frames)
+      const handleTrackEnded = () => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = screen.stream;
+        }
+      };
+      screen.stream.getVideoTracks().forEach(t => {
+        t.addEventListener('ended', handleTrackEnded);
+        t.addEventListener('mute', handleTrackEnded);
+      });
+
+      return () => {
+        screen.stream.getVideoTracks().forEach(t => {
+          t.removeEventListener('ended', handleTrackEnded);
+          t.removeEventListener('mute', handleTrackEnded);
+        });
+      };
     }
   }, [screen.stream, isMuted]);
 
-  const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev + 0.5, 4));
-  };
-
-  const handleZoomOut = () => {
-    const newZoom = Math.max(zoom - 0.5, 1);
-    setZoom(newZoom);
-    if (newZoom === 1) setPanOffset({ x: 0, y: 0 });
-  };
-
-  const handleResetZoom = () => {
-    setZoom(1);
-    setPanOffset({ x: 0, y: 0 });
-  };
-
-  // Wheel zoom
+  // Wheel zoom (main view only)
   const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!isMain) return;
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.25 : 0.25;
     const newZoom = Math.max(1, Math.min(4, zoom + delta));
     setZoom(newZoom);
     if (newZoom === 1) setPanOffset({ x: 0, y: 0 });
-  }, [zoom]);
+  }, [zoom, isMain]);
 
-  // Pan when zoomed
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (zoom <= 1) return;
+    if (zoom <= 1 || !isMain) return;
     setIsPanning(true);
     panStartRef.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
-  }, [zoom, panOffset]);
+  }, [zoom, panOffset, isMain]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isPanning || zoom <= 1) return;
@@ -85,11 +87,8 @@ const ScreenTile = ({
     });
   }, [isPanning, zoom]);
 
-  const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
-  }, []);
+  const handleMouseUp = useCallback(() => setIsPanning(false), []);
 
-  // Picture-in-Picture
   const handlePiP = async () => {
     try {
       if (videoRef.current && document.pictureInPictureEnabled) {
@@ -104,7 +103,6 @@ const ScreenTile = ({
     }
   };
 
-  // Fullscreen
   const handleFullscreen = async () => {
     try {
       if (containerRef.current) {
@@ -119,27 +117,29 @@ const ScreenTile = ({
     }
   };
 
-  // Double-click to fullscreen
-  const handleDoubleClick = () => {
-    handleFullscreen();
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPanOffset({ x: 0, y: 0 });
   };
 
   return (
     <div 
       ref={containerRef}
       className={cn(
-        "relative rounded-2xl overflow-hidden bg-black/50 border border-white/[0.06]",
-        "transition-all duration-400",
-        isExpanded ? "col-span-full row-span-full" : "",
-        zoom > 1 ? "cursor-grab" : "",
+        "relative rounded-2xl overflow-hidden bg-black/80 border transition-all duration-300",
+        isMain
+          ? "border-primary/30 shadow-lg shadow-primary/10"
+          : "border-white/[0.06] cursor-pointer hover:border-white/20 hover:shadow-md",
+        zoom > 1 && isMain ? "cursor-grab" : "",
         isPanning ? "cursor-grabbing" : ""
       )}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onDoubleClick={handleDoubleClick}
+      onClick={!isMain ? onSelect : undefined}
+      onWheel={isMain ? handleWheel : undefined}
+      onMouseDown={isMain ? handleMouseDown : undefined}
+      onMouseMove={isMain ? handleMouseMove : undefined}
+      onMouseUp={isMain ? handleMouseUp : undefined}
+      onMouseLeave={isMain ? handleMouseUp : undefined}
+      onDoubleClick={isMain ? handleFullscreen : undefined}
     >
       <video
         ref={videoRef}
@@ -148,168 +148,150 @@ const ScreenTile = ({
         muted={isMuted}
         className="w-full h-full object-contain bg-black transition-transform duration-100"
         style={{
-          transform: zoom > 1 ? `scale(${zoom}) translate(${panOffset.x / zoom}px, ${panOffset.y / zoom}px)` : undefined,
+          transform: zoom > 1 && isMain ? `scale(${zoom}) translate(${panOffset.x / zoom}px, ${panOffset.y / zoom}px)` : undefined,
           imageRendering: 'auto',
         }}
       />
       
-      {/* Overlay controls */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300">
-        <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-white text-sm font-semibold truncate max-w-[150px]">
+      {/* Controls overlay - only on main or hover on thumbnails */}
+      <div className={cn(
+        "absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent transition-opacity duration-300",
+        isMain ? "opacity-0 hover:opacity-100" : "opacity-0 hover:opacity-100"
+      )}>
+        <div className="absolute bottom-0 left-0 right-0 p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-white text-xs font-semibold truncate max-w-[120px]">
               {screen.username}
               {screen.isLocal && " (Vous)"}
             </span>
             {hasAudio && (
-              <span className="text-[10px] text-emerald-400 font-medium px-2 py-0.5 rounded-full bg-emerald-500/20">
-                🔊 Audio système
+              <span className="text-[9px] text-emerald-400 font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/20">
+                🔊
               </span>
             )}
           </div>
           
-          <div className="flex items-center gap-1.5">
-            {/* Zoom controls */}
-            {zoom > 1 && (
-              <span className="text-white/70 text-xs font-mono mr-1">{Math.round(zoom * 100)}%</span>
-            )}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 rounded-lg text-white hover:bg-white/20 transition-all duration-200"
-              onClick={handleZoomIn}
-              title="Zoom +"
-            >
-              <ZoomIn className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className={cn(
-                "h-8 w-8 rounded-lg text-white hover:bg-white/20 transition-all duration-200",
-                zoom <= 1 && "opacity-30 pointer-events-none"
+          {isMain && (
+            <div className="flex items-center gap-1">
+              {zoom > 1 && (
+                <span className="text-white/70 text-xs font-mono mr-1">{Math.round(zoom * 100)}%</span>
               )}
-              onClick={handleZoomOut}
-              title="Zoom -"
-            >
-              <ZoomOut className="h-3.5 w-3.5" />
-            </Button>
-
-            {/* Audio mute (only for remote with audio or local) */}
-            {(hasAudio || !screen.isLocal) && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 rounded-lg text-white hover:bg-white/20 transition-all duration-200"
-                onClick={() => setIsMuted(!isMuted)}
-              >
-                {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg text-white hover:bg-white/20" onClick={handleWheel ? () => setZoom(z => Math.min(z + 0.5, 4)) : undefined} title="Zoom +">
+                <ZoomIn className="h-3 w-3" />
               </Button>
-            )}
-
-            {/* PiP */}
-            {document.pictureInPictureEnabled && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 rounded-lg text-white hover:bg-white/20 transition-all duration-200"
-                onClick={handlePiP}
-                title="Picture-in-Picture"
-              >
-                <PictureInPicture2 className="h-3.5 w-3.5" />
+              <Button size="icon" variant="ghost" className={cn("h-7 w-7 rounded-lg text-white hover:bg-white/20", zoom <= 1 && "opacity-30 pointer-events-none")} onClick={() => { const nz = Math.max(zoom - 0.5, 1); setZoom(nz); if (nz === 1) setPanOffset({ x: 0, y: 0 }); }} title="Zoom -">
+                <ZoomOut className="h-3 w-3" />
               </Button>
-            )}
-
-            {/* Fullscreen */}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 rounded-lg text-white hover:bg-white/20 transition-all duration-200"
-              onClick={handleFullscreen}
-              title="Plein écran"
-            >
-              <Maximize className="h-3.5 w-3.5" />
-            </Button>
-            
-            {/* Expand */}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 rounded-lg text-white hover:bg-white/20 transition-all duration-200"
-              onClick={onExpand}
-            >
-              {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            </Button>
-            
-            {/* Stop local share */}
-            {screen.isLocal && onStopLocal && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/20 transition-all duration-200"
-                onClick={() => onStopLocal()}
-              >
-                <X className="h-3.5 w-3.5" />
+              {(hasAudio || !screen.isLocal) && (
+                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg text-white hover:bg-white/20" onClick={() => setIsMuted(!isMuted)}>
+                  {isMuted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+                </Button>
+              )}
+              {document.pictureInPictureEnabled && (
+                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg text-white hover:bg-white/20" onClick={handlePiP} title="PiP">
+                  <PictureInPicture2 className="h-3 w-3" />
+                </Button>
+              )}
+              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg text-white hover:bg-white/20" onClick={handleFullscreen} title="Plein écran">
+                <Maximize className="h-3 w-3" />
               </Button>
-            )}
-          </div>
+              {screen.isLocal && onStopLocal && (
+                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg text-destructive hover:bg-destructive/20" onClick={() => onStopLocal()}>
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Top bar with zoom reset */}
-        {zoom > 1 && (
-          <div className="absolute top-4 right-20">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-white/70 hover:text-white hover:bg-white/20 text-xs h-7 px-2 rounded-lg"
-              onClick={handleResetZoom}
-            >
-              Réinitialiser le zoom
+        {isMain && zoom > 1 && (
+          <div className="absolute top-3 right-3">
+            <Button size="sm" variant="ghost" className="text-white/70 hover:text-white hover:bg-white/20 text-xs h-6 px-2 rounded-lg" onClick={handleResetZoom}>
+              Reset zoom
             </Button>
           </div>
         )}
       </div>
 
-      {/* Live badge */}
-      <div className="absolute top-4 left-4">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-destructive/90 text-destructive-foreground text-xs font-bold shadow-lg shadow-destructive/30">
-          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+      {/* LIVE badge */}
+      <div className="absolute top-3 left-3">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-destructive/90 text-destructive-foreground text-[10px] font-bold shadow-lg shadow-destructive/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
           LIVE
         </div>
       </div>
+
+      {/* Thumbnail label when not main */}
+      {!isMain && (
+        <div className="absolute bottom-2 left-2 right-2">
+          <span className="text-white text-[10px] font-medium bg-black/60 px-2 py-0.5 rounded">
+            {screen.username}{screen.isLocal ? " (Vous)" : ""}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
 
 const MultiScreenShareView = ({ screens, onStopLocal }: MultiScreenShareViewProps) => {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [mainScreenId, setMainScreenId] = useState<string | null>(null);
+
+  // Default to first screen or local screen as main
+  useEffect(() => {
+    if (screens.length === 0) {
+      setMainScreenId(null);
+      return;
+    }
+    if (!mainScreenId || !screens.find(s => s.odId === mainScreenId)) {
+      // Prefer first remote screen, fallback to first
+      const remote = screens.find(s => !s.isLocal);
+      setMainScreenId(remote?.odId || screens[0].odId);
+    }
+  }, [screens, mainScreenId]);
 
   if (screens.length === 0) return null;
 
-  const gridCols = screens.length === 1 ? 1 : screens.length <= 4 ? 2 : 3;
+  const mainScreen = screens.find(s => s.odId === mainScreenId) || screens[0];
+  const thumbnails = screens.filter(s => s.odId !== mainScreen.odId);
 
+  // Single screen — full view
+  if (screens.length === 1) {
+    return (
+      <div className="w-full h-full p-3">
+        <ScreenTile
+          screen={screens[0]}
+          isMain={true}
+          onSelect={() => {}}
+          onStopLocal={screens[0].isLocal ? onStopLocal : undefined}
+        />
+      </div>
+    );
+  }
+
+  // Multiple screens — main + sidebar thumbnails
   return (
-    <div className="w-full h-full p-4">
-      <div 
-        className={cn(
-          "grid gap-4 h-full",
-          expandedId ? "grid-cols-1 grid-rows-1" : "",
-          !expandedId && gridCols === 1 && "grid-cols-1",
-          !expandedId && gridCols === 2 && "grid-cols-2",
-          !expandedId && gridCols === 3 && "grid-cols-3"
-        )}
-        style={{
-          gridAutoRows: expandedId ? "1fr" : "minmax(0, 1fr)"
-        }}
-      >
-        {screens.map((screen) => (
-          <ScreenTile
-            key={screen.odId}
-            screen={screen}
-            isExpanded={expandedId === screen.odId}
-            onExpand={() => setExpandedId(expandedId === screen.odId ? null : screen.odId)}
-            onStopLocal={screen.isLocal ? onStopLocal : undefined}
-          />
+    <div className="w-full h-full p-3 flex gap-3">
+      {/* Main view */}
+      <div className="flex-1 min-w-0">
+        <ScreenTile
+          screen={mainScreen}
+          isMain={true}
+          onSelect={() => {}}
+          onStopLocal={mainScreen.isLocal ? onStopLocal : undefined}
+        />
+      </div>
+
+      {/* Sidebar thumbnails */}
+      <div className="w-48 flex flex-col gap-2 overflow-y-auto">
+        {thumbnails.map((screen) => (
+          <div key={screen.odId} className="aspect-video flex-shrink-0">
+            <ScreenTile
+              screen={screen}
+              isMain={false}
+              onSelect={() => setMainScreenId(screen.odId)}
+              onStopLocal={screen.isLocal ? onStopLocal : undefined}
+            />
+          </div>
         ))}
       </div>
     </div>
