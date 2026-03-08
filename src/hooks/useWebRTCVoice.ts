@@ -884,7 +884,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     currentUsername,
     currentPresenceAvatar,
     isConnecting,
-    clearConflictingVoiceChannels,
+    clearOwnVoiceChannels,
     startVoiceDetection,
     startStatsMonitoring,
     cleanup,
