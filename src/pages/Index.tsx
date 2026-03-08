@@ -7,17 +7,19 @@ import PrivateCallPanel from "@/components/friends/PrivateCallPanel";
 import GroupChatPanel from "@/components/groups/GroupChatPanel";
 import GroupVoiceChannel from "@/components/groups/GroupVoiceChannel";
 import SearchPalette from "@/components/chat/SearchPalette";
+import KeyboardShortcutsDialog from "@/components/KeyboardShortcutsDialog";
 import { Friend } from "@/hooks/useFriends";
 import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Phone, PhoneOff } from "lucide-react";
+import { MessageCircle, Phone, PhoneOff, WifiOff } from "lucide-react";
 import { playNotificationSound, RingtoneManager } from "@/hooks/useSound";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { usePresence } from "@/hooks/usePresence";
 import { useCallCleanup } from "@/hooks/useCallCleanup";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTabTitle } from "@/hooks/useTabTitle";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
@@ -32,6 +34,8 @@ const Index = () => {
   useCallCleanup();
   useNotifications();
   useTabTitle();
+
+  const { isOnline } = useOnlineStatus();
 
   const ringtoneRef = useRef(new RingtoneManager());
 
@@ -49,7 +53,7 @@ const Index = () => {
     callId: string;
   } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   useKeyboardShortcuts({
     onEscape: useCallback(() => {
       if (incomingCall) return;
@@ -57,6 +61,11 @@ const Index = () => {
       else if (selectedGroup) setSelectedGroup(null);
     }, [selectedFriend, selectedGroup, incomingCall]),
     onSearch: useCallback(() => setSearchOpen(true), []),
+    onShowShortcuts: useCallback(() => setShortcutsOpen(prev => !prev), []),
+    onSwitchTab: useCallback((tab: number) => {
+      if (tab === 1) setViewMode("messages");
+      else if (tab === 2) setViewMode("groups");
+    }, []),
   });
 
   // Incoming calls listener
@@ -133,37 +142,46 @@ const Index = () => {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="h-screen w-screen overflow-hidden">
-        <div className="h-full w-full flex bg-background">
-          {/* Unified Sidebar */}
-          <UnifiedSidebar
-            tab={viewMode}
-            onTabChange={setViewMode}
-            selectedFriend={selectedFriend}
-            onSelectFriend={setSelectedFriend}
-            selectedGroup={selectedGroup}
-            onSelectGroup={setSelectedGroup}
-            onStartCall={handleStartCall}
-            onStartGroupCall={handleStartGroupCall}
-            onOpenSearch={() => setSearchOpen(true)}
-          />
+        <div className="h-full w-full flex flex-col bg-background">
+          {/* Offline Banner */}
+          {!isOnline && (
+            <div className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-destructive/90 text-destructive-foreground text-sm font-medium animate-fade-in-down">
+              <WifiOff className="h-4 w-4" />
+              Connexion perdue — en attente de reconnexion…
+            </div>
+          )}
+          <div className="flex-1 flex min-h-0">
+            {/* Unified Sidebar */}
+            <UnifiedSidebar
+              tab={viewMode}
+              onTabChange={setViewMode}
+              selectedFriend={selectedFriend}
+              onSelectFriend={setSelectedFriend}
+              selectedGroup={selectedGroup}
+              onSelectGroup={setSelectedGroup}
+              onStartCall={handleStartCall}
+              onStartGroupCall={handleStartGroupCall}
+              onOpenSearch={() => setSearchOpen(true)}
+            />
 
-          {/* Main Content */}
-          <div className="flex-1 flex flex-col min-w-0">
-            {viewMode === "messages" && selectedFriend ? (
-              <PrivateChatPanel
-                friend={selectedFriend}
-                onClose={() => setSelectedFriend(null)}
-                onStartCall={() => handleStartCall(selectedFriend)}
-              />
-            ) : viewMode === "groups" && selectedGroup ? (
-              <GroupChatPanel
-                group={selectedGroup}
-                onClose={() => setSelectedGroup(null)}
-                onStartCall={() => handleStartGroupCall(selectedGroup)}
-              />
-            ) : (
-              <EmptyState viewMode={viewMode} />
-            )}
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col min-w-0">
+              {viewMode === "messages" && selectedFriend ? (
+                <PrivateChatPanel
+                  friend={selectedFriend}
+                  onClose={() => setSelectedFriend(null)}
+                  onStartCall={() => handleStartCall(selectedFriend)}
+                />
+              ) : viewMode === "groups" && selectedGroup ? (
+                <GroupChatPanel
+                  group={selectedGroup}
+                  onClose={() => setSelectedGroup(null)}
+                  onStartCall={() => handleStartGroupCall(selectedGroup)}
+                />
+              ) : (
+                <EmptyState viewMode={viewMode} />
+              )}
+            </div>
           </div>
         </div>
 
@@ -209,6 +227,9 @@ const Index = () => {
             setSelectedGroup(group);
           }}
         />
+
+        {/* Keyboard Shortcuts */}
+        <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       </div>
     </TooltipProvider>
   );
@@ -217,7 +238,7 @@ const Index = () => {
 /* ─── Empty State ─── */
 const EmptyState = ({ viewMode }: { viewMode: ViewMode }) => (
   <div className="flex-1 flex items-center justify-center h-full bg-background">
-    <div className="text-center">
+    <div className="text-center animate-fade-in-up">
       <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/30 border border-border flex items-center justify-center">
         <MessageCircle className="h-9 w-9 text-muted-foreground/40" />
       </div>
@@ -228,6 +249,12 @@ const EmptyState = ({ viewMode }: { viewMode: ViewMode }) => (
         {viewMode === "messages"
           ? "Sélectionne un ami pour démarrer une conversation"
           : "Sélectionne un groupe ou crée-en un nouveau"}
+      </p>
+      <p className="text-muted-foreground/40 text-xs mt-4">
+        <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border text-[10px] font-mono">Ctrl</kbd>
+        {" + "}
+        <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border text-[10px] font-mono">/</kbd>
+        {" pour les raccourcis"}
       </p>
     </div>
   </div>

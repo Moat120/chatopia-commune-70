@@ -237,6 +237,48 @@ const unmute = () => {
   slide(500, 1100, 0.05, 0.03, "sine", 4500);
 };
 
+/** 🔇 Deafen — deep descending double-tone */
+const deafen = () => {
+  tone({ freq: 600, dur: 0.08, vol: 0.035, type: "sine", fadeOut: 0.06, lpf: 2500 });
+  tone({ freq: 400, dur: 0.12, vol: 0.03, type: "sine", fadeOut: 0.09, delay: 0.06, lpf: 2000 });
+  noiseBurst(0.015, 0.03, 1500);
+};
+
+/** 🔊 Undeafen — warm ascending restore */
+const undeafen = () => {
+  tone({ freq: 500, dur: 0.08, vol: 0.035, type: "sine", fadeOut: 0.06, lpf: 3500 });
+  tone({ freq: 800, dur: 0.1, vol: 0.03, type: "sine", fadeOut: 0.08, delay: 0.06, lpf: 4000 });
+  tone({ freq: 1100, dur: 0.12, vol: 0.025, type: "sine", fadeOut: 0.1, delay: 0.12, lpf: 4500 });
+};
+
+/** 🖥️ Screen share start — tech ascending chirp */
+const screenShareStart = () => {
+  noiseBurst(0.01, 0.03, 5000);
+  tone({ freq: 880, dur: 0.06, vol: 0.03, type: "sine", fadeOut: 0.04, lpf: 5000 });
+  tone({ freq: 1320, dur: 0.08, vol: 0.025, type: "sine", fadeOut: 0.06, delay: 0.05, lpf: 4500 });
+  tone({ freq: 1760, dur: 0.1, vol: 0.02, type: "sine", fadeOut: 0.08, delay: 0.1, lpf: 4000 });
+};
+
+/** 🖥️ Screen share stop — tech descending chirp */
+const screenShareStop = () => {
+  tone({ freq: 1320, dur: 0.06, vol: 0.025, type: "sine", fadeOut: 0.04, lpf: 4000 });
+  tone({ freq: 880, dur: 0.08, vol: 0.02, type: "sine", fadeOut: 0.06, delay: 0.05, lpf: 3000 });
+  noiseBurst(0.01, 0.025, 2500);
+};
+
+/** 👤 User joined voice — soft pop */
+const userJoined = () => {
+  noiseBurst(0.008, 0.03, 4000);
+  tone({ freq: 1047, dur: 0.05, vol: 0.025, type: "sine", fadeOut: 0.04, lpf: 4500 });
+  tone({ freq: 1319, dur: 0.06, vol: 0.02, type: "sine", fadeOut: 0.05, delay: 0.04, lpf: 4000 });
+};
+
+/** 👤 User left voice — soft descending */
+const userLeft = () => {
+  tone({ freq: 1047, dur: 0.05, vol: 0.02, type: "sine", fadeOut: 0.04, lpf: 3500 });
+  tone({ freq: 784, dur: 0.07, vol: 0.015, type: "sine", fadeOut: 0.05, delay: 0.04, lpf: 3000 });
+};
+
 /** 🎙️ PTT on — sharp engage */
 const pttOn = () => {
   noiseBurst(0.008, 0.05, 5000);
@@ -319,6 +361,12 @@ export const useSound = () => ({
   playMessageReceived: useCallback(messageReceived, []),
   playMute: useCallback(mute, []),
   playUnmute: useCallback(unmute, []),
+  playDeafen: useCallback(deafen, []),
+  playUndeafen: useCallback(undeafen, []),
+  playScreenShareStart: useCallback(screenShareStart, []),
+  playScreenShareStop: useCallback(screenShareStop, []),
+  playUserJoined: useCallback(userJoined, []),
+  playUserLeft: useCallback(userLeft, []),
   playPttOn: useCallback(pttOn, []),
   playPttOff: useCallback(pttOff, []),
   playSuccess: useCallback(success, []),
@@ -341,6 +389,12 @@ export const playMessageSentSound = messageSent;
 export const playMessageReceivedSound = messageReceived;
 export const playMuteSound = mute;
 export const playUnmuteSound = unmute;
+export const playDeafenSound = deafen;
+export const playUndeafenSound = undeafen;
+export const playScreenShareStartSound = screenShareStart;
+export const playScreenShareStopSound = screenShareStop;
+export const playUserJoinedSound = userJoined;
+export const playUserLeftSound = userLeft;
 export const playPttOnSound = pttOn;
 export const playPttOffSound = pttOff;
 export const playSuccessSound = success;

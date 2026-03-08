@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Volume2, Users, Sparkles, MicOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -6,6 +6,7 @@ import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
 import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
 import { useSimpleLatency } from "@/hooks/useConnectionLatency";
 import { useAuth } from "@/contexts/AuthContext";
+import { playUserJoinedSound, playUserLeftSound, playDeafenSound, playUndeafenSound, playScreenShareStartSound, playScreenShareStopSound } from "@/hooks/useSound";
 import VoiceUserCard from "@/components/voice/VoiceUserCard";
 import VoiceControlsWithScreenShare from "@/components/voice/VoiceControlsWithScreenShare";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
@@ -52,6 +53,30 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
 
   // Observe participants when not connected
   const { participants: presenceParticipants } = useVoicePresence(isConnected ? null : group.id);
+
+  // Track user join/leave for sound effects
+  const prevUserIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isConnected) return;
+    const currentIds = new Set(connectedUsers.map(u => u.odId));
+    const prevIds = prevUserIdsRef.current;
+
+    // New users that joined (not ourselves)
+    currentIds.forEach(id => {
+      if (!prevIds.has(id) && id !== currentUserId && prevIds.size > 0) {
+        playUserJoinedSound();
+      }
+    });
+
+    // Users that left
+    prevIds.forEach(id => {
+      if (!currentIds.has(id) && id !== currentUserId) {
+        playUserLeftSound();
+      }
+    });
+
+    prevUserIdsRef.current = currentIds;
+  }, [connectedUsers, isConnected, currentUserId]);
 
   // Override local user's isSpeaking with real-time audioLevel (presence sync is too slow)
   const localSpeaking = audioLevel > 0.08 && !isMuted;
@@ -125,20 +150,23 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   };
 
   const handleToggleDeafen = useCallback(() => {
-    setIsDeafened(prev => !prev);
+    const newDeafened = !isDeafened;
+    setIsDeafened(newDeafened);
+    if (newDeafened) playDeafenSound(); else playUndeafenSound();
     document.querySelectorAll('audio').forEach(audio => {
-      if (audio.srcObject) { audio.muted = !isDeafened; }
+      if (audio.srcObject) { audio.muted = newDeafened; }
     });
   }, [isDeafened]);
 
   const handleToggleScreenShare = () => {
-    if (isSharing) { stopScreenShare(); } else { setQualityDialogOpen(true); }
+    if (isSharing) { stopScreenShare(); playScreenShareStopSound(); } else { setQualityDialogOpen(true); }
   };
 
   const handleSelectQuality = async (quality: ScreenQuality) => {
     const preset = QUALITY_PRESETS[quality];
     const stream = await startScreenShare(quality);
     if (stream) {
+      playScreenShareStartSound();
       toast({ title: "Partage d'écran", description: `Tu partages ton écran en ${preset.height}p ${preset.frameRate}fps` });
     }
   };
