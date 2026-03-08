@@ -7,11 +7,12 @@ import PrivateCallPanel from "@/components/friends/PrivateCallPanel";
 import GroupsSidebar from "@/components/groups/GroupsSidebar";
 import GroupChatPanel from "@/components/groups/GroupChatPanel";
 import GroupVoiceChannel from "@/components/groups/GroupVoiceChannel";
+import SearchPalette from "@/components/chat/SearchPalette";
 import { Friend } from "@/hooks/useFriends";
 import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Users, Phone, PhoneOff, Sparkles } from "lucide-react";
+import { MessageCircle, Users, Phone, PhoneOff, Sparkles, Search } from "lucide-react";
 import { playNotificationSound, RingtoneManager } from "@/hooks/useSound";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
