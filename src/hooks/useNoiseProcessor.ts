@@ -94,26 +94,42 @@ export class AdvancedNoiseProcessor {
         const rnnoiseModule = await import('@sapphi-red/web-noise-suppressor');
         const { RnnoiseWorkletNode, loadRnnoise } = rnnoiseModule;
 
-        // Use ?url suffix for Vite to get resolved URLs
-        const rnnoiseWorkletUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url')).default;
-        const rnnoiseWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise.wasm?url')).default;
-        
-        // Try SIMD first, fallback to non-SIMD
-        let rnnoiseSimdWasmUrl: string | undefined;
+        let wasmBinary: any;
+        let rnnoiseSource = 'public/rnnoise';
+
         try {
-          rnnoiseSimdWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url')).default;
-        } catch {
-          console.log('[AdvancedNoiseProcessor] SIMD WASM not available, using non-SIMD');
+          // Priorité aux fichiers locaux (public/rnnoise/*)
+          await this.audioContext.audioWorklet.addModule('/rnnoise/rnnoiseWorklet.js');
+          try {
+            wasmBinary = await loadRnnoise({
+              url: '/rnnoise/rnnoise.wasm',
+              simdUrl: '/rnnoise/rnnoise_simd.wasm',
+            });
+          } catch {
+            wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: undefined });
+          }
+        } catch (localAssetsError) {
+          // Fallback Vite-bundled assets
+          rnnoiseSource = 'vite-bundled';
+
+          const rnnoiseWorkletUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url')).default;
+          const rnnoiseWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise.wasm?url')).default;
+
+          let rnnoiseSimdWasmUrl: string | undefined;
+          try {
+            rnnoiseSimdWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url')).default;
+          } catch {
+            console.log('[AdvancedNoiseProcessor] SIMD WASM not available, using non-SIMD');
+          }
+
+          wasmBinary = await loadRnnoise({
+            url: rnnoiseWasmUrl,
+            simdUrl: rnnoiseSimdWasmUrl,
+          });
+
+          await this.audioContext.audioWorklet.addModule(rnnoiseWorkletUrl);
+          console.warn('[AdvancedNoiseProcessor] Local RNNoise assets unavailable, fallback used:', localAssetsError);
         }
-
-        // Charger le binaire WASM (avec support SIMD automatique)
-        const wasmBinary = await loadRnnoise({
-          url: rnnoiseWasmUrl,
-          simdUrl: rnnoiseSimdWasmUrl,
-        });
-
-        // Charger le worklet processor
-        await this.audioContext.audioWorklet.addModule(rnnoiseWorkletUrl);
 
         // Créer le node RNNoise
         this.rnnoiseNode = new RnnoiseWorkletNode(this.audioContext, {
@@ -125,7 +141,7 @@ export class AdvancedNoiseProcessor {
         lastNode.connect(this.rnnoiseNode);
         lastNode = this.rnnoiseNode;
 
-        console.log('[AdvancedNoiseProcessor] ✅ RNNoise WASM loaded - neural network noise suppression active');
+        console.log(`[AdvancedNoiseProcessor] ✅ RNNoise WASM loaded from ${rnnoiseSource} - neural network noise suppression active`);
       } catch (rnnoiseError) {
         console.warn('[AdvancedNoiseProcessor] ⚠️ RNNoise WASM failed, trying fallback noise gate:', rnnoiseError);
         this.useRnnoise = false;
