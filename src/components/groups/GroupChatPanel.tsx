@@ -36,7 +36,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
   const { user } = useAuth();
   const { messages, loading, sendMessage } = useGroupChat(group.id);
   const { getGroupMembers } = useGroups();
-  const { playMessageSent } = useSound();
+  const { playMessageSent, playMessageReceived } = useSound();
   const channelId = `group-${group.id}`;
   const { isTyping, typingUsers, startTyping, stopTyping } = useTypingIndicator(channelId);
   const [input, setInput] = useState("");
