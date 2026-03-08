@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { playTabSwitchSound } from "@/hooks/useSound";
 import { useFriends, Friend } from "@/hooks/useFriends";
 import { useGroups, Group } from "@/hooks/useGroups";
 import { useAuth } from "@/contexts/AuthContext";
@@ -108,14 +109,14 @@ const UnifiedSidebar = ({
         <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/40 border border-white/[0.04]">
           <TabButton
             active={tab === "messages"}
-            onClick={() => { onTabChange("messages"); onSelectGroup(null); }}
+            onClick={() => { playTabSwitchSound(); onTabChange("messages"); onSelectGroup(null); }}
             icon={<MessageCircle className="h-4 w-4" />}
             label="Messages"
             badge={totalUnread > 0 ? totalUnread : undefined}
           />
           <TabButton
             active={tab === "groups"}
-            onClick={() => { onTabChange("groups"); onSelectFriend(null); }}
+            onClick={() => { playTabSwitchSound(); onTabChange("groups"); onSelectFriend(null); }}
             icon={<Users className="h-4 w-4" />}
             label="Groupes"
           />
