@@ -144,6 +144,8 @@ const SettingsDialog = () => {
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const processedSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const spectrumAnimRef = useRef<number | null>(null);
   const { toast } = useToast();
 
   // Load microphones
@@ -366,8 +368,10 @@ const SettingsDialog = () => {
       const source = audioContextRef.current.createMediaStreamSource(stream);
       sourceNodeRef.current = source;
       analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      analyserRef.current.smoothingTimeConstant = 0.5;
+      analyserRef.current.fftSize = 512;
+      analyserRef.current.smoothingTimeConstant = 0.65;
+      analyserRef.current.minDecibels = -90;
+      analyserRef.current.maxDecibels = -10;
       source.connect(analyserRef.current);
 
       // Apply AdvancedNoiseProcessor for loopback (RNNoise + filters)
@@ -405,42 +409,82 @@ const SettingsDialog = () => {
       isTestingRef.current = true;
       setIsTesting(true);
 
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      // dataArray created inside drawSpectrum
       let noiseFloor = 255;
       let peakLevel = 0;
       let sampleCount = 0;
 
-      const monitor = () => {
-        if (!analyserRef.current || !isTestingRef.current) return;
+      const drawSpectrum = () => {
+        const canvas = spectrumCanvasRef.current;
+        const analyser = analyserRef.current;
+        if (!canvas || !analyser || !isTestingRef.current) return;
 
-        analyserRef.current.getByteFrequencyData(dataArray);
-        
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i] * dataArray[i];
-        }
-        const rms = Math.sqrt(sum / dataArray.length);
-        const normalizedLevel = Math.min(rms / 100, 1);
-        
-        setAudioLevel(normalizedLevel * 100);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
 
-        sampleCount++;
-        if (sampleCount > 10) {
-          const avgLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          if (avgLevel < noiseFloor && avgLevel > 0) noiseFloor = avgLevel;
-          if (avgLevel > peakLevel) peakLevel = avgLevel;
+        const freqData = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(freqData);
 
-          const snr = peakLevel - noiseFloor;
-          if (snr > 40) {
-            setAudioQuality("excellent");
-          } else if (snr > 20) {
-            setAudioQuality("good");
-          } else {
-            setAudioQuality("poor");
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // Draw frequency bars
+        const barCount = 64;
+        const step = Math.floor(freqData.length / barCount);
+        const barWidth = w / barCount - 1;
+
+        for (let i = 0; i < barCount; i++) {
+          // Average a range of bins for smoother look
+          let sum = 0;
+          for (let j = 0; j < step; j++) {
+            sum += freqData[i * step + j];
+          }
+          const avg = sum / step;
+          const barHeight = (avg / 255) * h;
+
+          // Color gradient from primary (low freq) to accent (high freq)
+          const ratio = i / barCount;
+          const hue = 200 + ratio * 120; // blue → green
+          const lightness = 45 + (avg / 255) * 20;
+          ctx.fillStyle = `hsl(${hue}, 80%, ${lightness}%)`;
+
+          const x = i * (barWidth + 1);
+          ctx.fillRect(x, h - barHeight, barWidth, barHeight);
+
+          // Glow effect on active bars
+          if (avg > 80) {
+            ctx.shadowColor = `hsl(${hue}, 80%, 60%)`;
+            ctx.shadowBlur = 6;
+            ctx.fillRect(x, h - barHeight, barWidth, 2);
+            ctx.shadowBlur = 0;
           }
         }
 
-        animationRef.current = requestAnimationFrame(monitor);
+        // Level & quality update
+        let rmsSum = 0;
+        for (let i = 0; i < freqData.length; i++) {
+          rmsSum += freqData[i] * freqData[i];
+        }
+        const rms = Math.sqrt(rmsSum / freqData.length);
+        setAudioLevel(Math.min(rms / 100, 1) * 100);
+
+        sampleCount++;
+        if (sampleCount > 10) {
+          const avgLevel = freqData.reduce((a: number, b: number) => a + b, 0) / freqData.length;
+          if (avgLevel < noiseFloor && avgLevel > 0) noiseFloor = avgLevel;
+          if (avgLevel > peakLevel) peakLevel = avgLevel;
+          const snr = peakLevel - noiseFloor;
+          if (snr > 40) setAudioQuality("excellent");
+          else if (snr > 20) setAudioQuality("good");
+          else setAudioQuality("poor");
+        }
+
+        animationRef.current = requestAnimationFrame(drawSpectrum);
+      };
+
+      const monitor = () => {
+        drawSpectrum();
       };
 
       monitor();
@@ -711,6 +755,16 @@ const SettingsDialog = () => {
                         <div 
                           className="h-full bg-gradient-to-r from-success via-warning to-destructive transition-all duration-75 rounded-full"
                           style={{ width: `${audioLevel}%` }}
+                        />
+                      </div>
+
+                      {/* Frequency Spectrum Visualizer */}
+                      <div className="rounded-xl overflow-hidden bg-black/30 border border-white/[0.04]">
+                        <canvas
+                          ref={spectrumCanvasRef}
+                          width={400}
+                          height={80}
+                          className="w-full h-20"
                         />
                       </div>
                       <p className="text-xs text-muted-foreground/70">
