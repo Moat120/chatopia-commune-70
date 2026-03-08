@@ -159,7 +159,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   }, [isDeafened]);
 
   const handleToggleScreenShare = () => {
-    if (isSharing) { stopScreenShare(); } else { setQualityDialogOpen(true); }
+    if (isSharing) { stopScreenShare(); playScreenShareStopSound(); } else { setQualityDialogOpen(true); }
   };
 
   const handleSelectQuality = async (quality: ScreenQuality) => {
