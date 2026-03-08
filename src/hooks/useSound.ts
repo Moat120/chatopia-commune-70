@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 
 // ══════════════════════════════════════════════
-//  AIRY SOUND ENGINE v3
-//  Bright, open, spacious UI sounds
-//  Higher frequencies, more reverb-like tails
+//  iOS SOUND ENGINE v4
+//  Faithful recreation of Apple iOS system sounds
+//  Crystalline, precise, haptic-feeling tones
 // ══════════════════════════════════════════════
 
 let audioCtx: AudioContext | null = null;
@@ -29,6 +29,7 @@ interface ToneOpts {
   fadeOut?: number;
   detune?: number;
   lpf?: number;
+  hpf?: number;
   delay?: number;
 }
 
@@ -38,15 +39,16 @@ const tone = (opts: ToneOpts) => {
     const {
       freq, dur, vol,
       type = "sine",
-      fadeIn = 0.01,
-      fadeOut = 0.08,
+      fadeIn = 0.003,
+      fadeOut = 0.06,
       detune = 0,
       lpf,
+      hpf,
       delay = 0,
     } = opts;
 
     const t = ctx.currentTime + delay;
-    const v = Math.min(vol, 0.3);
+    const v = Math.min(vol, 0.35);
 
     const osc = ctx.createOscillator();
     osc.type = type;
@@ -60,23 +62,33 @@ const tone = (opts: ToneOpts) => {
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
     const compressor = ctx.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-20, t);
-    compressor.knee.setValueAtTime(15, t);
-    compressor.ratio.setValueAtTime(3, t);
+    compressor.threshold.setValueAtTime(-18, t);
+    compressor.knee.setValueAtTime(12, t);
+    compressor.ratio.setValueAtTime(4, t);
 
-    osc.connect(gain);
+    let chain: AudioNode = gain;
+
+    if (hpf) {
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.setValueAtTime(hpf, t);
+      hp.Q.setValueAtTime(0.5, t);
+      osc.connect(hp);
+      hp.connect(gain);
+    } else {
+      osc.connect(gain);
+    }
 
     if (lpf) {
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
       filter.frequency.setValueAtTime(lpf, t);
-      filter.Q.setValueAtTime(0.3, t);
-      gain.connect(filter);
-      filter.connect(compressor);
-    } else {
-      gain.connect(compressor);
+      filter.Q.setValueAtTime(0.7, t);
+      chain.connect(filter);
+      chain = filter;
     }
 
+    chain.connect(compressor);
     compressor.connect(ctx.destination);
 
     osc.start(t);
@@ -84,28 +96,6 @@ const tone = (opts: ToneOpts) => {
   } catch {
     // Silently ignore
   }
-};
-
-/** Play a bright chord with stagger */
-const chord = (
-  freqs: number[],
-  dur: number,
-  vol: number,
-  type: OscillatorType = "sine",
-  stagger = 0,
-  lpf?: number
-) => {
-  freqs.forEach((freq, i) => {
-    tone({
-      freq,
-      dur,
-      vol: vol / freqs.length,
-      type,
-      delay: i * stagger / 1000,
-      lpf,
-      fadeOut: dur * 0.4,
-    });
-  });
 };
 
 /** Frequency slide (portamento) */
@@ -129,7 +119,7 @@ const slide = (
 
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(v, t + 0.005);
+    gain.gain.linearRampToValueAtTime(v, t + 0.003);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
     osc.connect(gain);
@@ -138,7 +128,7 @@ const slide = (
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
       filter.frequency.setValueAtTime(lpf, t);
-      filter.Q.setValueAtTime(0.3, t);
+      filter.Q.setValueAtTime(0.5, t);
       gain.connect(filter);
       filter.connect(ctx.destination);
     } else {
@@ -152,101 +142,167 @@ const slide = (
   }
 };
 
-// ══════════════════════════════════════════════
-//  SOUND PRESETS — bright, airy, open
-// ══════════════════════════════════════════════
-
-/** ✨ Bright wind-chime — notification */
-const notification = () => {
-  tone({ freq: 587, dur: 0.2, vol: 0.04, type: "sine", fadeOut: 0.16, lpf: 4500 });
-  tone({ freq: 784, dur: 0.25, vol: 0.035, type: "sine", fadeOut: 0.2, delay: 0.1, lpf: 4200 });
-  tone({ freq: 988, dur: 0.35, vol: 0.025, type: "sine", fadeOut: 0.3, delay: 0.2, lpf: 3800 });
+/** Short noise burst for haptic feel */
+const noiseBurst = (dur: number, vol: number, lpf = 3000) => {
+  try {
+    const ctx = getCtx();
+    const t = ctx.currentTime;
+    const bufferSize = Math.floor(ctx.sampleRate * dur);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+    }
+    
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(Math.min(vol, 0.15), t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(lpf, t);
+    filter.Q.setValueAtTime(1.5, t);
+    
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    
+    source.start(t);
+  } catch {}
 };
 
-/** 🖱️ Light tap — button click */
+// ══════════════════════════════════════════════
+//  iOS SOUND PRESETS
+// ══════════════════════════════════════════════
+
+/** 📱 iOS Haptic Tap — ultra-short crystalline tick like Taptic Engine */
 const click = () => {
-  tone({ freq: 880, dur: 0.015, vol: 0.02, type: "sine", fadeIn: 0.001, fadeOut: 0.01, lpf: 3500 });
-  tone({ freq: 1760, dur: 0.008, vol: 0.006, type: "sine", fadeIn: 0.001, fadeOut: 0.005, delay: 0.003, lpf: 4000 });
+  noiseBurst(0.012, 0.06, 4500);
+  tone({ freq: 1800, dur: 0.008, vol: 0.03, type: "sine", fadeIn: 0.001, fadeOut: 0.005, lpf: 5000 });
 };
 
-/** 🟢 Bright ascending — user join */
-const join = () => {
-  tone({ freq: 523, dur: 0.14, vol: 0.035, type: "sine", fadeOut: 0.11, lpf: 4000 });
-  tone({ freq: 659, dur: 0.18, vol: 0.03, type: "sine", fadeOut: 0.14, delay: 0.1, lpf: 3800 });
-  tone({ freq: 880, dur: 0.28, vol: 0.025, type: "sine", fadeOut: 0.22, delay: 0.2, lpf: 3500 });
-};
-
-/** 🔴 Soft descending — user leave */
-const leave = () => {
-  tone({ freq: 698, dur: 0.14, vol: 0.03, type: "sine", fadeOut: 0.11, lpf: 3000 });
-  tone({ freq: 523, dur: 0.2, vol: 0.025, type: "sine", fadeOut: 0.16, delay: 0.1, lpf: 2800 });
-};
-
-/** ✉️ Airy whoosh — message sent */
-const messageSent = () => {
-  slide(550, 1100, 0.08, 0.02, "sine", 4000);
-  tone({ freq: 1320, dur: 0.03, vol: 0.008, type: "sine", fadeIn: 0.002, fadeOut: 0.02, delay: 0.05, lpf: 4500 });
-};
-
-/** 📩 Crystal drop — message received */
-const messageReceived = () => {
-  tone({ freq: 659, dur: 0.1, vol: 0.035, type: "sine", fadeOut: 0.08, lpf: 4000 });
-  tone({ freq: 880, dur: 0.15, vol: 0.025, type: "sine", fadeOut: 0.12, delay: 0.06, lpf: 3500 });
-};
-
-/** 🔇 Soft fade down — mute */
-const mute = () => {
-  slide(550, 330, 0.07, 0.025, "sine", 2200);
-};
-
-/** 🔊 Breeze up — unmute */
-const unmute = () => {
-  slide(400, 800, 0.06, 0.025, "sine", 3500);
-  tone({ freq: 1100, dur: 0.03, vol: 0.008, type: "sine", fadeOut: 0.02, delay: 0.04, lpf: 4000 });
-};
-
-/** 🎙️ PTT on */
-const pttOn = () => {
-  tone({ freq: 700, dur: 0.025, vol: 0.025, type: "sine", fadeIn: 0.002, fadeOut: 0.018, lpf: 3000 });
-  tone({ freq: 1050, dur: 0.02, vol: 0.012, type: "sine", fadeIn: 0.002, fadeOut: 0.012, delay: 0.015, lpf: 3500 });
-};
-
-/** 🎙️ PTT off */
-const pttOff = () => {
-  tone({ freq: 800, dur: 0.02, vol: 0.02, type: "sine", fadeIn: 0.002, fadeOut: 0.015, lpf: 2500 });
-  tone({ freq: 500, dur: 0.03, vol: 0.015, type: "sine", fadeIn: 0.002, fadeOut: 0.02, delay: 0.012, lpf: 2000 });
-};
-
-/** 📞 Airy ringtone — bright arpeggiated chords */
-const ringtone = () => {
-  chord([523, 659, 784, 988], 0.35, 0.06, "sine", 40, 4000);
-  setTimeout(() => {
-    chord([494, 622, 740, 880], 0.4, 0.05, "sine", 40, 3800);
-  }, 450);
-};
-
-/** 🎉 Success — bright ascending */
-const success = () => {
-  tone({ freq: 523, dur: 0.1, vol: 0.035, type: "sine", fadeOut: 0.08, lpf: 4000 });
-  tone({ freq: 659, dur: 0.1, vol: 0.03, type: "sine", fadeOut: 0.08, delay: 0.07, lpf: 4000 });
-  tone({ freq: 784, dur: 0.12, vol: 0.025, type: "sine", fadeOut: 0.1, delay: 0.14, lpf: 3800 });
-  tone({ freq: 1047, dur: 0.3, vol: 0.02, type: "sine", fadeOut: 0.25, delay: 0.21, lpf: 3500 });
-};
-
-/** ❌ Error — gentle dissonance */
-const error = () => {
-  tone({ freq: 330, dur: 0.12, vol: 0.03, type: "triangle", fadeOut: 0.09, lpf: 1500 });
-  tone({ freq: 310, dur: 0.16, vol: 0.025, type: "triangle", fadeOut: 0.12, delay: 0.07, lpf: 1200 });
-};
-
-/** 🔔 Tab switch — light tick */
-const tabSwitch = () => {
-  tone({ freq: 1000, dur: 0.015, vol: 0.015, type: "sine", fadeIn: 0.001, fadeOut: 0.01, lpf: 3500 });
-};
-
-/** 📎 Hover — whisper */
+/** 📱 iOS Light Tap — softer than click, for hover/selection */
 const hover = () => {
-  tone({ freq: 1200, dur: 0.01, vol: 0.005, type: "sine", fadeIn: 0.001, fadeOut: 0.007, lpf: 2500 });
+  noiseBurst(0.006, 0.025, 5000);
+  tone({ freq: 2200, dur: 0.005, vol: 0.012, type: "sine", fadeIn: 0.001, fadeOut: 0.003, lpf: 6000 });
+};
+
+/** 🔔 iOS Tri-tone Notification — the iconic ascending crystalline triplet */
+const notification = () => {
+  tone({ freq: 1175, dur: 0.09, vol: 0.045, type: "sine", fadeIn: 0.002, fadeOut: 0.06, lpf: 6000 });
+  tone({ freq: 1480, dur: 0.09, vol: 0.04, type: "sine", fadeIn: 0.002, fadeOut: 0.06, delay: 0.1, lpf: 5500 });
+  tone({ freq: 1760, dur: 0.15, vol: 0.035, type: "sine", fadeIn: 0.002, fadeOut: 0.12, delay: 0.2, lpf: 5000 });
+};
+
+/** 🟢 iOS FaceTime Connect — warm ascending dyad */
+const join = () => {
+  tone({ freq: 880, dur: 0.12, vol: 0.04, type: "sine", fadeOut: 0.09, lpf: 4500 });
+  tone({ freq: 1109, dur: 0.15, vol: 0.035, type: "sine", fadeOut: 0.12, delay: 0.08, lpf: 4200 });
+  tone({ freq: 1319, dur: 0.22, vol: 0.03, type: "sine", fadeOut: 0.18, delay: 0.16, lpf: 4000 });
+  noiseBurst(0.015, 0.02, 3000);
+};
+
+/** 🔴 iOS Disconnect — gentle descending minor */
+const leave = () => {
+  tone({ freq: 880, dur: 0.1, vol: 0.035, type: "sine", fadeOut: 0.08, lpf: 3500 });
+  tone({ freq: 698, dur: 0.14, vol: 0.03, type: "sine", fadeOut: 0.11, delay: 0.08, lpf: 3000 });
+  tone({ freq: 523, dur: 0.2, vol: 0.025, type: "sine", fadeOut: 0.16, delay: 0.16, lpf: 2500 });
+};
+
+/** ✉️ iOS Message Sent — the iconic swoosh (upward sweep + noise) */
+const messageSent = () => {
+  slide(600, 1400, 0.08, 0.03, "sine", 5000);
+  noiseBurst(0.04, 0.04, 6000);
+  tone({ freq: 1760, dur: 0.025, vol: 0.01, type: "sine", fadeIn: 0.002, fadeOut: 0.018, delay: 0.05, lpf: 6000 });
+};
+
+/** 📩 iOS Message Received — soft crystalline double-chime */
+const messageReceived = () => {
+  tone({ freq: 1319, dur: 0.07, vol: 0.04, type: "sine", fadeOut: 0.05, lpf: 5000 });
+  tone({ freq: 1568, dur: 0.1, vol: 0.035, type: "sine", fadeOut: 0.08, delay: 0.08, lpf: 4500 });
+};
+
+/** 🔇 iOS Mute — short descending with haptic */
+const mute = () => {
+  noiseBurst(0.01, 0.04, 2000);
+  slide(800, 400, 0.06, 0.03, "sine", 2500);
+};
+
+/** 🔊 iOS Unmute — crisp ascending with haptic */
+const unmute = () => {
+  noiseBurst(0.01, 0.04, 4000);
+  slide(500, 1100, 0.05, 0.03, "sine", 4500);
+};
+
+/** 🎙️ PTT on — sharp engage */
+const pttOn = () => {
+  noiseBurst(0.008, 0.05, 5000);
+  tone({ freq: 1047, dur: 0.02, vol: 0.03, type: "sine", fadeIn: 0.001, fadeOut: 0.015, lpf: 4000 });
+  tone({ freq: 1568, dur: 0.015, vol: 0.015, type: "sine", fadeIn: 0.001, fadeOut: 0.01, delay: 0.012, lpf: 5000 });
+};
+
+/** 🎙️ PTT off — soft disengage */
+const pttOff = () => {
+  noiseBurst(0.008, 0.04, 3000);
+  tone({ freq: 1200, dur: 0.018, vol: 0.025, type: "sine", fadeIn: 0.001, fadeOut: 0.013, lpf: 3000 });
+  tone({ freq: 800, dur: 0.025, vol: 0.018, type: "sine", fadeIn: 0.001, fadeOut: 0.018, delay: 0.01, lpf: 2500 });
+};
+
+/** 📞 iOS Ringtone — crystalline arpeggiated pattern */
+const ringtone = () => {
+  const notes = [1319, 1568, 1760, 2093];
+  notes.forEach((freq, i) => {
+    tone({ freq, dur: 0.12, vol: 0.04 / (i * 0.3 + 1), type: "sine", fadeOut: 0.09, delay: i * 0.1, lpf: 5000 });
+  });
+  setTimeout(() => {
+    [1175, 1397, 1568, 1760].forEach((freq, i) => {
+      tone({ freq, dur: 0.15, vol: 0.035 / (i * 0.3 + 1), type: "sine", fadeOut: 0.12, delay: i * 0.1, lpf: 4500 });
+    });
+  }, 500);
+};
+
+/** ✅ iOS Success — the warm ascending major 4th */
+const success = () => {
+  tone({ freq: 880, dur: 0.08, vol: 0.04, type: "sine", fadeOut: 0.06, lpf: 4500 });
+  tone({ freq: 1109, dur: 0.08, vol: 0.035, type: "sine", fadeOut: 0.06, delay: 0.06, lpf: 4200 });
+  tone({ freq: 1319, dur: 0.1, vol: 0.03, type: "sine", fadeOut: 0.08, delay: 0.12, lpf: 4000 });
+  tone({ freq: 1760, dur: 0.25, vol: 0.025, type: "sine", fadeOut: 0.2, delay: 0.18, lpf: 3800 });
+  noiseBurst(0.01, 0.02, 4000);
+};
+
+/** ❌ iOS Error — the subtle double low-tone with haptic */
+const error = () => {
+  noiseBurst(0.015, 0.05, 1500);
+  tone({ freq: 350, dur: 0.1, vol: 0.04, type: "triangle", fadeOut: 0.07, lpf: 1800 });
+  tone({ freq: 330, dur: 0.12, vol: 0.035, type: "triangle", fadeOut: 0.09, delay: 0.1, lpf: 1500 });
+  noiseBurst(0.015, 0.03, 1200);
+};
+
+/** 🔔 iOS Tab Switch — precise haptic tick */
+const tabSwitch = () => {
+  noiseBurst(0.008, 0.04, 4500);
+  tone({ freq: 1400, dur: 0.01, vol: 0.02, type: "sine", fadeIn: 0.001, fadeOut: 0.007, lpf: 5000 });
+};
+
+/** 🔘 iOS Toggle — soft pop */
+const toggle = () => {
+  noiseBurst(0.01, 0.05, 3500);
+  tone({ freq: 1100, dur: 0.015, vol: 0.025, type: "sine", fadeIn: 0.001, fadeOut: 0.01, lpf: 4000 });
+};
+
+/** 🗑️ iOS Delete — soft whoosh down */
+const deleteSound = () => {
+  slide(1200, 300, 0.12, 0.025, "sine", 3000);
+  noiseBurst(0.03, 0.03, 2000);
+};
+
+/** 📋 iOS Copy/Action — quick snap */
+const action = () => {
+  noiseBurst(0.006, 0.05, 5500);
+  tone({ freq: 2000, dur: 0.006, vol: 0.02, type: "sine", fadeIn: 0.001, fadeOut: 0.004, lpf: 6000 });
 };
 
 // ══════════════════════════════════════════════
@@ -269,6 +325,9 @@ export const useSound = () => ({
   playError: useCallback(error, []),
   playTabSwitch: useCallback(tabSwitch, []),
   playHover: useCallback(hover, []),
+  playToggle: useCallback(toggle, []),
+  playDelete: useCallback(deleteSound, []),
+  playAction: useCallback(action, []),
 });
 
 // ── Standalone exports ──
@@ -287,6 +346,9 @@ export const playPttOffSound = pttOff;
 export const playSuccessSound = success;
 export const playErrorSound = error;
 export const playTabSwitchSound = tabSwitch;
+export const playToggleSound = toggle;
+export const playDeleteSound = deleteSound;
+export const playActionSound = action;
 
 // ── Ringtone Manager ──
 
