@@ -567,18 +567,20 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       joinWatchdogRef.current = null;
     }
 
+    // Untrack presence before removing channel
     if (presenceChannelRef.current) {
-      await supabase.removeChannel(presenceChannelRef.current);
+      try { await presenceChannelRef.current.untrack(); } catch {}
+      try { await supabase.removeChannel(presenceChannelRef.current); } catch {}
       presenceChannelRef.current = null;
     }
 
     if (signalingChannelRef.current) {
-      await supabase.removeChannel(signalingChannelRef.current);
+      try { await supabase.removeChannel(signalingChannelRef.current); } catch {}
       signalingChannelRef.current = null;
     }
 
     if (rosterChannelRef.current) {
-      await supabase.removeChannel(rosterChannelRef.current);
+      try { await supabase.removeChannel(rosterChannelRef.current); } catch {}
       rosterChannelRef.current = null;
     }
 
