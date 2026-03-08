@@ -1,12 +1,15 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Group, useGroups } from "@/hooks/useGroups";
-import { useGroupChat } from "@/hooks/useGroupChat";
+import { useGroupChat, GroupMessage } from "@/hooks/useGroupChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSound } from "@/hooks/useSound";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
+import { useReactions } from "@/hooks/useReactions";
 import { smartTimestamp, dateSeparator, shouldShowDateSeparator } from "@/lib/timeUtils";
 import GroupMessageContextMenu from "@/components/chat/GroupMessageContextMenu";
+import MessageContent from "@/components/chat/MessageContent";
 import EmojiPicker from "@/components/chat/EmojiPicker";
+import { ReactionPills, QuickReactionPicker } from "@/components/chat/ReactionPills";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,7 +19,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ArrowLeft, Send, Phone, Users, UserPlus, Loader2, Pencil } from "lucide-react";
+import { ArrowLeft, Send, Phone, Users, UserPlus, Loader2, Pencil, X, Reply } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -38,11 +41,21 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
   const { isTyping, typingUsers, startTyping, stopTyping } = useTypingIndicator(channelId);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [members, setMembers] = useState<{ user_id: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+  const { toggleReaction, getReactionGroups } = useReactions("group", messageIds);
+
+  const messageMap = useMemo(() => {
+    const map: Record<string, GroupMessage> = {};
+    messages.forEach((m) => { map[m.id] = m; });
+    return map;
+  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -67,10 +80,11 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
     if (!input.trim() || sending) return;
     stopTyping();
     setSending(true);
-    const success = await sendMessage(input);
+    const success = await sendMessage(input, replyTo?.id);
     if (success) {
       playMessageSent();
       setInput("");
+      setReplyTo(null);
     }
     setSending(false);
     inputRef.current?.focus();
@@ -88,6 +102,11 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
     inputRef.current?.focus();
   };
 
+  const handleReply = useCallback((msg: GroupMessage) => {
+    setReplyTo(msg);
+    inputRef.current?.focus();
+  }, []);
+
   const isOwnerOrAdmin = group.owner_id === user?.id;
 
   return (
@@ -95,12 +114,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
       <div className="flex-1 flex flex-col h-full bg-background">
         {/* ─── Header ─── */}
         <header className="h-16 px-4 flex items-center gap-3 border-b border-white/[0.06] bg-card/30 backdrop-blur-xl shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-8 w-8 rounded-lg hover:bg-white/[0.06] md:hidden"
-          >
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-lg hover:bg-white/[0.06] md:hidden" silent>
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
@@ -117,9 +131,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
               {isTyping ? (
                 <p className="text-[11px] text-primary flex items-center gap-1">
                   <span className="flex gap-0.5">
-                    <span className="typing-dot" />
-                    <span className="typing-dot" />
-                    <span className="typing-dot" />
+                    <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
                   </span>
                   {typingUsers.join(", ")} écri{typingUsers.length > 1 ? "vent" : "t"}…
                 </p>
@@ -132,59 +144,28 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           </div>
 
           <div className="flex gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setMembersOpen((p) => !p)}
-                  className={cn(
-                    "h-8 w-8 rounded-lg",
-                    membersOpen ? "bg-primary/10 text-primary" : "hover:bg-white/[0.06]"
-                  )}
-                >
-                  <Users className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Membres</TooltipContent>
-            </Tooltip>
+            <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={() => setMembersOpen((p) => !p)}
+                className={cn("h-8 w-8 rounded-lg", membersOpen ? "bg-primary/10 text-primary" : "hover:bg-white/[0.06]")}>
+                <Users className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger><TooltipContent>Membres</TooltipContent></Tooltip>
             {isOwnerOrAdmin && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setAddMemberOpen(true)}
-                    className="h-8 w-8 rounded-lg hover:bg-white/[0.06]"
-                  >
-                    <UserPlus className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Inviter</TooltipContent>
-              </Tooltip>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onStartCall}
-                  className="h-8 w-8 rounded-lg hover:bg-success/10 hover:text-success"
-                >
-                  <Phone className="h-4 w-4" />
+              <Tooltip><TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setAddMemberOpen(true)} className="h-8 w-8 rounded-lg hover:bg-white/[0.06]">
+                  <UserPlus className="h-4 w-4" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>Appel vocal</TooltipContent>
-            </Tooltip>
+              </TooltipTrigger><TooltipContent>Inviter</TooltipContent></Tooltip>
+            )}
+            <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={onStartCall} className="h-8 w-8 rounded-lg hover:bg-success/10 hover:text-success">
+                <Phone className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger><TooltipContent>Appel vocal</TooltipContent></Tooltip>
           </div>
         </header>
 
-        <AddMemberDialog
-          open={addMemberOpen}
-          onOpenChange={setAddMemberOpen}
-          groupId={group.id}
-          existingMemberIds={members.map((m) => m.user_id)}
-        />
+        <AddMemberDialog open={addMemberOpen} onOpenChange={setAddMemberOpen} groupId={group.id} existingMemberIds={members.map((m) => m.user_id)} />
 
         {/* ─── Messages ─── */}
         <ScrollArea className="flex-1 px-4 py-4">
@@ -198,9 +179,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
                 <Users className="h-7 w-7 text-muted-foreground/20" />
               </div>
               <h4 className="font-semibold text-base mb-1">{group.name}</h4>
-              <p className="text-muted-foreground/40 text-sm">
-                Commencez la conversation !
-              </p>
+              <p className="text-muted-foreground/40 text-sm">Commencez la conversation !</p>
             </div>
           ) : (
             <div className="space-y-0.5">
@@ -209,9 +188,11 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
                 const prevMsg = messages[idx - 1];
                 const nextMsg = messages[idx + 1];
                 const showDateSep = shouldShowDateSeparator(msg.created_at, prevMsg?.created_at);
-                const isGroupStart = !prevMsg || prevMsg.sender_id !== msg.sender_id || showDateSep;
-                const isGroupEnd = !nextMsg || nextMsg.sender_id !== msg.sender_id;
+                const isGStart = !prevMsg || prevMsg.sender_id !== msg.sender_id || showDateSep;
+                const isGEnd = !nextMsg || nextMsg.sender_id !== msg.sender_id;
                 const isEdited = !!msg.edited_at;
+                const replyMsg = msg.reply_to_id ? messageMap[msg.reply_to_id] : null;
+                const reactionGroups = getReactionGroups(msg.id);
 
                 return (
                   <div key={msg.id}>
@@ -224,65 +205,66 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
                         <div className="flex-1 h-px bg-white/[0.04]" />
                       </div>
                     )}
-                    <div
-                      className={cn(
-                        "flex items-end gap-2 group/msg",
-                        isOwn && "flex-row-reverse",
-                        isGroupStart ? "mt-2.5" : "mt-0.5"
-                      )}
-                    >
-                      {isGroupStart && !isOwn ? (
+                    <div className={cn(
+                      "flex items-end gap-2 group/msg relative",
+                      isOwn && "flex-row-reverse",
+                      isGStart ? "mt-2.5" : "mt-0.5"
+                    )}>
+                      {isGStart && !isOwn ? (
                         <Avatar className="h-7 w-7 shrink-0">
                           <AvatarImage src={msg.sender?.avatar_url || ""} className="object-cover" />
                           <AvatarFallback className="text-[10px] bg-muted/50 font-semibold">
                             {msg.sender?.username?.[0]?.toUpperCase() || "?"}
                           </AvatarFallback>
                         </Avatar>
-                      ) : !isOwn ? (
-                        <div className="w-7 shrink-0" />
-                      ) : null}
+                      ) : !isOwn ? <div className="w-7 shrink-0" /> : null}
 
-                      <GroupMessageContextMenu message={msg}>
+                      <GroupMessageContextMenu message={msg} onReply={handleReply}>
                         <div className="max-w-[70%]">
-                          {isGroupStart && (
+                          {isGStart && (
                             <div className={cn("flex items-center gap-2 mb-0.5", isOwn && "flex-row-reverse")}>
                               <span className="text-[11px] font-semibold text-muted-foreground/50">
                                 {isOwn ? "Toi" : msg.sender?.username}
                               </span>
                             </div>
                           )}
+
+                          {/* Reply preview */}
+                          {replyMsg && (
+                            <div className={cn(
+                              "flex items-center gap-1.5 mb-0.5 px-2 py-1 rounded-lg bg-white/[0.03] border-l-2 border-primary/30 text-[11px] text-muted-foreground/50 truncate",
+                              isOwn && "ml-auto"
+                            )}>
+                              <Reply className="h-3 w-3 shrink-0 text-primary/40" />
+                              <span className="truncate">
+                                {replyMsg.sender_id === user?.id ? "Toi" : replyMsg.sender?.username}: {replyMsg.content}
+                              </span>
+                            </div>
+                          )}
+
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <div
-                                className={cn(
-                                  "px-3 py-2 transition-all cursor-default",
-                                  isOwn
-                                    ? cn(
-                                        "message-own",
-                                        isGroupStart && isGroupEnd && "rounded-2xl",
-                                        isGroupStart && !isGroupEnd && "rounded-2xl rounded-br-md",
-                                        !isGroupStart && isGroupEnd && "rounded-2xl rounded-tr-md",
-                                        !isGroupStart && !isGroupEnd && "rounded-lg rounded-r-md"
-                                      )
-                                    : cn(
-                                        "message-other",
-                                        isGroupStart && isGroupEnd && "rounded-2xl",
-                                        isGroupStart && !isGroupEnd && "rounded-2xl rounded-bl-md",
-                                        !isGroupStart && isGroupEnd && "rounded-2xl rounded-tl-md",
-                                        !isGroupStart && !isGroupEnd && "rounded-lg rounded-l-md"
-                                      )
-                                )}
-                              >
-                                <p className="text-[13.5px] leading-relaxed break-words">{msg.content}</p>
-                                {isGroupEnd && (
-                                  <div className={cn(
-                                    "flex items-center gap-1 mt-0.5",
-                                    isOwn ? "justify-end" : "justify-start"
-                                  )}>
+                              <div className={cn(
+                                "px-3 py-2 transition-all cursor-default",
+                                isOwn
+                                  ? cn("message-own",
+                                      isGStart && isGEnd && "rounded-2xl",
+                                      isGStart && !isGEnd && "rounded-2xl rounded-br-md",
+                                      !isGStart && isGEnd && "rounded-2xl rounded-tr-md",
+                                      !isGStart && !isGEnd && "rounded-lg rounded-r-md")
+                                  : cn("message-other",
+                                      isGStart && isGEnd && "rounded-2xl",
+                                      isGStart && !isGEnd && "rounded-2xl rounded-bl-md",
+                                      !isGStart && isGEnd && "rounded-2xl rounded-tl-md",
+                                      !isGStart && !isGEnd && "rounded-lg rounded-l-md")
+                              )}>
+                                <p className="text-[13.5px] leading-relaxed break-words">
+                                  <MessageContent content={msg.content} />
+                                </p>
+                                {isGEnd && (
+                                  <div className={cn("flex items-center gap-1 mt-0.5", isOwn ? "justify-end" : "justify-start")}>
                                     {isEdited && <Pencil className="h-2.5 w-2.5 text-foreground/15" />}
-                                    <span className="text-[10px] text-foreground/25">
-                                      {smartTimestamp(msg.created_at)}
-                                    </span>
+                                    <span className="text-[10px] text-foreground/25">{smartTimestamp(msg.created_at)}</span>
                                   </div>
                                 )}
                               </div>
@@ -292,8 +274,19 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
                               {isEdited && " (modifié)"}
                             </TooltipContent>
                           </Tooltip>
+
+                          <ReactionPills
+                            reactions={reactionGroups}
+                            onToggle={(emoji) => toggleReaction(msg.id, emoji)}
+                            isOwn={isOwn}
+                          />
                         </div>
                       </GroupMessageContextMenu>
+
+                      <QuickReactionPicker
+                        onSelect={(emoji) => toggleReaction(msg.id, emoji)}
+                        side={isOwn ? "left" : "right"}
+                      />
                     </div>
                   </div>
                 );
@@ -308,25 +301,36 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
           <div className="px-4 py-1.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground/40">
               <span className="flex gap-0.5">
-                <span className="typing-dot" />
-                <span className="typing-dot" />
-                <span className="typing-dot" />
+                <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
               </span>
               <span>{typingUsers.join(", ")} écri{typingUsers.length > 1 ? "vent" : "t"}…</span>
             </div>
           </div>
         )}
 
+        {/* ─── Reply preview bar ─── */}
+        {replyTo && (
+          <div className="px-4 py-2 border-t border-white/[0.04] bg-card/20 flex items-center gap-2 animate-fade-in">
+            <Reply className="h-4 w-4 text-primary/60 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-primary/60 font-medium">
+                Réponse à {replyTo.sender_id === user?.id ? "toi" : replyTo.sender?.username}
+              </p>
+              <p className="text-xs text-muted-foreground/50 truncate">{replyTo.content}</p>
+            </div>
+            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-white/[0.06]" onClick={() => setReplyTo(null)} silent>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
         {/* ─── Input ─── */}
-        <form
-          onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-          className="px-4 py-3 border-t border-white/[0.06] bg-card/20"
-        >
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="px-4 py-3 border-t border-white/[0.06] bg-card/20">
           <div className="flex gap-2 items-center">
             <EmojiPicker onSelect={handleEmojiSelect} />
             <Input
               ref={inputRef}
-              placeholder={`Message #${group.name}`}
+              placeholder={replyTo ? "Écrire une réponse…" : `Message #${group.name}`}
               value={input}
               onChange={handleInputChange}
               onBlur={stopTyping}
@@ -334,17 +338,8 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
               className="flex-1 h-10 text-sm input-modern rounded-lg px-3"
               disabled={sending}
             />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!input.trim() || sending}
-              className="h-10 w-10 rounded-lg btn-premium shrink-0"
-            >
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
+            <Button type="submit" size="icon" disabled={!input.trim() || sending} className="h-10 w-10 rounded-lg btn-premium shrink-0">
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
         </form>

@@ -18,15 +18,16 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Copy, Pencil, Trash2 } from "lucide-react";
+import { Copy, Pencil, Trash2, Reply } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface GroupMessageContextMenuProps {
   message: GroupMessage;
   children: React.ReactNode;
+  onReply?: (message: GroupMessage) => void;
 }
 
-const GroupMessageContextMenu = ({ message, children }: GroupMessageContextMenuProps) => {
+const GroupMessageContextMenu = ({ message, children, onReply }: GroupMessageContextMenuProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [editOpen, setEditOpen] = useState(false);
@@ -66,6 +67,11 @@ const GroupMessageContextMenu = ({ message, children }: GroupMessageContextMenuP
           <ContextMenuItem onClick={handleCopy} className="gap-2 rounded-lg">
             <Copy className="h-4 w-4" /> Copier
           </ContextMenuItem>
+          {onReply && (
+            <ContextMenuItem onClick={() => onReply(message)} className="gap-2 rounded-lg">
+              <Reply className="h-4 w-4" /> Répondre
+            </ContextMenuItem>
+          )}
           {isOwn && (
             <>
               <ContextMenuSeparator className="bg-white/[0.06]" />
