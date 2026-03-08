@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useGroups, Group } from "@/hooks/useGroups";
+import { useVoicePresence } from "@/hooks/useVoicePresence";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Users, Plus, MessageCircle, Phone, ChevronLeft, Search } from "lucide-react";
+import { Users, Plus, MessageCircle, Phone, ChevronLeft, Search, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import CreateGroupDialog from "./CreateGroupDialog";
 
