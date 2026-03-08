@@ -106,7 +106,7 @@ export class AdvancedNoiseProcessor {
               simdUrl: '/rnnoise/rnnoise_simd.wasm',
             });
           } catch {
-            wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm' });
+            wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: undefined });
           }
         } catch (localAssetsError) {
           // Fallback Vite-bundled assets
