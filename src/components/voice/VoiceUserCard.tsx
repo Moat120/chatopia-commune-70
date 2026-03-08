@@ -118,13 +118,21 @@ const VoiceUserCard = ({
       {/* Avatar */}
       <div className="relative">
         {isSpeaking && !isMuted && (
-          <div 
-            className="absolute inset-0 rounded-full animate-[speaking-ring_1.8s_ease-out_infinite]"
-            style={{
-              background: `radial-gradient(circle, hsl(var(--success) / 0.3), transparent 70%)`,
-              transform: `scale(${ringScale * 1.5})`,
-            }}
-          />
+          <>
+            <div 
+              className="absolute inset-0 rounded-full animate-speaking-ring"
+              style={{
+                background: `radial-gradient(circle, hsl(var(--success) / 0.4), transparent 70%)`,
+              }}
+            />
+            <div 
+              className="absolute inset-0 rounded-full animate-speaking-ring"
+              style={{
+                background: `radial-gradient(circle, hsl(var(--success) / 0.25), transparent 70%)`,
+                animationDelay: '0.4s',
+              }}
+            />
+          </>
         )}
         
         <Avatar 
