@@ -645,6 +645,23 @@ const SettingsDialog = () => {
                       <p className="text-xs text-muted-foreground/70">
                         Parlez dans votre microphone pour voir le niveau
                       </p>
+                      
+                      {/* Loopback toggle */}
+                      <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+                        <div className="flex items-center gap-2">
+                          <Volume2 className={cn("w-4 h-4", isLoopback ? "text-primary" : "text-muted-foreground/50")} />
+                          <span className="text-xs font-medium">Retour vocal (s'écouter)</span>
+                        </div>
+                        <Switch
+                          checked={isLoopback}
+                          onCheckedChange={toggleLoopback}
+                        />
+                      </div>
+                      {isLoopback && (
+                        <p className="text-[10px] text-warning/80 animate-fade-in">
+                          🎧 Utilisez un casque pour éviter le larsen
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
