@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import FriendsSidebar from "@/components/friends/FriendsSidebar";
@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Users, Phone, PhoneOff, Sparkles } from "lucide-react";
 import { playNotificationSound, RingtoneManager } from "@/hooks/useSound";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 import { cn } from "@/lib/utils";
 import { usePresence } from "@/hooks/usePresence";
