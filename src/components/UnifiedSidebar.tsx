@@ -242,7 +242,7 @@ const UnifiedSidebar = ({
       )}
 
       {/* ─── User Footer ─── */}
-      <div className="px-3 py-3 border-t border-white/[0.06] bg-card/30">
+      <div className="px-3 py-3 border-t border-border bg-card">
         <div className="flex items-center gap-3">
           <StatusPicker currentStatus={profile?.custom_status}>
             <button className="relative shrink-0 group/avatar">
