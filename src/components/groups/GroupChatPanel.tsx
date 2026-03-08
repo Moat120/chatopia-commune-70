@@ -33,7 +33,7 @@ interface GroupChatPanelProps {
 }
 
 const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = useGroupChat(group.id);
   const { getGroupMembers } = useGroups();
   const { playMessageSent, playMessageReceived } = useSound();

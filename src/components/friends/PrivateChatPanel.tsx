@@ -31,7 +31,7 @@ interface PrivateChatPanelProps {
 }
 
 const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProps) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = usePrivateChat(friend.id);
   const { playMessageSent, playMessageReceived } = useSound();
   const channelId = `private-${[user?.id, friend.id].sort().join("-")}`;
