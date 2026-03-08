@@ -434,6 +434,9 @@ const PrivateCallPanel = ({
     cleanup(); onEnd();
   };
 
+  // Keep ref up to date for ICE give-up callback
+  useEffect(() => { endCallRef.current = endCall; });
+
   const toggleMute = () => {
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach((track) => { track.enabled = isMuted; });
