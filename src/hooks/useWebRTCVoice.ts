@@ -781,6 +781,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       startVoiceDetection(rawStream);
       startStatsMonitoring();
 
+      if (joinWatchdogRef.current) {
+        clearTimeout(joinWatchdogRef.current);
+        joinWatchdogRef.current = null;
+      }
+
       isConnectedRef.current = true;
       setIsConnected(true);
       setIsConnecting(false);
