@@ -519,6 +519,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       audioContextRef.current = null;
     }
 
+    if (joinWatchdogRef.current) {
+      clearTimeout(joinWatchdogRef.current);
+      joinWatchdogRef.current = null;
+    }
+
     if (presenceChannelRef.current) {
       await supabase.removeChannel(presenceChannelRef.current);
       presenceChannelRef.current = null;
