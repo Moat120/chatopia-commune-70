@@ -279,9 +279,15 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       const outgoingPc = outgoingConnectionsRef.current.get(message.from);
       const incomingPc = incomingConnectionsRef.current.get(message.from);
 
-      const icePayload = message.data as RTCIceCandidateInit | ScreenIcePayload;
-      const candidateInit = "candidate" in icePayload ? icePayload.candidate : icePayload;
-      const connectionRole = "connectionRole" in icePayload ? icePayload.connectionRole : undefined;
+      const hasRoleMetadata = typeof message.data === "object" && message.data !== null && "connectionRole" in message.data;
+      const connectionRole = hasRoleMetadata
+        ? (message.data as ScreenIcePayload).connectionRole
+        : undefined;
+      const candidateInit: RTCIceCandidateInit = hasRoleMetadata
+        ? (message.data as ScreenIcePayload).candidate
+        : typeof message.data === "string"
+          ? { candidate: message.data }
+          : (message.data as RTCIceCandidateInit);
 
       const targetPc = connectionRole === "outgoing"
         ? incomingPc
