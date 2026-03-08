@@ -139,7 +139,7 @@ const VoiceControlsWithScreenShare = ({
               <Phone className="h-4.5 w-4.5" />
               <Phone className="h-4.5 w-4.5 absolute inset-0 animate-ping opacity-20" />
             </div>
-            Rejoindre
+            Rejoindre l'appel
           </span>
         )}
       </Button>

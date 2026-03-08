@@ -65,7 +65,7 @@ const VoiceControls = ({
                 <Phone className="h-5 w-5" />
               </div>
             </div>
-            <span>Rejoindre le vocal</span>
+            <span>Rejoindre l'appel</span>
           </>
         )}
       </Button>
