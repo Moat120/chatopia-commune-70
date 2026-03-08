@@ -27,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { cn } from "@/lib/utils";
-import { getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/hooks/useNoiseProcessor";
+import { AdvancedNoiseProcessor, getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/hooks/useNoiseProcessor";
 
 // Audio settings keys
 const NOISE_SUPPRESSION_KEY = "noiseSuppressionEnabled";
