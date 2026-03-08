@@ -707,13 +707,22 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       await subscribeChannel(presenceChannel, "presence");
 
-      await presenceChannel.track({
-        odId: currentUserId,
-        username: currentUsername,
-        avatarUrl: currentPresenceAvatar,
-        isSpeaking: false,
-        isMuted: false,
-      });
+      // Do not block connection forever on presence track ack
+      try {
+        await withTimeout(
+          presenceChannel.track({
+            odId: currentUserId,
+            username: currentUsername,
+            avatarUrl: currentPresenceAvatar,
+            isSpeaking: false,
+            isMuted: false,
+          }),
+          4000,
+          "presence track"
+        );
+      } catch (trackError) {
+        console.warn("[Voice] Presence track delayed, continuing join", trackError);
+      }
 
       // Immediately include self in connected users
       // (presence sync may not have fired yet)
