@@ -322,6 +322,11 @@ const PrivateCallPanel = ({
 
   const startAudioAndConnect = async () => {
     try {
+      // Fetch dynamic TURN credentials
+      const dynamicConfig = await getDynamicRtcConfig();
+      rtcConfigRef.current = dynamicConfig;
+      console.log('[PrivateCall] Using ICE config with', dynamicConfig.iceServers?.length, 'servers');
+
       const rawStream = await navigator.mediaDevices.getUserMedia({ audio: getOptimizedAudioConstraints() });
       rawStreamRef.current = rawStream;
 
