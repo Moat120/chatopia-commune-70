@@ -95,22 +95,24 @@ function findOpusPayload(lines: string[]): string | null {
 
 /**
  * Munge SDP for screen sharing video:
- * - Prefer VP9 or H264 for screen content
- * - Higher bitrate for video
+ * - High bitrate for crisp screen content
+ * - Prefer VP9/H264 for screen content
  */
 export function mungeScreenShareSDP(sdp: string): string {
-  // Set video bitrate high for screen content
   const lines = sdp.split('\r\n');
   const result: string[] = [];
   
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    let line = lines[i];
+    
+    // Remove any existing bandwidth lines
+    if (line.startsWith('b=AS:') || line.startsWith('b=TIAS:')) continue;
+    
     result.push(line);
     
-    // After video m-line, add bandwidth
+    // After video m-line, add high bandwidth
     if (line.startsWith('m=video')) {
-      // Add bandwidth line for video
-      result.push('b=AS:8000'); // 8 Mbps max for screen share
+      result.push('b=AS:20000'); // 20 Mbps max for screen share
     }
   }
   
