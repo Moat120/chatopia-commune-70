@@ -130,6 +130,7 @@ export type Database = {
           edited_at: string | null
           group_id: string
           id: string
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -138,6 +139,7 @@ export type Database = {
           edited_at?: string | null
           group_id: string
           id?: string
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -146,6 +148,7 @@ export type Database = {
           edited_at?: string | null
           group_id?: string
           id?: string
+          reply_to_id?: string | null
           sender_id?: string
         }
         Relationships: [
@@ -154,6 +157,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
             referencedColumns: ["id"]
           },
         ]
@@ -182,6 +192,33 @@ export type Database = {
           name?: string
           owner_id?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      message_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          message_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          message_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          message_type?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -238,6 +275,7 @@ export type Database = {
           id: string
           read_at: string | null
           receiver_id: string
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -247,6 +285,7 @@ export type Database = {
           id?: string
           read_at?: string | null
           receiver_id: string
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -256,6 +295,7 @@ export type Database = {
           id?: string
           read_at?: string | null
           receiver_id?: string
+          reply_to_id?: string | null
           sender_id?: string
         }
         Relationships: [
@@ -264,6 +304,13 @@ export type Database = {
             columns: ["receiver_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "private_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "private_messages"
             referencedColumns: ["id"]
           },
           {
