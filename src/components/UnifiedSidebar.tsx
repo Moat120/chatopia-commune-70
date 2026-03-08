@@ -587,14 +587,15 @@ const GroupRow = ({
 }) => (
   <div
     className={cn(
-      "group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200",
+      "group flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer",
+      "transition-all duration-200 ease-out",
       isSelected
-        ? "bg-primary/10 text-foreground"
-        : "hover:bg-white/[0.04] text-foreground/80"
+        ? "bg-primary/10 border border-primary/15 text-foreground shadow-sm shadow-primary/5"
+        : "hover:bg-white/[0.04] text-foreground/80 border border-transparent"
     )}
     onClick={onSelect}
   >
-    <Avatar className="h-9 w-9 shrink-0">
+    <Avatar className="h-9 w-9 shrink-0 transition-transform duration-200 group-hover:scale-105">
       <AvatarImage src={group.avatar_url || ""} className="object-cover" />
       <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
         {group.name[0]?.toUpperCase()}
@@ -603,7 +604,7 @@ const GroupRow = ({
 
     <div className="flex-1 min-w-0">
       <p className="text-sm font-medium truncate">{group.name}</p>
-      <p className="text-[11px] text-muted-foreground/40">
+      <p className="text-[11px] text-muted-foreground/35">
         {group.member_count || 1} membre{(group.member_count || 1) > 1 ? "s" : ""}
       </p>
     </div>

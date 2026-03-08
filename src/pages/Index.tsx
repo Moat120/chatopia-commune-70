@@ -214,17 +214,17 @@ const Index = () => {
 
 /* ─── Empty State ─── */
 const EmptyState = ({ viewMode }: { viewMode: ViewMode }) => (
-  <div className="flex-1 flex items-center justify-center h-full bg-background">
+  <div className="flex-1 flex items-center justify-center h-full bg-background mesh-gradient">
     <div className="text-center animate-reveal">
-      <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/10 border border-white/[0.04] flex items-center justify-center">
-        <MessageCircle className="h-9 w-9 text-muted-foreground/15" />
+      <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/10 border border-white/[0.04] flex items-center justify-center float-slow">
+        <MessageCircle className="h-9 w-9 text-muted-foreground/12" />
       </div>
-      <h2 className="text-xl font-semibold mb-2 text-foreground/80">
+      <h2 className="text-lg font-semibold mb-1.5 text-foreground/70">
         {viewMode === "messages" ? "Messages" : "Groupes"}
       </h2>
-      <p className="text-muted-foreground/40 max-w-xs text-sm">
+      <p className="text-muted-foreground/35 max-w-[260px] text-sm leading-relaxed">
         {viewMode === "messages"
-          ? "Sélectionne un ami pour commencer une conversation"
+          ? "Sélectionne un ami pour démarrer une conversation"
           : "Sélectionne un groupe ou crée-en un nouveau"}
       </p>
     </div>
