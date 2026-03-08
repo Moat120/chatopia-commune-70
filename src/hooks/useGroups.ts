@@ -235,68 +235,49 @@ export const useGroups = () => {
 
     pollRef.current = setInterval(fetchGroups, 15000);
 
-    // Single channel for group_members changes (filtered to current user)
+    const ts = Date.now();
+    // Separate channels to avoid "mismatch" errors
     const membershipChannel = supabase
-      .channel(`groups-membership-${user.id}`)
+      .channel(`grp-mbr-${user.id}-${ts}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "group_members",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          fetchGroups();
-        }
+        { event: "*", schema: "public", table: "group_members",
+          filter: `user_id=eq.${user.id}` },
+        () => { fetchGroups(); }
       )
-      .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR' && err) {
-          console.warn("[groups-membership] subscription error, relying on polling");
-        }
-      });
+      .subscribe();
 
-    // Group metadata changes (name, avatar, deletion)
-    const groupsChannel = supabase
-      .channel(`groups-updates-${user.id}`)
+    const groupsUpdChannel = supabase
+      .channel(`grp-upd-${user.id}-${ts}`)
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "groups",
-        },
+        { event: "UPDATE", schema: "public", table: "groups" },
         (payload) => {
-          const updatedGroup = payload.new as Group;
-          setGroups(prev => prev.map(g => 
-            g.id === updatedGroup.id 
-              ? { ...g, name: updatedGroup.name, avatar_url: updatedGroup.avatar_url }
-              : g
+          const g = payload.new as Group;
+          setGroups(prev => prev.map(x => 
+            x.id === g.id ? { ...x, name: g.name, avatar_url: g.avatar_url } : x
           ));
         }
       )
+      .subscribe();
+
+    const groupsDelChannel = supabase
+      .channel(`grp-del-${user.id}-${ts}`)
       .on(
         "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "groups",
-        },
+        { event: "DELETE", schema: "public", table: "groups" },
         (payload) => {
-          const deletedGroupId = (payload.old as any).id;
-          setGroups(prev => prev.filter(g => g.id !== deletedGroupId));
+          const id = (payload.old as any).id;
+          setGroups(prev => prev.filter(g => g.id !== id));
         }
       )
-      .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR' && err) {
-          console.warn("[groups-updates] subscription error, relying on polling");
-        }
-      });
+      .subscribe();
 
     return () => {
       clearInterval(pollRef.current);
       supabase.removeChannel(membershipChannel);
-      supabase.removeChannel(groupsChannel);
+      supabase.removeChannel(groupsUpdChannel);
+      supabase.removeChannel(groupsDelChannel);
     };
   }, [user, fetchGroups]);
 
