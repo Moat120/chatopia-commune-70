@@ -54,6 +54,30 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   // Observe participants when not connected
   const { participants: presenceParticipants } = useVoicePresence(isConnected ? null : group.id);
 
+  // Track user join/leave for sound effects
+  const prevUserIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isConnected) return;
+    const currentIds = new Set(connectedUsers.map(u => u.odId));
+    const prevIds = prevUserIdsRef.current;
+
+    // New users that joined (not ourselves)
+    currentIds.forEach(id => {
+      if (!prevIds.has(id) && id !== currentUserId && prevIds.size > 0) {
+        playUserJoinedSound();
+      }
+    });
+
+    // Users that left
+    prevIds.forEach(id => {
+      if (!currentIds.has(id) && id !== currentUserId) {
+        playUserLeftSound();
+      }
+    });
+
+    prevUserIdsRef.current = currentIds;
+  }, [connectedUsers, isConnected, currentUserId]);
+
   // Override local user's isSpeaking with real-time audioLevel (presence sync is too slow)
   const localSpeaking = audioLevel > 0.08 && !isMuted;
 
