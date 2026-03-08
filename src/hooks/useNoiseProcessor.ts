@@ -1,42 +1,13 @@
 /**
  * AdvancedNoiseProcessor - Pipeline audio avancé pour suppression de bruit
  * 
- * Architecture du pipeline :
+ * Pipeline :
+ *   Mic → [RNNoise WASM] → [ImpulseNoiseGate] → [BiquadFilters] → [Compressor] → [Gain] → Output
  * 
- *   Microphone (MediaStream)
- *       |
- *       v
- *   [MediaTrackConstraints: noiseSuppression, echoCancellation, autoGainControl]
- *       |
- *       v
- *   [RNNoise WASM - Réseau neuronal récurrent pour séparation voix/bruit]
- *       |  - Modèle entraîné sur des milliers d'heures de données vocales
- *       |  - Traitement par blocs de 480 samples (10ms à 48kHz)
- *       |  - Suppression intelligente du bruit sans affecter la voix
- *       |  - Équivalent à la technologie utilisée par Discord/Krisp
- *       |
- *       v
- *   [BiquadFilter Chain - Post-traitement]
- *       |  - Highpass 85Hz Q=0.8 (rumble résiduel)
- *       |  - Peaking 200Hz gain=-3dB (muddiness)
- *       |  - Highshelf 3kHz gain=+2dB (présence vocale)
- *       |  - Lowpass 14kHz Q=0.7 (hiss résiduel)
- *       |
- *       v
- *   [DynamicsCompressor - optimisé voix]
- *       |
- *       v
- *   [GainNode - volume de sortie]
- *       |
- *       v
- *   MediaStreamDestination --> WebRTC
- * 
- * Modes :
- * - "standard" : RNNoise + filtrage léger, compressor doux
- * - "aggressive" : RNNoise + filtrage vocal fort, compressor fort
- * 
- * Fallback : Si RNNoise WASM ne charge pas, utilise le noise gate
- * AudioWorklet comme solution de repli.
+ * - RNNoise : suppression bruit continu (ventilateur, ambiance)
+ * - ImpulseNoiseGate : suppression bruits impulsifs (clavier, souris, respiration)
+ * - BiquadFilters : post-traitement spectral
+ * - Compressor : normalisation dynamique
  */
 
 export type NoiseSuppressionMode = 'standard' | 'aggressive';
@@ -64,33 +35,28 @@ export class AdvancedNoiseProcessor {
   private lowpassFilter: BiquadFilterNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
   private rnnoiseNode: AudioWorkletNode | null = null;
+  private impulseGateNode: AudioWorkletNode | null = null;
   private fallbackWorkletNode: AudioWorkletNode | null = null;
   private mode: NoiseSuppressionMode = 'standard';
   private processingStartTime: number = 0;
   private _latencyMs: number = 0;
   private useRnnoise: boolean = false;
+  private useImpulseGate: boolean = false;
   private useFallbackWorklet: boolean = false;
 
-  /**
-   * Traite un MediaStream audio à travers le pipeline de suppression de bruit.
-   * Cœur du pipeline : RNNoise WASM (réseau neuronal).
-   * Retourne un nouveau MediaStream traité.
-   */
   async process(stream: MediaStream): Promise<MediaStream> {
     try {
       this.processingStartTime = performance.now();
       this.mode = getNoiseSuppressionMode();
 
-      // RNNoise requiert exactement 48kHz
       this.audioContext = new AudioContext({ sampleRate: 48000 });
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.destinationNode = this.audioContext.createMediaStreamDestination();
 
       let lastNode: AudioNode = this.sourceNode;
 
-      // === Étape 1 : RNNoise WASM (cœur du pipeline) ===
+      // === Stage 1: RNNoise WASM ===
       try {
-        // Dynamic import the library
         const rnnoiseModule = await import('@sapphi-red/web-noise-suppressor');
         const { RnnoiseWorkletNode, loadRnnoise } = rnnoiseModule;
 
@@ -98,7 +64,6 @@ export class AdvancedNoiseProcessor {
         let rnnoiseSource = 'public/rnnoise';
 
         try {
-          // Priorité au bundle Vite (plus fiable en AudioWorklet)
           const rnnoiseWorkletUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url')).default;
           const rnnoiseWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise.wasm?url')).default;
 
@@ -106,91 +71,83 @@ export class AdvancedNoiseProcessor {
           try {
             rnnoiseSimdWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url')).default;
           } catch {
-            console.log('[AdvancedNoiseProcessor] SIMD WASM not available, using non-SIMD');
+            console.log('[NoiseProcessor] SIMD WASM not available');
           }
 
-          wasmBinary = await loadRnnoise({
-            url: rnnoiseWasmUrl,
-            simdUrl: rnnoiseSimdWasmUrl,
-          });
-
+          wasmBinary = await loadRnnoise({ url: rnnoiseWasmUrl, simdUrl: rnnoiseSimdWasmUrl });
           await this.audioContext.audioWorklet.addModule(rnnoiseWorkletUrl);
           rnnoiseSource = 'vite-bundled';
-        } catch (bundledAssetsError) {
-          // Fallback aux fichiers locaux fournis (public/rnnoise/*)
+        } catch (bundledErr) {
           await this.audioContext.audioWorklet.addModule('/rnnoise/rnnoiseWorklet.js');
           try {
-            wasmBinary = await loadRnnoise({
-              url: '/rnnoise/rnnoise.wasm',
-              simdUrl: '/rnnoise/rnnoise_simd.wasm',
-            });
+            wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: '/rnnoise/rnnoise_simd.wasm' });
           } catch {
             wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: undefined });
           }
           rnnoiseSource = 'public/rnnoise';
-          console.warn('[AdvancedNoiseProcessor] Vite RNNoise assets unavailable, fallback local used:', bundledAssetsError);
+          console.warn('[NoiseProcessor] Vite RNNoise unavailable, fallback used:', bundledErr);
         }
 
-        // Créer le node RNNoise
-        this.rnnoiseNode = new RnnoiseWorkletNode(this.audioContext, {
-          wasmBinary,
-          maxChannels: 1,
-        });
-
+        this.rnnoiseNode = new RnnoiseWorkletNode(this.audioContext, { wasmBinary, maxChannels: 1 });
         this.useRnnoise = true;
         lastNode.connect(this.rnnoiseNode);
         lastNode = this.rnnoiseNode;
-
-        console.log(`[AdvancedNoiseProcessor] ✅ RNNoise WASM loaded from ${rnnoiseSource} - neural network noise suppression active`);
+        console.log(`[NoiseProcessor] ✅ RNNoise loaded from ${rnnoiseSource}`);
       } catch (rnnoiseError) {
-        console.warn('[AdvancedNoiseProcessor] ⚠️ RNNoise WASM failed, trying fallback noise gate:', rnnoiseError);
+        console.warn('[NoiseProcessor] ⚠️ RNNoise failed, trying fallback:', rnnoiseError);
         this.useRnnoise = false;
 
-        // === Fallback : noise gate AudioWorklet ===
         try {
           await this.audioContext.audioWorklet.addModule('/audio-worklet/noise-gate-processor.js');
           this.fallbackWorkletNode = new AudioWorkletNode(this.audioContext, 'noise-gate-processor');
           this.fallbackWorkletNode.port.postMessage({ type: 'setMode', mode: this.mode });
           this.useFallbackWorklet = true;
-
           lastNode.connect(this.fallbackWorkletNode);
           lastNode = this.fallbackWorkletNode;
-
-          console.log('[AdvancedNoiseProcessor] ✅ Fallback noise gate loaded');
+          console.log('[NoiseProcessor] ✅ Fallback noise gate loaded');
         } catch (fallbackError) {
-          console.warn('[AdvancedNoiseProcessor] ⚠️ No worklet available, filter-only pipeline:', fallbackError);
+          console.warn('[NoiseProcessor] ⚠️ No worklet available, filter-only:', fallbackError);
           this.useFallbackWorklet = false;
         }
       }
 
-      // === Étape 2 : Chain de filtres BiquadFilter (post-traitement) ===
+      // === Stage 2: Impulse Noise Gate (keyboard/mouse/breathing) ===
+      try {
+        await this.audioContext.audioWorklet.addModule('/audio-worklet/impulse-noise-gate.js');
+        this.impulseGateNode = new AudioWorkletNode(this.audioContext, 'impulse-noise-gate');
+        this.impulseGateNode.port.postMessage({ type: 'setMode', mode: this.mode });
+        this.useImpulseGate = true;
+        lastNode.connect(this.impulseGateNode);
+        lastNode = this.impulseGateNode;
+        console.log('[NoiseProcessor] ✅ Impulse noise gate loaded (keyboard/mouse/breathing suppression)');
+      } catch (impulseError) {
+        console.warn('[NoiseProcessor] ⚠️ Impulse gate failed:', impulseError);
+        this.useImpulseGate = false;
+      }
 
-      // 1. Highpass 85Hz - Supprime le rumble basse fréquence résiduel
+      // === Stage 3: BiquadFilter chain ===
       this.highpassFilter = this.audioContext.createBiquadFilter();
       this.highpassFilter.type = 'highpass';
       this.highpassFilter.frequency.value = 85;
       this.highpassFilter.Q.value = 0.8;
 
-      // 2. Peaking à 200Hz - Réduit le "muddiness"
       this.peakingFilter = this.audioContext.createBiquadFilter();
       this.peakingFilter.type = 'peaking';
       this.peakingFilter.frequency.value = 200;
       this.peakingFilter.Q.value = 1.0;
       this.peakingFilter.gain.value = this.mode === 'aggressive' ? -5 : -3;
 
-      // 3. Highshelf à 3kHz - Boost la présence vocale
       this.highshelfFilter = this.audioContext.createBiquadFilter();
       this.highshelfFilter.type = 'highshelf';
       this.highshelfFilter.frequency.value = 3000;
       this.highshelfFilter.gain.value = this.mode === 'aggressive' ? 3 : 2;
 
-      // 4. Lowpass 14kHz - Supprime le sifflement haute fréquence résiduel
       this.lowpassFilter = this.audioContext.createBiquadFilter();
       this.lowpassFilter.type = 'lowpass';
       this.lowpassFilter.frequency.value = this.mode === 'aggressive' ? 12000 : 14000;
       this.lowpassFilter.Q.value = 0.7;
 
-      // === Étape 3 : Compresseur dynamique optimisé pour la voix ===
+      // === Stage 4: Compressor ===
       this.compressor = this.audioContext.createDynamicsCompressor();
       if (this.mode === 'aggressive') {
         this.compressor.threshold.value = -30;
@@ -206,11 +163,11 @@ export class AdvancedNoiseProcessor {
         this.compressor.release.value = 0.25;
       }
 
-      // === Gain de sortie ===
+      // === Stage 5: Output gain ===
       this.gainNode = this.audioContext.createGain();
       this.gainNode.gain.value = 1.0;
 
-      // Connecter la chaîne complète : [RNNoise|Gate|Source] → filters → compressor → gain → destination
+      // Connect chain
       lastNode
         .connect(this.highpassFilter)
         .connect(this.peakingFilter)
@@ -222,27 +179,30 @@ export class AdvancedNoiseProcessor {
 
       this._latencyMs = performance.now() - this.processingStartTime;
 
-      const engine = this.useRnnoise ? 'RNNoise-WASM' : this.useFallbackWorklet ? 'NoiseGate-Worklet' : 'Filters-only';
-      console.log(`[AdvancedNoiseProcessor] Pipeline created in ${this._latencyMs.toFixed(1)}ms | mode=${this.mode} | engine=${engine}`);
+      const engines = [
+        this.useRnnoise ? 'RNNoise' : this.useFallbackWorklet ? 'NoiseGate' : null,
+        this.useImpulseGate ? 'ImpulseGate' : null,
+      ].filter(Boolean).join('+') || 'Filters-only';
+
+      console.log(`[NoiseProcessor] Pipeline ready in ${this._latencyMs.toFixed(1)}ms | mode=${this.mode} | engine=${engines}`);
 
       return this.destinationNode.stream;
     } catch (error) {
-      console.error('[AdvancedNoiseProcessor] Failed to create pipeline:', error);
-      return stream; // Fallback : retourne le stream original
+      console.error('[NoiseProcessor] Pipeline failed:', error);
+      return stream;
     }
   }
 
-  /**
-   * Change le mode de suppression de bruit en temps réel.
-   */
   setMode(mode: NoiseSuppressionMode) {
     this.mode = mode;
     setNoiseSuppressionMode(mode);
 
+    if (this.impulseGateNode) {
+      this.impulseGateNode.port.postMessage({ type: 'setMode', mode });
+    }
     if (this.fallbackWorkletNode) {
       this.fallbackWorkletNode.port.postMessage({ type: 'setMode', mode });
     }
-
     if (this.peakingFilter) {
       this.peakingFilter.gain.value = mode === 'aggressive' ? -5 : -3;
     }
@@ -267,40 +227,34 @@ export class AdvancedNoiseProcessor {
         this.compressor.release.value = 0.25;
       }
     }
-
-    console.log(`[AdvancedNoiseProcessor] Mode changed to: ${mode}`);
+    console.log(`[NoiseProcessor] Mode changed to: ${mode}`);
   }
 
-  /**
-   * Retourne la latence estimée du pipeline en millisecondes.
-   */
   getLatency(): number {
     if (!this.audioContext) return 0;
     const baseLatency = (this.audioContext.baseLatency || 0) * 1000;
     const outputLatency = (this.audioContext.outputLatency || 0) * 1000;
-    const processingLatency = this.useRnnoise ? 10 : this.useFallbackWorklet ? (128 / 48000) * 1000 : 0;
-    return Math.round(baseLatency + outputLatency + processingLatency);
+    const rnnoiseLatency = this.useRnnoise ? 10 : this.useFallbackWorklet ? (128 / 48000) * 1000 : 0;
+    const impulseLatency = this.useImpulseGate ? (128 / 48000) * 1000 : 0;
+    return Math.round(baseLatency + outputLatency + rnnoiseLatency + impulseLatency);
   }
 
-  /**
-   * Indique si RNNoise est actif.
-   */
   isRnnoiseActive(): boolean {
     return this.useRnnoise;
   }
 
-  /**
-   * Nettoie toutes les ressources audio.
-   */
+  isImpulseGateActive(): boolean {
+    return this.useImpulseGate;
+  }
+
   cleanup() {
     try {
       this.sourceNode?.disconnect();
-      
       if (this.rnnoiseNode) {
         (this.rnnoiseNode as any).destroy?.();
         this.rnnoiseNode.disconnect();
       }
-      
+      this.impulseGateNode?.disconnect();
       this.fallbackWorkletNode?.disconnect();
       this.highpassFilter?.disconnect();
       this.peakingFilter?.disconnect();
@@ -308,18 +262,17 @@ export class AdvancedNoiseProcessor {
       this.lowpassFilter?.disconnect();
       this.compressor?.disconnect();
       this.gainNode?.disconnect();
-      
       if (this.audioContext && this.audioContext.state !== 'closed') {
         this.audioContext.close();
       }
     } catch (error) {
-      console.error('[AdvancedNoiseProcessor] Cleanup error:', error);
+      console.error('[NoiseProcessor] Cleanup error:', error);
     }
-    
     this.audioContext = null;
     this.sourceNode = null;
     this.destinationNode = null;
     this.rnnoiseNode = null;
+    this.impulseGateNode = null;
     this.fallbackWorkletNode = null;
     this.highpassFilter = null;
     this.peakingFilter = null;
