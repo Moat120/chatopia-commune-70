@@ -549,10 +549,15 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setConnectionQuality("connecting");
 
     try {
-      // Fetch dynamic TURN credentials first
-      const dynamicConfig = await getDynamicRtcConfig();
-      rtcConfigRef.current = dynamicConfig;
-      console.log('[Voice] Using ICE config with', dynamicConfig.iceServers?.length, 'servers');
+      // Fetch dynamic TURN credentials first (fallback fast if function is slow)
+      try {
+        const dynamicConfig = await withTimeout(getDynamicRtcConfig(), 8000, "TURN config");
+        rtcConfigRef.current = dynamicConfig;
+        console.log('[Voice] Using ICE config with', dynamicConfig.iceServers?.length, 'servers');
+      } catch (turnError) {
+        console.warn('[Voice] TURN config unavailable, fallback to static RTC config', turnError);
+        rtcConfigRef.current = RTC_CONFIG;
+      }
 
       const audioConstraints = await getOptimizedAudioConstraints();
       console.log('[Voice] Getting media with constraints:', audioConstraints);
