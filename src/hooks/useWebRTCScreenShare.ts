@@ -24,6 +24,11 @@ export const QUALITY_PRESETS: Record<ScreenQuality, { width: number; height: num
   "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 25_000_000 },
 };
 
+interface ScreenIcePayload {
+  candidate: RTCIceCandidateInit;
+  connectionRole: "outgoing" | "incoming";
+}
+
 interface SignalMessage {
   type: "screen-offer" | "screen-answer" | "screen-ice";
   from: string;
