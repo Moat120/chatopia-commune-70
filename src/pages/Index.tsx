@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import FriendsSidebar from "@/components/friends/FriendsSidebar";
+import UnifiedSidebar from "@/components/UnifiedSidebar";
 import PrivateChatPanel from "@/components/friends/PrivateChatPanel";
 import PrivateCallPanel from "@/components/friends/PrivateCallPanel";
-import GroupsSidebar from "@/components/groups/GroupsSidebar";
 import GroupChatPanel from "@/components/groups/GroupChatPanel";
 import GroupVoiceChannel from "@/components/groups/GroupVoiceChannel";
 import SearchPalette from "@/components/chat/SearchPalette";
@@ -12,34 +11,29 @@ import { Friend } from "@/hooks/useFriends";
 import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Users, Phone, PhoneOff, Sparkles, Search } from "lucide-react";
+import { MessageCircle, Phone, PhoneOff } from "lucide-react";
 import { playNotificationSound, RingtoneManager } from "@/hooks/useSound";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
-
-import { cn } from "@/lib/utils";
 import { usePresence } from "@/hooks/usePresence";
 import { useCallCleanup } from "@/hooks/useCallCleanup";
 import { useNotifications } from "@/hooks/useNotifications";
 import {
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-type ViewMode = "friends" | "groups";
+type ViewMode = "messages" | "groups";
 
 const Index = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   usePresence();
   useCallCleanup();
   useNotifications();
-  
+
   const ringtoneRef = useRef(new RingtoneManager());
-  
-  const [viewMode, setViewMode] = useState<ViewMode>("friends");
+
+  const [viewMode, setViewMode] = useState<ViewMode>("messages");
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [activeCall, setActiveCall] = useState<{
@@ -53,7 +47,7 @@ const Index = () => {
     callId: string;
   } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  // Keyboard shortcuts
+
   useKeyboardShortcuts({
     onEscape: useCallback(() => {
       if (incomingCall) return;
@@ -63,6 +57,7 @@ const Index = () => {
     onSearch: useCallback(() => setSearchOpen(true), []),
   });
 
+  // Incoming calls listener
   useEffect(() => {
     if (!user) return;
 
@@ -86,10 +81,7 @@ const Index = () => {
               .single();
 
             if (caller) {
-              setIncomingCall({
-                friend: caller as Friend,
-                callId: call.id,
-              });
+              setIncomingCall({ friend: caller as Friend, callId: call.id });
               playNotificationSound();
               ringtoneRef.current.start();
               toast({
@@ -102,9 +94,7 @@ const Index = () => {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [user, toast]);
 
   const handleStartCall = (friend: Friend) => {
@@ -140,72 +130,23 @@ const Index = () => {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="h-screen flex mesh-gradient-animated overflow-hidden relative">
-        {/* Noise overlay */}
-        <div className="absolute inset-0 noise pointer-events-none" />
-
-        {/* Navigation Rail */}
-        <div className="w-[76px] h-full flex flex-col items-center py-5 gap-2 glass-solid border-r border-white/[0.04] relative z-10">
-          {/* Logo */}
-          <div className="mb-4 p-2">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 border border-white/10 flex items-center justify-center glow-primary">
-              <Sparkles className="w-5 h-5 text-primary" />
-            </div>
-          </div>
-
-          <div className="w-8 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-2" />
-
-          {/* Nav buttons */}
-          <NavButton
-            active={viewMode === "friends"}
-            onClick={() => {
-              setViewMode("friends");
-              setSelectedGroup(null);
-            }}
-            icon={<MessageCircle className="h-5 w-5" />}
-            label="Messages"
-          />
-          <NavButton
-            active={viewMode === "groups"}
-            onClick={() => {
-              setViewMode("groups");
-              setSelectedFriend(null);
-            }}
-            icon={<Users className="h-5 w-5" />}
-            label="Groupes"
-          />
-          
-          <div className="w-8 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent my-2" />
-          
-          <NavButton
-            active={false}
-            onClick={() => setSearchOpen(true)}
-            icon={<Search className="h-5 w-5" />}
-            label="Rechercher (Ctrl+K)"
-          />
-        </div>
-
-        {/* Sidebar */}
-        <div className="relative z-10">
-          {viewMode === "friends" ? (
-            <FriendsSidebar
-              selectedFriend={selectedFriend}
-              onSelectFriend={setSelectedFriend}
-              onStartCall={handleStartCall}
-            />
-          ) : (
-            <GroupsSidebar
-              selectedGroup={selectedGroup}
-              onSelectGroup={setSelectedGroup}
-              onStartGroupCall={handleStartGroupCall}
-              onBack={() => setViewMode("friends")}
-            />
-          )}
-        </div>
+      <div className="h-screen flex bg-background overflow-hidden">
+        {/* Unified Sidebar */}
+        <UnifiedSidebar
+          tab={viewMode}
+          onTabChange={setViewMode}
+          selectedFriend={selectedFriend}
+          onSelectFriend={setSelectedFriend}
+          selectedGroup={selectedGroup}
+          onSelectGroup={setSelectedGroup}
+          onStartCall={handleStartCall}
+          onStartGroupCall={handleStartGroupCall}
+          onOpenSearch={() => setSearchOpen(true)}
+        />
 
         {/* Main Content */}
-        <div className="flex-1 relative z-10">
-          {viewMode === "friends" && selectedFriend ? (
+        <div className="flex-1 flex flex-col min-w-0">
+          {viewMode === "messages" && selectedFriend ? (
             <PrivateChatPanel
               friend={selectedFriend}
               onClose={() => setSelectedFriend(null)}
@@ -254,7 +195,7 @@ const Index = () => {
           open={searchOpen}
           onOpenChange={setSearchOpen}
           onSelectFriend={(friend) => {
-            setViewMode("friends");
+            setViewMode("messages");
             setSelectedGroup(null);
             setSelectedFriend(friend);
           }}
@@ -269,23 +210,18 @@ const Index = () => {
   );
 };
 
-// Empty State Component
+/* ─── Empty State ─── */
 const EmptyState = ({ viewMode }: { viewMode: ViewMode }) => (
-  <div className="flex-1 flex items-center justify-center h-full">
+  <div className="flex-1 flex items-center justify-center h-full bg-background">
     <div className="text-center animate-reveal">
-      {/* Decorative icon container */}
-      <div className="relative mb-8 inline-block">
-        <div className="absolute -inset-8 bg-primary/10 rounded-full blur-3xl" />
-        <div className="relative w-24 h-24 rounded-3xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-white/[0.06] flex items-center justify-center float-subtle">
-          <MessageCircle className="h-12 w-12 text-muted-foreground/30" />
-        </div>
+      <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/10 border border-white/[0.04] flex items-center justify-center">
+        <MessageCircle className="h-9 w-9 text-muted-foreground/15" />
       </div>
-      
-      <h2 className="text-3xl font-bold mb-3 gradient-text-static">
-        Bienvenue !
+      <h2 className="text-xl font-semibold mb-2 text-foreground/80">
+        {viewMode === "messages" ? "Messages" : "Groupes"}
       </h2>
-      <p className="text-muted-foreground/70 max-w-sm text-lg font-light">
-        {viewMode === "friends"
+      <p className="text-muted-foreground/40 max-w-xs text-sm">
+        {viewMode === "messages"
           ? "Sélectionne un ami pour commencer une conversation"
           : "Sélectionne un groupe ou crée-en un nouveau"}
       </p>
@@ -293,78 +229,33 @@ const EmptyState = ({ viewMode }: { viewMode: ViewMode }) => (
   </div>
 );
 
-// Nav Button Component
-interface NavButtonProps {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}
-
-const NavButton = ({ active, onClick, icon, label }: NavButtonProps) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <button
-        onClick={onClick}
-        className={cn(
-          "relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-400 group",
-          active
-            ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg glow-primary"
-            : "text-muted-foreground hover:text-foreground hover:bg-white/[0.06]"
-        )}
-      >
-        <span className={cn(
-          "transition-transform duration-300",
-          active && "scale-110"
-        )}>
-          {icon}
-        </span>
-        
-        {/* Active indicator pill */}
-        {active && (
-          <span className="absolute -left-[14px] w-1 h-7 bg-primary rounded-r-full shadow-lg shadow-primary/50" />
-        )}
-      </button>
-    </TooltipTrigger>
-    <TooltipContent side="right" className="glass-solid border-white/10 px-3 py-2">
-      <p className="font-medium">{label}</p>
-    </TooltipContent>
-  </Tooltip>
-);
-
-// Incoming Call Modal Component
-interface IncomingCallModalProps {
+/* ─── Incoming Call Modal ─── */
+const IncomingCallModal = ({
+  friend,
+  onAccept,
+  onDecline,
+}: {
   friend: Friend;
   onAccept: () => void;
   onDecline: () => void;
-}
-
-const IncomingCallModal = ({ friend, onAccept, onDecline }: IncomingCallModalProps) => (
+}) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-2xl animate-fade-in">
-    <div className="card-modern p-10 w-[400px] animate-scale-in border-gradient">
-      <div className="flex flex-col items-center text-center mb-10">
-        {/* Avatar with rings */}
-        <div className="relative mb-6">
-          {/* Animated rings */}
+    <div className="card-modern p-8 w-[380px] animate-scale-in">
+      <div className="flex flex-col items-center text-center mb-8">
+        <div className="relative mb-5">
           <div className="absolute inset-0 rounded-full border-2 border-success/50 animate-speaking-ring" />
-          <div className="absolute inset-0 rounded-full border-2 border-success/30 animate-speaking-ring" style={{ animationDelay: '0.5s' }} />
-          <div className="absolute inset-0 rounded-full border-2 border-success/20 animate-speaking-ring" style={{ animationDelay: '1s' }} />
-          
-          {/* Avatar */}
+          <div className="absolute inset-0 rounded-full border-2 border-success/30 animate-speaking-ring" style={{ animationDelay: "0.5s" }} />
           <img
             src={friend.avatar_url || ""}
             alt=""
-            className="h-32 w-32 rounded-full bg-muted ring-4 ring-success/30 relative z-10 object-cover shadow-2xl"
+            className="h-28 w-28 rounded-full bg-muted ring-4 ring-success/20 relative z-10 object-cover"
           />
-          
-          {/* Phone icon badge */}
-          <span className="absolute -top-2 -right-2 w-10 h-10 bg-success rounded-xl flex items-center justify-center z-20 shadow-lg glow-success ring-pulse">
-            <Phone className="h-5 w-5 text-success-foreground" />
+          <span className="absolute -top-1 -right-1 w-9 h-9 bg-success rounded-xl flex items-center justify-center z-20 shadow-lg">
+            <Phone className="h-4 w-4 text-success-foreground" />
           </span>
         </div>
-        
-        <p className="text-2xl font-bold mb-2">{friend.username}</p>
-        <p className="text-muted-foreground flex items-center gap-2">
+        <p className="text-xl font-bold mb-1">{friend.username}</p>
+        <p className="text-sm text-muted-foreground flex items-center gap-2">
           <span className="flex gap-1">
             <span className="typing-dot" />
             <span className="typing-dot" />
@@ -373,20 +264,19 @@ const IncomingCallModal = ({ friend, onAccept, onDecline }: IncomingCallModalPro
           Appel entrant
         </p>
       </div>
-      
-      <div className="flex gap-4">
+      <div className="flex gap-3">
         <Button
           onClick={onDecline}
-          className="flex-1 h-14 rounded-2xl bg-destructive/90 hover:bg-destructive text-destructive-foreground font-semibold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_8px_30px_hsl(var(--destructive)/0.3)]"
+          className="flex-1 h-12 rounded-xl bg-destructive/90 hover:bg-destructive text-destructive-foreground font-semibold"
         >
-          <PhoneOff className="h-5 w-5 mr-2" />
+          <PhoneOff className="h-4 w-4 mr-2" />
           Refuser
         </Button>
         <Button
           onClick={onAccept}
-          className="flex-1 h-14 rounded-2xl bg-success hover:bg-success/90 text-success-foreground font-semibold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] glow-success"
+          className="flex-1 h-12 rounded-xl bg-success hover:bg-success/90 text-success-foreground font-semibold"
         >
-          <Phone className="h-5 w-5 mr-2" />
+          <Phone className="h-4 w-4 mr-2" />
           Accepter
         </Button>
       </div>
