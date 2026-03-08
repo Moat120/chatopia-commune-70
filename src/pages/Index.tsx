@@ -54,10 +54,11 @@ const Index = () => {
   // Keyboard shortcuts
   useKeyboardShortcuts({
     onEscape: useCallback(() => {
-      if (incomingCall) return; // Don't close incoming call with Escape
+      if (incomingCall) return;
       if (selectedFriend) setSelectedFriend(null);
       else if (selectedGroup) setSelectedGroup(null);
     }, [selectedFriend, selectedGroup, incomingCall]),
+    onSearch: useCallback(() => setSearchOpen(true), []),
   });
 
   useEffect(() => {
