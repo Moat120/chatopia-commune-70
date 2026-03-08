@@ -90,6 +90,7 @@ const PrivateCallPanel = ({
   const rawStreamRef = useRef<MediaStream | null>(null);
   const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const iceRestartManagerRef = useRef<ICERestartManager>(new ICERestartManager());
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
