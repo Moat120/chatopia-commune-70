@@ -562,9 +562,13 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       const audioConstraints = await getOptimizedAudioConstraints();
       console.log('[Voice] Getting media with constraints:', audioConstraints);
 
-      const rawStream = await navigator.mediaDevices.getUserMedia({
-        audio: audioConstraints,
-      });
+      const rawStream = await withTimeout(
+        navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+        }),
+        10000,
+        "getUserMedia"
+      );
       rawStreamRef.current = rawStream;
 
       const audioTrack = rawStream.getAudioTracks()[0];
