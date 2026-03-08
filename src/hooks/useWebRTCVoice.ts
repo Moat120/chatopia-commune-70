@@ -762,18 +762,29 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       presenceChannel.on("presence", { event: "sync" }, syncPresenceState);
 
       presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
-        const joinedUserIds = [
-          key,
-          ...(Array.isArray(newPresences)
-            ? newPresences.map((p: any) => String(p?.odId || "")).filter(Boolean)
-            : []),
-        ];
+        // Skip observer joins
+        if (key.startsWith("observer-")) return;
+
+        const joinedUserIds = new Set<string>();
+        if (key && key !== currentUserId) joinedUserIds.add(key);
+        if (Array.isArray(newPresences)) {
+          newPresences.forEach((p: any) => {
+            const id = String(p?.odId || "");
+            if (id && id !== currentUserId && !id.startsWith("observer-") && !p?._observer) {
+              joinedUserIds.add(id);
+            }
+          });
+        }
 
         joinedUserIds.forEach((joinedUserId) => {
-          if (joinedUserId !== currentUserId && currentUserId < joinedUserId) {
+          if (!peerConnectionsRef.current.has(joinedUserId) && currentUserId < joinedUserId) {
+            console.log('[Voice] Join event → initiating connection to', joinedUserId);
             initiateConnectionRef.current?.(joinedUserId);
           }
         });
+
+        // Also re-sync presence state to update the user list
+        syncPresenceState();
       });
 
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
