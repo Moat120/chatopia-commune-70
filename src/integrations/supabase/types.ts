@@ -127,6 +127,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string | null
+          edited_at: string | null
           group_id: string
           id: string
           sender_id: string
@@ -134,6 +135,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string | null
+          edited_at?: string | null
           group_id: string
           id?: string
           sender_id: string
@@ -141,6 +143,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string | null
+          edited_at?: string | null
           group_id?: string
           id?: string
           sender_id?: string
@@ -231,6 +234,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string | null
+          edited_at: string | null
           id: string
           read_at: string | null
           receiver_id: string
@@ -239,6 +243,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string | null
+          edited_at?: string | null
           id?: string
           read_at?: string | null
           receiver_id: string
@@ -247,6 +252,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string | null
+          edited_at?: string | null
           id?: string
           read_at?: string | null
           receiver_id?: string
