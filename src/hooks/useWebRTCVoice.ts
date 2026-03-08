@@ -582,6 +582,12 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         try { supabase.removeChannel(rosterChannelRef.current); } catch {}
         rosterChannelRef.current = null;
       }
+      if (observerChannelRef.current) {
+        // Broadcast empty roster before removing so observers see "nobody"
+        try { observerChannelRef.current.send({ type: "broadcast", event: "voice-roster", payload: { users: [] } }); } catch {}
+        try { supabase.removeChannel(observerChannelRef.current); } catch {}
+        observerChannelRef.current = null;
+      }
     };
 
     // Hard 2s timeout on channel cleanup — never block leaving
