@@ -98,6 +98,7 @@ const PrivateCallPanel = ({
   const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const iceRestartManagerRef = useRef<ICERestartManager>(new ICERestartManager());
+  const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
