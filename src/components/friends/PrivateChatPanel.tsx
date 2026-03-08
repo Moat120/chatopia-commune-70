@@ -131,7 +131,7 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
   return (
     <div className="flex-1 flex flex-col h-full bg-background">
       {/* ─── Header ─── */}
-      <header className="h-16 px-4 flex items-center gap-3 border-b border-white/[0.06] bg-card/30 backdrop-blur-xl shrink-0">
+      <header className="h-16 px-4 flex items-center gap-3 border-b border-border bg-card shrink-0">
         <Button
           variant="ghost"
           size="icon"

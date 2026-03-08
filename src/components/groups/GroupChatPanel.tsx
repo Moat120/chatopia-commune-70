@@ -141,7 +141,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
     <div className="flex-1 flex h-full">
       <div className="flex-1 flex flex-col h-full bg-background">
         {/* ─── Header ─── */}
-        <header className="h-16 px-4 flex items-center gap-3 border-b border-white/[0.06] bg-card/30 backdrop-blur-xl shrink-0">
+        <header className="h-16 px-4 flex items-center gap-3 border-b border-border bg-card shrink-0">
           <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-lg hover:bg-white/[0.06] md:hidden" silent>
             <ArrowLeft className="h-4 w-4" />
           </Button>
