@@ -654,60 +654,46 @@ const PrivateCallPanel = ({
           "border-t border-white/[0.04] glass-solid"
         )}>
           {callStatus === "ringing" && isIncoming ? (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="lg" className="h-14 w-14 rounded-2xl bg-destructive/90 hover:bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30 transition-all duration-300 hover:scale-105 active:scale-95" onClick={declineCall}>
-                    <PhoneOff className="h-6 w-6" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="glass-solid border-white/10">Refuser</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="lg" className="h-14 w-14 rounded-2xl bg-success hover:bg-success/90 text-success-foreground shadow-lg glow-success transition-all duration-300 hover:scale-105 active:scale-95" onClick={acceptCall}>
-                    <Phone className="h-6 w-6" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="glass-solid border-white/10">Accepter</TooltipContent>
-              </Tooltip>
-            </>
+            <div className="flex items-center gap-3">
+              <Button
+                size="lg"
+                variant="destructive"
+                className="h-12 rounded-xl px-4"
+                onClick={declineCall}
+              >
+                <PhoneOff className="h-5 w-5 mr-2" />
+                Refuser
+              </Button>
+              <Button
+                size="lg"
+                className="h-12 rounded-xl px-4 bg-success text-success-foreground hover:bg-success/90"
+                onClick={acceptCall}
+              >
+                <Phone className="h-5 w-5 mr-2" />
+                Accepter
+              </Button>
+            </div>
           ) : callStatus === "active" ? (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="lg" className={cn("h-14 w-14 rounded-2xl transition-all duration-300", isMuted ? "bg-destructive/90 hover:bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30" : "bg-secondary/80 hover:bg-secondary text-foreground border border-white/10")} onClick={toggleMute}>
-                    {isMuted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="glass-solid border-white/10">{isMuted ? "Activer le micro" : "Couper le micro"}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="lg" className={cn("h-14 w-14 rounded-2xl transition-all duration-300", isSharing ? "bg-primary text-primary-foreground shadow-lg glow-primary" : "bg-secondary/80 hover:bg-secondary text-foreground border border-white/10")} onClick={handleToggleScreenShare}>
-                    {isSharing ? <MonitorOff className="h-6 w-6" /> : <Monitor className="h-6 w-6" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="glass-solid border-white/10">{isSharing ? "Arrêter le partage" : "Partager l'écran"}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="lg" className="h-14 w-14 rounded-2xl bg-destructive/90 hover:bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30 transition-all duration-300 hover:scale-105 active:scale-95" onClick={endCall}>
-                    <PhoneOff className="h-6 w-6" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="glass-solid border-white/10">Terminer l'appel</TooltipContent>
-              </Tooltip>
-            </>
+            <VoiceControlsWithScreenShare
+              isConnected={true}
+              isConnecting={false}
+              isMuted={isMuted}
+              isScreenSharing={isSharing}
+              onJoin={() => {}}
+              onLeave={endCall}
+              onToggleMute={toggleMute}
+              onToggleScreenShare={handleToggleScreenShare}
+            />
           ) : callStatus === "connecting" || (callStatus === "ringing" && !isIncoming) ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button size="lg" className="h-14 w-14 rounded-2xl bg-destructive/90 hover:bg-destructive text-destructive-foreground shadow-lg shadow-destructive/30 transition-all duration-300 hover:scale-105 active:scale-95" onClick={endCall}>
-                  <PhoneOff className="h-6 w-6" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent className="glass-solid border-white/10">Annuler</TooltipContent>
-            </Tooltip>
+            <Button
+              size="lg"
+              variant="destructive"
+              className="h-12 rounded-xl px-4"
+              onClick={endCall}
+            >
+              <PhoneOff className="h-5 w-5 mr-2" />
+              Annuler l'appel
+            </Button>
           ) : null}
         </div>
 
