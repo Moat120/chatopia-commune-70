@@ -385,13 +385,20 @@ const SettingsDialog = () => {
       }
 
       // Loopback: route processed audio to speakers (muted by default)
+      // Use a stereo merger to fix mono-only-left issue
       loopbackDelayRef.current = audioContextRef.current.createDelay(1.0);
-      loopbackDelayRef.current.delayTime.value = 0.04; // 40ms
+      loopbackDelayRef.current.delayTime.value = 0.04;
       loopbackGainRef.current = audioContextRef.current.createGain();
       loopbackGainRef.current.gain.value = 0;
 
       const loopbackSource = processedSourceRef.current || source;
-      loopbackSource.connect(loopbackDelayRef.current);
+      // Merge mono to both L+R channels
+      const merger = audioContextRef.current.createChannelMerger(2);
+      const splitter = audioContextRef.current.createChannelSplitter(1);
+      loopbackSource.connect(splitter);
+      splitter.connect(merger, 0, 0); // mono → left
+      splitter.connect(merger, 0, 1); // mono → right
+      merger.connect(loopbackDelayRef.current);
       loopbackDelayRef.current.connect(loopbackGainRef.current);
       loopbackGainRef.current.connect(audioContextRef.current.destination);
 
