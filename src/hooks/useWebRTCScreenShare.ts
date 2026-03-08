@@ -422,11 +422,19 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         surfaceSwitching: "include",
       } as any);
 
-      // Set content hint for video track
+      // Set content hint and degradation preference for video track
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         try {
           (videoTrack as any).contentHint = 'detail';
+        } catch {}
+        // Apply constraints to maintain resolution quality
+        try {
+          await videoTrack.applyConstraints({
+            width: { ideal: preset.width },
+            height: { ideal: preset.height },
+            frameRate: { ideal: preset.frameRate },
+          });
         } catch {}
       }
 

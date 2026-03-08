@@ -149,6 +149,7 @@ const ScreenTile = ({
         className="w-full h-full object-contain bg-black transition-transform duration-100"
         style={{
           transform: zoom > 1 ? `scale(${zoom}) translate(${panOffset.x / zoom}px, ${panOffset.y / zoom}px)` : undefined,
+          imageRendering: 'auto',
         }}
       />
       
