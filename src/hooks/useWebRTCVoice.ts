@@ -689,6 +689,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     audioLevel,
     isPttActive,
     userVolumes,
+    noiseEngine,
     setUserVolume,
     join,
     leave,
