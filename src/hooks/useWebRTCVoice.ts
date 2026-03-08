@@ -263,7 +263,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     if (conflicting.length > 0) {
       console.warn("[Voice] Removing conflicting realtime channels:", conflicting.map((c: any) => c?.topic));
-      await Promise.all(conflicting.map((ch) => supabase.removeChannel(ch)));
+      await Promise.all(conflicting.map((ch) => supabase.removeChannel(ch).catch(() => {})));
+      // Small delay to let the server process unsubscribes before re-subscribing
+      await new Promise(r => setTimeout(r, 300));
     }
   }, [channelId]);
 
