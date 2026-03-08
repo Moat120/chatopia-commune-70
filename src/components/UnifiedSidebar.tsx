@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useFriends, Friend } from "@/hooks/useFriends";
 import { useGroups, Group } from "@/hooks/useGroups";
 import { useAuth } from "@/contexts/AuthContext";
