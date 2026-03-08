@@ -35,6 +35,7 @@ const Index = () => {
   
   usePresence();
   useCallCleanup();
+  useNotifications();
   
   const ringtoneRef = useRef(new RingtoneManager());
   
