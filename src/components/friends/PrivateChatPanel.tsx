@@ -47,8 +47,24 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const { toggleReaction, getReactionGroups } = useReactions("private", messageIds);
 
-  // Smart scroll
+  const prevMsgCountRef = useRef(messages.length);
+
+  // Smart scroll + play sound for incoming messages
   useEffect(() => {
+    const newCount = messages.length;
+    const isNewIncoming = newCount > prevMsgCountRef.current && messages[newCount - 1]?.sender_id !== user?.id;
+    prevMsgCountRef.current = newCount;
+
+    if (isNewIncoming && !isNearBottomRef.current) {
+      // Don't auto-scroll, user is reading history
+      playMessageReceived();
+      return;
+    }
+
+    if (isNewIncoming) {
+      playMessageReceived();
+    }
+
     if (isNearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
