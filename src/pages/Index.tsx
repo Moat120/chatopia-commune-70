@@ -53,7 +53,7 @@ const Index = () => {
     callId: string;
   } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   useKeyboardShortcuts({
     onEscape: useCallback(() => {
       if (incomingCall) return;
