@@ -248,24 +248,24 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
   const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
 
-  const clearConflictingVoiceChannels = useCallback(async () => {
-    const topicSuffixes = [
-      `voice-sig-${channelId}`,
-      `voice-status-${channelId}`,
-      `voice-pres-${channelId}`,
+  const clearOwnVoiceChannels = useCallback(async () => {
+    // Only remove channels that WE previously created (exact topic match)
+    const exactTopics = [
+      `realtime:voice-sig-${channelId}`,
+      `realtime:voice-status-${channelId}`,
+      `realtime:voice-pres-${channelId}`,
     ];
 
     const channels = supabase.getChannels();
-    const conflicting = channels.filter((ch) => {
+    const ours = channels.filter((ch) => {
       const topic = String((ch as any)?.topic || "");
-      return topicSuffixes.some((suffix) => topic.endsWith(suffix));
+      return exactTopics.includes(topic);
     });
 
-    if (conflicting.length > 0) {
-      console.warn("[Voice] Removing conflicting realtime channels:", conflicting.map((c: any) => c?.topic));
-      await Promise.all(conflicting.map((ch) => supabase.removeChannel(ch).catch(() => {})));
-      // Small delay to let the server process unsubscribes before re-subscribing
-      await new Promise(r => setTimeout(r, 300));
+    if (ours.length > 0) {
+      console.log("[Voice] Cleaning up own stale channels:", ours.map((c: any) => c?.topic));
+      await Promise.all(ours.map((ch) => supabase.removeChannel(ch).catch(() => {})));
+      await new Promise(r => setTimeout(r, 200));
     }
   }, [channelId]);
 
