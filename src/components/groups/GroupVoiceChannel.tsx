@@ -35,6 +35,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     connectionQuality,
     audioLevel,
     userVolumes,
+    noiseEngine,
     setUserVolume,
     join,
     leave,
@@ -128,8 +129,11 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight">{group.name}</h2>
-              <p className="text-xs text-muted-foreground/50">
+              <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
                 {isConnected ? `${connectedUsers.length} participant${connectedUsers.length > 1 ? 's' : ''}` : "Rejoindre l'appel"}
+                {isConnected && noiseEngine && (
+                  <span className="text-[10px] text-success/70">• {noiseEngine}</span>
+                )}
               </p>
             </div>
           </div>

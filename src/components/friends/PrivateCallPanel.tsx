@@ -316,9 +316,20 @@ const PrivateCallPanel = ({
 
       let processedStream = rawStream;
       if (getNoiseSuppression()) {
-        noiseProcessorRef.current = new AdvancedNoiseProcessor();
-        processedStream = await noiseProcessorRef.current.process(rawStream);
-        console.log('[PrivateCall] Noise processing applied | rnnoiseActive=', noiseProcessorRef.current.isRnnoiseActive(), '| latency=', noiseProcessorRef.current.getLatency(), 'ms');
+        try {
+          noiseProcessorRef.current = new AdvancedNoiseProcessor();
+          processedStream = await noiseProcessorRef.current.process(rawStream);
+          const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
+          const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
+          console.log(`[PrivateCall] Noise processing applied | RNNoise=${rnnoiseActive} | ImpulseGate=${impulseActive} | latency=${noiseProcessorRef.current.getLatency()}ms`);
+          if (!rnnoiseActive) {
+            console.warn('[PrivateCall] ⚠️ RNNoise failed to load, using fallback');
+          }
+        } catch (noiseErr) {
+          console.error('[PrivateCall] Noise processor failed:', noiseErr);
+        }
+      } else {
+        console.log('[PrivateCall] Noise suppression disabled in settings');
       }
       
       localStreamRef.current = processedStream;

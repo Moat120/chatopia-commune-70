@@ -86,6 +86,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const [audioLevel, setAudioLevel] = useState(0);
   const [isPttActive, setIsPttActive] = useState(false);
   const [userVolumes, setUserVolumes] = useState<Record<string, number>>({});
+  const [noiseEngine, setNoiseEngine] = useState<string | null>(null);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const rawStreamRef = useRef<MediaStream | null>(null);
@@ -511,10 +512,31 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       // Apply AdvancedNoiseProcessor pipeline
       let processedStream = rawStream;
       if (getNoiseSuppression()) {
-        noiseProcessorRef.current = new AdvancedNoiseProcessor();
-        processedStream = await noiseProcessorRef.current.process(rawStream);
-        const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
-        console.log('[Voice] Advanced noise processing applied | rnnoiseActive=', rnnoiseActive, '| latency=', noiseProcessorRef.current.getLatency(), 'ms');
+        try {
+          noiseProcessorRef.current = new AdvancedNoiseProcessor();
+          processedStream = await noiseProcessorRef.current.process(rawStream);
+          const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
+          const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
+          const latency = noiseProcessorRef.current.getLatency();
+          
+          const engines = [
+            rnnoiseActive ? 'RNNoise' : null,
+            impulseActive ? 'ImpulseGate' : null,
+          ].filter(Boolean).join('+') || 'Filters';
+          setNoiseEngine(engines);
+          
+          console.log(`[Voice] Noise processing applied | engine=${engines} | latency=${latency}ms`);
+          
+          if (!rnnoiseActive) {
+            console.warn('[Voice] ⚠️ RNNoise failed to load, using fallback noise processing');
+          }
+        } catch (noiseErr) {
+          console.error('[Voice] Noise processor pipeline failed entirely:', noiseErr);
+          setNoiseEngine(null);
+        }
+      } else {
+        console.log('[Voice] Noise suppression disabled in settings');
+        setNoiseEngine(null);
       }
 
       localStreamRef.current = processedStream;
@@ -667,6 +689,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     audioLevel,
     isPttActive,
     userVolumes,
+    noiseEngine,
     setUserVolume,
     join,
     leave,

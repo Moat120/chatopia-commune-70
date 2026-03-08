@@ -28,6 +28,7 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     connectionQuality,
     audioLevel,
     userVolumes,
+    noiseEngine,
     setUserVolume,
     join,
     leave,
@@ -94,10 +95,13 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight">{channelName}</h2>
-              <p className="text-xs text-muted-foreground/50">
+              <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
                 {isConnected 
                   ? `${connectedUsers.length} connecté${connectedUsers.length > 1 ? 's' : ''}`
                   : "Canal vocal"}
+                {isConnected && noiseEngine && (
+                  <span className="text-[10px] text-success/70">• {noiseEngine}</span>
+                )}
               </p>
             </div>
           </div>
