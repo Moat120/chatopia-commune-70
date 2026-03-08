@@ -795,6 +795,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     } catch (error: any) {
       console.error("[Voice] Join error:", error);
       onError?.(error.message || "Failed to join voice channel");
+      if (joinWatchdogRef.current) {
+        clearTimeout(joinWatchdogRef.current);
+        joinWatchdogRef.current = null;
+      }
       setIsConnecting(false);
       cleanup();
       return false;
