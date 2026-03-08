@@ -49,7 +49,15 @@ const Index = () => {
     friend: Friend;
     callId: string;
   } | null>(null);
-  
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onEscape: useCallback(() => {
+      if (incomingCall) return; // Don't close incoming call with Escape
+      if (selectedFriend) setSelectedFriend(null);
+      else if (selectedGroup) setSelectedGroup(null);
+    }, [selectedFriend, selectedGroup, incomingCall]),
+  });
 
   useEffect(() => {
     if (!user) return;
