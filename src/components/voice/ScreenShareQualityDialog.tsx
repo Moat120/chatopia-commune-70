@@ -6,7 +6,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Monitor, Zap, Crown } from "lucide-react";
+import { Monitor, Zap, Crown, Wifi } from "lucide-react";
 import { ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,14 @@ interface ScreenShareQualityDialogProps {
   onSelectQuality: (quality: ScreenQuality) => void;
 }
 
-const qualityOptions: { quality: ScreenQuality; label: string; description: string; icon: typeof Monitor }[] = [
+const qualityOptions: { quality: ScreenQuality; label: string; description: string; icon: typeof Monitor; badge?: string }[] = [
+  {
+    quality: "720p30",
+    label: "720p 30fps",
+    description: "Économique, idéal connexion lente",
+    icon: Wifi,
+    badge: "Éco",
+  },
   {
     quality: "1080p60",
     label: "1080p 60fps",
@@ -40,6 +47,7 @@ const qualityOptions: { quality: ScreenQuality; label: string; description: stri
     label: "1440p 120fps",
     description: "QHD, performance max",
     icon: Crown,
+    badge: "Max",
   },
 ];
 
@@ -64,7 +72,7 @@ const ScreenShareQualityDialog = ({
             <span className="gradient-text-static">Qualité du partage</span>
           </DialogTitle>
           <DialogDescription className="text-muted-foreground/70">
-            Sélectionnez la qualité de partage d'écran.
+            Sélectionnez la qualité. L'audio système sera capturé si disponible.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -88,11 +96,20 @@ const ScreenShareQualityDialog = ({
                   <Icon className="h-6 w-6 text-primary" />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="font-bold">{option.label}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold">{option.label}</p>
+                    {option.badge && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/20 text-primary font-bold">
+                        {option.badge}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground/70">{option.description}</p>
                 </div>
                 <div className="text-xs text-muted-foreground/50 text-right font-medium">
                   {preset.width}×{preset.height}
+                  <br />
+                  <span className="text-[10px]">{Math.round(preset.bitrate / 1000000)} Mbps</span>
                 </div>
               </Button>
             );

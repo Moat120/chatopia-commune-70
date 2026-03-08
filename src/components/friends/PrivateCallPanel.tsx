@@ -22,35 +22,20 @@ import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialo
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
+import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
+import { 
+  RTC_CONFIG, 
+  mungeOpusSDP, 
+  configureAudioSender,
+  ICERestartManager 
+} from "@/lib/webrtcUtils";
+
 interface PrivateCallPanelProps {
   friend: Friend;
   onEnd: () => void;
   isIncoming?: boolean;
   callId?: string;
 }
-
-// Optimized ICE servers for low latency
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  {
-    urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-];
-
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: ICE_SERVERS,
-  iceCandidatePoolSize: 10,
-  bundlePolicy: "max-bundle",
-  rtcpMuxPolicy: "require",
-};
 
 const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
   const selectedMic = getSelectedMicrophone();
@@ -82,9 +67,6 @@ const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
     } as any),
   };
 };
-
-import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
-
 const PrivateCallPanel = ({
   friend,
   onEnd,
@@ -108,6 +90,7 @@ const PrivateCallPanel = ({
   const rawStreamRef = useRef<MediaStream | null>(null);
   const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const iceRestartManagerRef = useRef<ICERestartManager>(new ICERestartManager());
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -172,19 +155,14 @@ const PrivateCallPanel = ({
 
   const setupPeerConnection = (stream: MediaStream) => {
     if (peerConnectionRef.current) peerConnectionRef.current.close();
+    iceRestartManagerRef.current.reset();
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnectionRef.current = pc;
 
     stream.getTracks().forEach(track => {
       const sender = pc.addTrack(track, stream);
       if (track.kind === 'audio') {
-        const params = sender.getParameters();
-        if (params.encodings && params.encodings.length > 0) {
-          params.encodings[0].maxBitrate = 128000;
-          params.encodings[0].priority = "high";
-          params.encodings[0].networkPriority = "high";
-          sender.setParameters(params).catch(() => {});
-        }
+        configureAudioSender(sender);
       }
     });
 
@@ -202,15 +180,17 @@ const PrivateCallPanel = ({
         const remoteAudioContext = new AudioContext({ sampleRate: 48000 });
         const source = remoteAudioContext.createMediaStreamSource(remoteStream);
         const analyser = remoteAudioContext.createAnalyser();
-        analyser.fftSize = 128;
-        analyser.smoothingTimeConstant = 0.3;
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.4;
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const detectFriendSpeaking = () => {
           if (callStatusRef.current === "ended") { remoteAudioContext.close(); return; }
           analyser.getByteFrequencyData(dataArray);
-          const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-          setFriendSpeaking(avg > 15);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+          const rms = Math.sqrt(sum / dataArray.length);
+          setFriendSpeaking(rms > 12);
           requestAnimationFrame(detectFriendSpeaking);
         };
         detectFriendSpeaking();
@@ -227,7 +207,13 @@ const PrivateCallPanel = ({
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') pc.restartIce();
+      const state = pc.connectionState;
+      console.log('[PrivateCall] Connection state:', state);
+      if (state === 'connected') {
+        iceRestartManagerRef.current.reset();
+      } else if (state === 'failed' || state === 'disconnected') {
+        iceRestartManagerRef.current.scheduleRestart(pc);
+      }
     };
 
     return pc;
@@ -246,21 +232,27 @@ const PrivateCallPanel = ({
           analyserRef.current = audioContextRef.current.createAnalyser();
           const source = audioContextRef.current.createMediaStreamSource(stream);
           source.connect(analyserRef.current);
-          analyserRef.current.fftSize = 128;
-          analyserRef.current.smoothingTimeConstant = 0.3;
+          analyserRef.current.fftSize = 256;
+          analyserRef.current.smoothingTimeConstant = 0.4;
           const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
           const detectVoice = () => {
             if (!analyserRef.current || callStatusRef.current === "ended") return;
             analyserRef.current.getByteFrequencyData(dataArray);
-            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-            setIsSpeaking(average > 15 && !isMutedRef.current);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+            const rms = Math.sqrt(sum / dataArray.length);
+            setIsSpeaking(rms > 12 && !isMutedRef.current);
             animationRef.current = requestAnimationFrame(detectVoice);
           };
           detectVoice();
         }
         if (!pc) pc = setupPeerConnection(localStreamRef.current);
-        await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
+        // Munge incoming offer SDP for Opus HD
+        const mungedOffer = { ...payload.data, sdp: mungeOpusSDP(payload.data.sdp) };
+        await pc.setRemoteDescription(new RTCSessionDescription(mungedOffer));
         const answer = await pc.createAnswer();
+        // Munge answer SDP
+        answer.sdp = mungeOpusSDP(answer.sdp || '');
         await pc.setLocalDescription(answer);
         signalingChannelRef.current?.send({
           type: 'broadcast', event: 'webrtc-signal',
@@ -268,7 +260,10 @@ const PrivateCallPanel = ({
         });
       } catch (error) { console.error('[PrivateCall] Error handling offer:', error); }
     } else if (payload.type === 'answer') {
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
+      if (pc) {
+        const mungedAnswer = { ...payload.data, sdp: mungeOpusSDP(payload.data.sdp) };
+        await pc.setRemoteDescription(new RTCSessionDescription(mungedAnswer));
+      }
     } else if (payload.type === 'ice-candidate') {
       if (pc) { try { await pc.addIceCandidate(new RTCIceCandidate(payload.data)); } catch (error) { console.error('[PrivateCall] ICE error:', error); } }
     }
@@ -337,8 +332,10 @@ const PrivateCallPanel = ({
       const detectVoice = () => {
         if (!analyserRef.current || callStatusRef.current === "ended") return;
         analyserRef.current.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        setIsSpeaking(average > 15 && !isMutedRef.current);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+        const rms = Math.sqrt(sum / dataArray.length);
+        setIsSpeaking(rms > 12 && !isMutedRef.current);
         animationRef.current = requestAnimationFrame(detectVoice);
       };
       detectVoice();
@@ -352,6 +349,8 @@ const PrivateCallPanel = ({
 
       if (!isIncoming) {
         const offer = await pc.createOffer({ offerToReceiveAudio: true });
+        // Munge offer SDP for Opus HD
+        offer.sdp = mungeOpusSDP(offer.sdp || '');
         await pc.setLocalDescription(offer);
         signalingChannelRef.current?.send({
           type: 'broadcast', event: 'webrtc-signal',
@@ -365,6 +364,7 @@ const PrivateCallPanel = ({
 
   const cleanup = () => {
     callStatusRef.current = "ended";
+    iceRestartManagerRef.current.cleanup();
     if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
     if (noiseProcessorRef.current) { noiseProcessorRef.current.cleanup(); noiseProcessorRef.current = null; }
     if (rawStreamRef.current) { rawStreamRef.current.getTracks().forEach((track) => track.stop()); rawStreamRef.current = null; }
