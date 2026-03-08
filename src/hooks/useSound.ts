@@ -58,69 +58,69 @@ const playChord = (frequencies: number[], duration: number, volume: number, type
   });
 };
 
-// ── Sound Presets ──
+// ── Sound Presets (soft / musical / non-aggressive) ──
 
 /** Gentle ascending chime - notifications */
 const notification = () => {
-  playTone({ frequency: 587, duration: 0.12, volume: 0.15, type: "sine" });
-  setTimeout(() => playTone({ frequency: 784, duration: 0.18, volume: 0.12, type: "sine" }), 100);
-  setTimeout(() => playTone({ frequency: 1047, duration: 0.25, volume: 0.08, type: "sine", fadeOut: 0.15 }), 200);
+  playTone({ frequency: 523, duration: 0.11, volume: 0.07, type: "sine", fadeIn: 0.01, fadeOut: 0.06 });
+  setTimeout(() => playTone({ frequency: 659, duration: 0.14, volume: 0.06, type: "sine", fadeIn: 0.01, fadeOut: 0.08 }), 90);
+  setTimeout(() => playTone({ frequency: 784, duration: 0.2, volume: 0.05, type: "sine", fadeIn: 0.01, fadeOut: 0.12 }), 180);
 };
 
-/** Soft pop - button clicks */
+/** Soft tactile click - buttons */
 const click = () => {
-  playTone({ frequency: 980, duration: 0.05, volume: 0.14, type: "triangle", fadeIn: 0.002, fadeOut: 0.03 });
-  setTimeout(() => playTone({ frequency: 1320, duration: 0.03, volume: 0.07, type: "sine", fadeIn: 0.002, fadeOut: 0.02 }), 18);
+  playTone({ frequency: 740, duration: 0.03, volume: 0.05, type: "triangle", fadeIn: 0.002, fadeOut: 0.02 });
+  setTimeout(() => playTone({ frequency: 980, duration: 0.024, volume: 0.03, type: "sine", fadeIn: 0.002, fadeOut: 0.016 }), 14);
 };
 
 /** Warm ascending two-tone - user joining */
 const join = () => {
-  playTone({ frequency: 523, duration: 0.15, volume: 0.12, type: "sine" });
-  setTimeout(() => playTone({ frequency: 659, duration: 0.2, volume: 0.1, type: "sine", fadeOut: 0.12 }), 120);
+  playTone({ frequency: 440, duration: 0.12, volume: 0.07, type: "sine", fadeOut: 0.08 });
+  setTimeout(() => playTone({ frequency: 554, duration: 0.16, volume: 0.06, type: "sine", fadeOut: 0.1 }), 110);
 };
 
 /** Soft descending tone - user leaving */
 const leave = () => {
-  playTone({ frequency: 659, duration: 0.15, volume: 0.1, type: "sine" });
-  setTimeout(() => playTone({ frequency: 440, duration: 0.2, volume: 0.08, type: "sine", fadeOut: 0.12 }), 120);
+  playTone({ frequency: 554, duration: 0.12, volume: 0.06, type: "sine", fadeOut: 0.08 });
+  setTimeout(() => playTone({ frequency: 415, duration: 0.16, volume: 0.055, type: "sine", fadeOut: 0.1 }), 110);
 };
 
-/** Quick swoosh up - message sent */
+/** Light swoosh up - message sent */
 const messageSent = () => {
-  playTone({ frequency: 880, duration: 0.08, volume: 0.06, type: "sine", fadeIn: 0.005, fadeOut: 0.04 });
-  setTimeout(() => playTone({ frequency: 1100, duration: 0.06, volume: 0.04, type: "sine", fadeIn: 0.005, fadeOut: 0.03 }), 50);
+  playTone({ frequency: 660, duration: 0.06, volume: 0.04, type: "triangle", fadeIn: 0.004, fadeOut: 0.03 });
+  setTimeout(() => playTone({ frequency: 880, duration: 0.045, volume: 0.03, type: "sine", fadeIn: 0.004, fadeOut: 0.025 }), 35);
 };
 
 /** Gentle ding - message received */
 const messageReceived = () => {
-  playTone({ frequency: 830, duration: 0.12, volume: 0.1, type: "sine", fadeOut: 0.08 });
-  setTimeout(() => playTone({ frequency: 1046, duration: 0.15, volume: 0.07, type: "sine", fadeOut: 0.1 }), 80);
+  playTone({ frequency: 622, duration: 0.09, volume: 0.06, type: "sine", fadeOut: 0.06 });
+  setTimeout(() => playTone({ frequency: 831, duration: 0.11, volume: 0.045, type: "sine", fadeOut: 0.08 }), 70);
 };
 
 /** Low click - mute */
 const mute = () => {
-  playTone({ frequency: 350, duration: 0.08, volume: 0.1, type: "sine", fadeIn: 0.005, fadeOut: 0.04 });
+  playTone({ frequency: 320, duration: 0.06, volume: 0.06, type: "triangle", fadeIn: 0.004, fadeOut: 0.03 });
 };
 
 /** Higher click - unmute */
 const unmute = () => {
-  playTone({ frequency: 700, duration: 0.08, volume: 0.1, type: "sine", fadeIn: 0.005, fadeOut: 0.04 });
+  playTone({ frequency: 520, duration: 0.06, volume: 0.06, type: "triangle", fadeIn: 0.004, fadeOut: 0.03 });
 };
 
 /** Push-to-talk on */
 const pttOn = () => {
-  playTone({ frequency: 600, duration: 0.05, volume: 0.08, type: "square", fadeIn: 0.003, fadeOut: 0.02 });
+  playTone({ frequency: 540, duration: 0.04, volume: 0.045, type: "sine", fadeIn: 0.002, fadeOut: 0.02 });
 };
 
 /** Push-to-talk off */
 const pttOff = () => {
-  playTone({ frequency: 400, duration: 0.05, volume: 0.06, type: "square", fadeIn: 0.003, fadeOut: 0.02 });
+  playTone({ frequency: 420, duration: 0.04, volume: 0.04, type: "sine", fadeIn: 0.002, fadeOut: 0.02 });
 };
 
 /** Ringtone - pleasant chord pattern */
 const ringtone = () => {
-  playChord([523, 659, 784], 0.3, 0.25, "sine", 60);
-  setTimeout(() => playChord([587, 740, 880], 0.35, 0.2, "sine", 60), 450);
+  playChord([392, 494, 587], 0.26, 0.11, "sine", 55);
+  setTimeout(() => playChord([440, 523, 659], 0.3, 0.1, "sine", 55), 420);
 };
 
 // ── React Hook ──
