@@ -774,6 +774,14 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         }
 
         joinedUserIds.forEach((joinedUserId) => {
+          // Cancel any pending leave timer — user is back
+          const leaveTimer = leaveTimersRef.current.get(joinedUserId);
+          if (leaveTimer) {
+            clearTimeout(leaveTimer);
+            leaveTimersRef.current.delete(joinedUserId);
+            console.log('[Voice] Cancelled leave timer for rejoining user:', joinedUserId);
+          }
+
           if (!peerConnectionsRef.current.has(joinedUserId) && currentUserId < joinedUserId) {
             console.log('[Voice] Join event → initiating connection to', joinedUserId);
             initiateConnectionRef.current?.(joinedUserId);
