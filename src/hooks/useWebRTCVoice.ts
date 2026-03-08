@@ -762,12 +762,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
         setConnectedUsers(users);
 
-        // Broadcast roster to observers
-        rosterChannelRef.current?.send({
-          type: "broadcast",
-          event: "voice-roster",
-          payload: { users },
-        });
+        // Broadcast roster to observers (both channels)
+        const rosterPayload = { type: "broadcast" as const, event: "voice-roster", payload: { users } };
+        rosterChannelRef.current?.send(rosterPayload);
+        observerChannelRef.current?.send(rosterPayload);
 
         // Initiate WebRTC connections for ALL remote users (both directions try)
         users.forEach((u) => {
