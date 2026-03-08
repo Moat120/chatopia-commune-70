@@ -283,6 +283,112 @@
   }
 
   /* ============================================
+     INFINITE PARALLAX BACKGROUND
+     ============================================ */
+
+  .parallax-bg {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .parallax-bg::before,
+  .parallax-bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  /* Layer 1 – slow large orbs */
+  .parallax-bg::before {
+    background:
+      radial-gradient(ellipse 600px 600px at 15% 20%, hsl(var(--primary) / 0.10) 0%, transparent 70%),
+      radial-gradient(ellipse 500px 500px at 80% 70%, hsl(var(--accent-cyan) / 0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 400px 400px at 50% 50%, hsl(var(--accent-rose) / 0.05) 0%, transparent 70%);
+    background-size: 200% 200%;
+    animation: parallax-drift-slow 30s ease-in-out infinite;
+    z-index: 0;
+  }
+
+  /* Layer 2 – faster smaller accents */
+  .parallax-bg::after {
+    background:
+      radial-gradient(ellipse 300px 300px at 70% 25%, hsl(var(--accent-emerald) / 0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 250px 250px at 25% 75%, hsl(var(--primary) / 0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 350px 350px at 60% 85%, hsl(var(--accent-amber) / 0.04) 0%, transparent 70%);
+    background-size: 200% 200%;
+    animation: parallax-drift-fast 20s ease-in-out infinite;
+    z-index: 0;
+  }
+
+  /* Stardust particle layer via box-shadows */
+  .parallax-stars {
+    position: relative;
+  }
+
+  .parallax-stars > .stars-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .parallax-stars > .stars-layer-1 {
+    background-image:
+      radial-gradient(1px 1px at 10% 15%, hsl(var(--foreground) / 0.15) 50%, transparent 100%),
+      radial-gradient(1px 1px at 25% 35%, hsl(var(--foreground) / 0.10) 50%, transparent 100%),
+      radial-gradient(1px 1px at 40% 80%, hsl(var(--foreground) / 0.12) 50%, transparent 100%),
+      radial-gradient(1px 1px at 55% 10%, hsl(var(--foreground) / 0.08) 50%, transparent 100%),
+      radial-gradient(1px 1px at 70% 55%, hsl(var(--foreground) / 0.14) 50%, transparent 100%),
+      radial-gradient(1px 1px at 85% 40%, hsl(var(--foreground) / 0.10) 50%, transparent 100%),
+      radial-gradient(1px 1px at 95% 90%, hsl(var(--foreground) / 0.12) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 15% 60%, hsl(var(--primary) / 0.20) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 60% 30%, hsl(var(--accent-cyan) / 0.18) 50%, transparent 100%),
+      radial-gradient(1px 1px at 80% 75%, hsl(var(--foreground) / 0.09) 50%, transparent 100%);
+    background-size: 100% 100%;
+    animation: stars-float-1 40s linear infinite;
+  }
+
+  .parallax-stars > .stars-layer-2 {
+    background-image:
+      radial-gradient(1px 1px at 5% 45%, hsl(var(--foreground) / 0.08) 50%, transparent 100%),
+      radial-gradient(1px 1px at 20% 85%, hsl(var(--foreground) / 0.12) 50%, transparent 100%),
+      radial-gradient(1px 1px at 35% 25%, hsl(var(--foreground) / 0.06) 50%, transparent 100%),
+      radial-gradient(1px 1px at 50% 65%, hsl(var(--foreground) / 0.10) 50%, transparent 100%),
+      radial-gradient(1px 1px at 65% 5%, hsl(var(--foreground) / 0.14) 50%, transparent 100%),
+      radial-gradient(1px 1px at 78% 50%, hsl(var(--foreground) / 0.07) 50%, transparent 100%),
+      radial-gradient(1px 1px at 92% 20%, hsl(var(--foreground) / 0.11) 50%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 45% 70%, hsl(var(--accent-rose) / 0.15) 50%, transparent 100%);
+    background-size: 100% 100%;
+    animation: stars-float-2 55s linear infinite;
+  }
+
+  @keyframes parallax-drift-slow {
+    0%, 100% { background-position: 0% 0%; }
+    25% { background-position: 60% 40%; }
+    50% { background-position: 100% 100%; }
+    75% { background-position: 40% 60%; }
+  }
+
+  @keyframes parallax-drift-fast {
+    0%, 100% { background-position: 100% 0%; }
+    25% { background-position: 30% 70%; }
+    50% { background-position: 0% 100%; }
+    75% { background-position: 70% 30%; }
+  }
+
+  @keyframes stars-float-1 {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-50px); }
+  }
+
+  @keyframes stars-float-2 {
+    0% { transform: translateY(0) translateX(0); }
+    100% { transform: translateY(30px) translateX(-30px); }
+  }
+
+  /* ============================================
      NOISE TEXTURE
      ============================================ */
 

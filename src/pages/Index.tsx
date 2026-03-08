@@ -132,7 +132,9 @@ const Index = () => {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="h-screen flex bg-background overflow-hidden">
+      <div className="h-screen flex bg-background overflow-hidden parallax-bg parallax-stars">
+        <div className="stars-layer stars-layer-1" />
+        <div className="stars-layer stars-layer-2" />
         {/* Unified Sidebar */}
         <UnifiedSidebar
           tab={viewMode}
