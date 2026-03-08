@@ -531,12 +531,18 @@ const FriendRow = ({
         )}>
           {friend.username}
         </p>
-        <p className={cn(
-          "text-[11px]",
-          isOnline ? "text-success/80" : isAway ? "text-warning/80" : "text-muted-foreground/40"
-        )}>
-          {isOnline ? "En ligne" : isAway ? "Absent" : "Hors ligne"}
-        </p>
+        {friend.custom_status ? (
+          <p className="text-[11px] text-muted-foreground/60 truncate">
+            {friend.custom_status}
+          </p>
+        ) : (
+          <p className={cn(
+            "text-[11px]",
+            isOnline ? "text-success/80" : isAway ? "text-warning/80" : "text-muted-foreground/40"
+          )}>
+            {isOnline ? "En ligne" : isAway ? "Absent" : "Hors ligne"}
+          </p>
+        )}
       </div>
 
       {unreadCount > 0 && (
