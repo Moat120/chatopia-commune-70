@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Friend } from "@/hooks/useFriends";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -470,9 +471,10 @@ const PrivateCallPanel = ({
     ? (latencyQuality === 'fair' ? 'good' : latencyQuality === 'excellent' ? 'excellent' : latencyQuality === 'good' ? 'good' : 'poor') as 'excellent' | 'good' | 'poor' | 'connecting'
     : 'connecting' as const;
 
-  return (
+  const callUI = (
     <TooltipProvider delayDuration={200}>
-      <div className="fixed inset-0 z-50 flex flex-col call-bg">
+      <div className="fixed inset-0 z-[9999] flex flex-col bg-background" style={{ isolation: 'isolate' }}>
+        <div className="absolute inset-0 call-bg" />
         <div className="absolute inset-0 noise pointer-events-none" />
 
         {/* Header */}
@@ -701,6 +703,8 @@ const PrivateCallPanel = ({
       </div>
     </TooltipProvider>
   );
+
+  return createPortal(callUI, document.body);
 };
 
 export default PrivateCallPanel;
