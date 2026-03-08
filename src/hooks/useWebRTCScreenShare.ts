@@ -381,21 +381,6 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
                 viewerId: currentUserId,
               },
             });
-            // Retry after 2s in case the first request was missed
-            setTimeout(() => {
-              if (!incomingConnectionsRef.current.has(sharer.odId) || 
-                  incomingConnectionsRef.current.get(sharer.odId)?.connectionState === 'failed') {
-                console.log(`[ScreenShare] Retrying request from ${sharer.odId}`);
-                signalingChannel.send({
-                  type: "broadcast",
-                  event: "request-screen",
-                  payload: {
-                    broadcasterId: sharer.odId,
-                    viewerId: currentUserId,
-                  },
-                });
-              }
-            }, 2000);
           }
         });
       });
