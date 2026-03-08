@@ -109,7 +109,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
   const currentUserId = user?.id || "";
   const currentUsername = profile?.username || "Utilisateur";
-  const currentAvatarUrl = profile?.avatar_url || "";
+  const rawAvatarUrl = profile?.avatar_url || "";
+  const currentPresenceAvatar =
+    rawAvatarUrl && !rawAvatarUrl.startsWith("data:") && rawAvatarUrl.length < 1024
+      ? rawAvatarUrl
+      : undefined;
 
   const getSavedVolume = useCallback((userId: string): number => {
     try {
@@ -407,7 +411,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           presenceChannelRef.current?.track({
             odId: currentUserId,
             username: currentUsername,
-            avatarUrl: currentAvatarUrl,
+            avatarUrl: currentPresenceAvatar,
             isSpeaking: speaking,
             isMuted: isMutedRef.current,
           });
@@ -420,7 +424,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     } catch (error) {
       console.error("[Voice] Detection error:", error);
     }
-  }, [currentUserId, currentUsername, currentAvatarUrl]);
+  }, [currentUserId, currentUsername, currentPresenceAvatar]);
 
   // initiateConnection is now via ref above
 
@@ -641,7 +645,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           await presenceChannel.track({
             odId: currentUserId,
             username: currentUsername,
-            avatarUrl: currentAvatarUrl,
+            avatarUrl: currentPresenceAvatar,
             isSpeaking: false,
             isMuted: false,
           });
@@ -653,7 +657,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
             return [...prev, {
               odId: currentUserId,
               username: currentUsername,
-              avatarUrl: currentAvatarUrl,
+              avatarUrl: currentPresenceAvatar,
               isSpeaking: false,
               isMuted: false,
             }];
@@ -663,7 +667,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           const selfUser = {
             odId: currentUserId,
             username: currentUsername,
-            avatarUrl: currentAvatarUrl,
+            avatarUrl: currentPresenceAvatar,
             isSpeaking: false,
             isMuted: false,
           };
@@ -693,7 +697,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     channelId,
     currentUserId,
     currentUsername,
-    currentAvatarUrl,
+    currentPresenceAvatar,
     isConnecting,
     startVoiceDetection,
     startStatsMonitoring,
@@ -718,12 +722,12 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       presenceChannelRef.current?.track({
         odId: currentUserId,
         username: currentUsername,
-        avatarUrl: currentAvatarUrl,
+        avatarUrl: currentPresenceAvatar,
         isSpeaking: false,
         isMuted: newMuted,
       });
     }
-  }, [isMuted, currentUserId, currentUsername, currentAvatarUrl]);
+  }, [isMuted, currentUserId, currentUsername, currentPresenceAvatar]);
 
   useEffect(() => {
     return () => {
