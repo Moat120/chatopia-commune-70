@@ -139,6 +139,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const rosterChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const observerChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
@@ -248,24 +249,23 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
   const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
 
-  const clearConflictingVoiceChannels = useCallback(async () => {
-    const topicSuffixes = [
-      `voice-sig-${channelId}`,
-      `voice-status-${channelId}`,
-      `voice-pres-${channelId}`,
+  const clearOwnVoiceChannels = useCallback(async () => {
+    // Only remove signaling and presence channels (NOT roster/status — observer may share it)
+    const exactTopics = [
+      `realtime:voice-sig-${channelId}`,
+      `realtime:voice-pres-${channelId}`,
     ];
 
     const channels = supabase.getChannels();
-    const conflicting = channels.filter((ch) => {
+    const ours = channels.filter((ch) => {
       const topic = String((ch as any)?.topic || "");
-      return topicSuffixes.some((suffix) => topic.endsWith(suffix));
+      return exactTopics.includes(topic);
     });
 
-    if (conflicting.length > 0) {
-      console.warn("[Voice] Removing conflicting realtime channels:", conflicting.map((c: any) => c?.topic));
-      await Promise.all(conflicting.map((ch) => supabase.removeChannel(ch).catch(() => {})));
-      // Small delay to let the server process unsubscribes before re-subscribing
-      await new Promise(r => setTimeout(r, 300));
+    if (ours.length > 0) {
+      console.log("[Voice] Cleaning up stale channels:", ours.map((c: any) => c?.topic));
+      await Promise.all(ours.map((ch) => supabase.removeChannel(ch).catch(() => {})));
+      await new Promise(r => setTimeout(r, 200));
     }
   }, [channelId]);
 
@@ -529,6 +529,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       presencePollRef.current = null;
     }
 
+    if (joinWatchdogRef.current) {
+      clearTimeout(joinWatchdogRef.current);
+      joinWatchdogRef.current = null;
+    }
+
     // Cleanup ICE restart managers
     iceRestartManagersRef.current.forEach(m => m.cleanup());
     iceRestartManagersRef.current.clear();
@@ -558,31 +563,38 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
 
     if (audioContextRef.current?.state !== "closed") {
-      await audioContextRef.current?.close().catch(() => {});
+      audioContextRef.current?.close().catch(() => {});
       audioContextRef.current = null;
     }
 
-    if (joinWatchdogRef.current) {
-      clearTimeout(joinWatchdogRef.current);
-      joinWatchdogRef.current = null;
-    }
+    // Untrack presence and remove channels with a hard timeout to NEVER hang
+    const channelCleanup = async () => {
+      if (presenceChannelRef.current) {
+        try { await presenceChannelRef.current.untrack(); } catch {}
+        try { supabase.removeChannel(presenceChannelRef.current); } catch {}
+        presenceChannelRef.current = null;
+      }
+      if (signalingChannelRef.current) {
+        try { supabase.removeChannel(signalingChannelRef.current); } catch {}
+        signalingChannelRef.current = null;
+      }
+      if (rosterChannelRef.current) {
+        try { supabase.removeChannel(rosterChannelRef.current); } catch {}
+        rosterChannelRef.current = null;
+      }
+      if (observerChannelRef.current) {
+        // Broadcast empty roster before removing so observers see "nobody"
+        try { observerChannelRef.current.send({ type: "broadcast", event: "voice-roster", payload: { users: [] } }); } catch {}
+        try { supabase.removeChannel(observerChannelRef.current); } catch {}
+        observerChannelRef.current = null;
+      }
+    };
 
-    // Untrack presence before removing channel
-    if (presenceChannelRef.current) {
-      try { await presenceChannelRef.current.untrack(); } catch {}
-      try { await supabase.removeChannel(presenceChannelRef.current); } catch {}
-      presenceChannelRef.current = null;
-    }
-
-    if (signalingChannelRef.current) {
-      try { await supabase.removeChannel(signalingChannelRef.current); } catch {}
-      signalingChannelRef.current = null;
-    }
-
-    if (rosterChannelRef.current) {
-      try { await supabase.removeChannel(rosterChannelRef.current); } catch {}
-      rosterChannelRef.current = null;
-    }
+    // Hard 2s timeout on channel cleanup — never block leaving
+    await Promise.race([
+      channelCleanup(),
+      new Promise(r => setTimeout(r, 2000)),
+    ]);
 
     setIsConnected(false);
     setIsConnecting(false);
@@ -678,7 +690,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       localStreamRef.current = processedStream;
 
       // Ensure no observer/stale channel is already joined on same realtime topics
-      await clearConflictingVoiceChannels();
+      await clearOwnVoiceChannels();
 
       // Setup channels
       const signalingChannel = supabase.channel(`voice-sig-${channelId}`, {
@@ -692,7 +704,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       await subscribeChannel(signalingChannel, "signaling");
 
-      // Setup roster broadcast channel for observers (non-critical)
+      // Setup roster broadcast channel (non-critical)
       const rosterChannel = supabase.channel(`voice-status-${channelId}`, {
         config: { broadcast: { self: false } },
       });
@@ -700,7 +712,18 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       try {
         await subscribeChannel(rosterChannel, "roster");
       } catch (rosterError) {
-        console.warn("[Voice] Roster channel unavailable, continuing without observer roster sync", rosterError);
+        console.warn("[Voice] Roster channel unavailable", rosterError);
+      }
+
+      // Setup observer broadcast channel — separate from roster, used by useVoicePresence
+      const observerChannel = supabase.channel(`voice-obs-${channelId}`, {
+        config: { broadcast: { self: false } },
+      });
+      observerChannelRef.current = observerChannel;
+      try {
+        await subscribeChannel(observerChannel, "observer");
+      } catch (obsError) {
+        console.warn("[Voice] Observer channel unavailable", obsError);
       }
 
       const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
@@ -745,12 +768,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
         setConnectedUsers(users);
 
-        // Broadcast roster to observers
-        rosterChannelRef.current?.send({
-          type: "broadcast",
-          event: "voice-roster",
-          payload: { users },
-        });
+        // Broadcast roster to observers (both channels)
+        const rosterPayload = { type: "broadcast" as const, event: "voice-roster", payload: { users } };
+        rosterChannelRef.current?.send(rosterPayload);
+        observerChannelRef.current?.send(rosterPayload);
 
         // Initiate WebRTC connections for ALL remote users (both directions try)
         users.forEach((u) => {
@@ -841,11 +862,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       syncPresenceState();
 
       // Also broadcast initial roster to observers
-      rosterChannelRef.current?.send({
-        type: "broadcast",
-        event: "voice-roster",
-        payload: { users: [{ odId: currentUserId, username: currentUsername, avatarUrl: currentPresenceAvatar, isSpeaking: false, isMuted: false }] },
-      });
+      const initialRoster = { type: "broadcast" as const, event: "voice-roster", payload: { users: [{ odId: currentUserId, username: currentUsername, avatarUrl: currentPresenceAvatar, isSpeaking: false, isMuted: false }] } };
+      rosterChannelRef.current?.send(initialRoster);
+      observerChannelRef.current?.send(initialRoster);
 
       startVoiceDetection(rawStream);
       startStatsMonitoring();
@@ -884,7 +903,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     currentUsername,
     currentPresenceAvatar,
     isConnecting,
-    clearConflictingVoiceChannels,
+    clearOwnVoiceChannels,
     startVoiceDetection,
     startStatsMonitoring,
     cleanup,
