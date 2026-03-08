@@ -20,6 +20,7 @@ import { usePushToTalk, getPushToTalkEnabled, getKeyDisplayName, getPushToTalkKe
 import MultiScreenShareView from "@/components/voice/MultiScreenShareView";
 import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialog";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
+import VoiceControlsWithScreenShare from "@/components/voice/VoiceControlsWithScreenShare";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
