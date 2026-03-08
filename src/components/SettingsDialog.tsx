@@ -568,7 +568,7 @@ const SettingsDialog = () => {
           <Settings className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] glass-premium border-white/[0.08] rounded-3xl p-0 flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-lg glass-premium border-white/[0.08] rounded-3xl p-0 flex flex-col" style={{ maxHeight: '85vh' }}>
         <DialogHeader className="p-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-3 text-xl">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
@@ -581,7 +581,7 @@ const SettingsDialog = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 px-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6">
           <div className="space-y-6 pb-6">
             {/* Avatar Section */}
             <div className="space-y-4">
