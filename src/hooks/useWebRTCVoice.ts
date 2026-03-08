@@ -856,11 +856,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       syncPresenceState();
 
       // Also broadcast initial roster to observers
-      rosterChannelRef.current?.send({
-        type: "broadcast",
-        event: "voice-roster",
-        payload: { users: [{ odId: currentUserId, username: currentUsername, avatarUrl: currentPresenceAvatar, isSpeaking: false, isMuted: false }] },
-      });
+      const initialRoster = { type: "broadcast" as const, event: "voice-roster", payload: { users: [{ odId: currentUserId, username: currentUsername, avatarUrl: currentPresenceAvatar, isSpeaking: false, isMuted: false }] } };
+      rosterChannelRef.current?.send(initialRoster);
+      observerChannelRef.current?.send(initialRoster);
 
       startVoiceDetection(rawStream);
       startStatsMonitoring();
