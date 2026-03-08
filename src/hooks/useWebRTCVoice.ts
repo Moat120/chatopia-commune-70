@@ -282,7 +282,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     return pc;
   }, [currentUserId, getSavedVolume]);
 
-  const handleSignal = useCallback(async (message: SignalMessage) => {
+  const handleSignalRef = useRef<(msg: SignalMessage) => Promise<void>>();
+  handleSignalRef.current = async (message: SignalMessage) => {
     if (message.to !== currentUserId || !isConnectedRef.current) return;
 
     let pc = peerConnectionsRef.current.get(message.from);
@@ -291,7 +292,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       if (!pc) pc = createPeerConnection(message.from);
 
       try {
-        // Apply Opus HD SDP munging on received offer
         const mungeSdp = mungeOpusSDP(message.data.sdp);
         const mungedOffer = { ...message.data, sdp: mungeSdp };
         
@@ -301,7 +301,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         pendingCandidatesRef.current.delete(message.from);
 
         const answer = await pc.createAnswer();
-        // Munge answer SDP for Opus HD
         answer.sdp = mungeOpusSDP(answer.sdp || '');
         await pc.setLocalDescription(answer);
 
@@ -340,7 +339,33 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         pendingCandidatesRef.current.set(message.from, pending);
       }
     }
-  }, [currentUserId, createPeerConnection]);
+  };
+
+  const initiateConnectionRef = useRef<(remoteUserId: string) => Promise<void>>();
+  initiateConnectionRef.current = async (remoteUserId: string) => {
+    if (remoteUserId === currentUserId || peerConnectionsRef.current.has(remoteUserId)) return;
+
+    const pc = createPeerConnection(remoteUserId);
+
+    try {
+      const offer = await pc.createOffer({ offerToReceiveAudio: true });
+      offer.sdp = mungeOpusSDP(offer.sdp || '');
+      await pc.setLocalDescription(offer);
+
+      signalingChannelRef.current?.send({
+        type: "broadcast",
+        event: "voice-signal",
+        payload: {
+          type: "voice-offer",
+          from: currentUserId,
+          to: remoteUserId,
+          data: offer,
+        },
+      });
+    } catch (error) {
+      console.error("[Voice] Offer error:", error);
+    }
+  };
 
   const startVoiceDetection = useCallback((stream: MediaStream) => {
     try {
