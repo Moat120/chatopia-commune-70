@@ -522,6 +522,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       statsIntervalRef.current = null;
     }
 
+    if (presencePollRef.current) {
+      clearInterval(presencePollRef.current);
+      presencePollRef.current = null;
+    }
+
     // Cleanup ICE restart managers
     iceRestartManagersRef.current.forEach(m => m.cleanup());
     iceRestartManagersRef.current.clear();
