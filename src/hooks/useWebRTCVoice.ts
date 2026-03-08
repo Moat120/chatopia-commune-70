@@ -77,6 +77,15 @@ const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> =>
   };
 };
 
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`[Voice] ${label} timeout after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ]);
+};
+
 const subscribeChannel = (
   channel: ReturnType<typeof supabase.channel>,
   label: string,
