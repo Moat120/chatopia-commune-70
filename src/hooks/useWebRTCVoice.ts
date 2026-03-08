@@ -77,6 +77,38 @@ const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> =>
   };
 };
 
+const subscribeChannel = (
+  channel: ReturnType<typeof supabase.channel>,
+  label: string,
+  timeoutMs = 8000
+): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timeout = setTimeout(() => {
+      if (done) return;
+      done = true;
+      reject(new Error(`[Voice] ${label} subscribe timeout`));
+    }, timeoutMs);
+
+    channel.subscribe((status, err) => {
+      if (done) return;
+
+      if (status === "SUBSCRIBED") {
+        done = true;
+        clearTimeout(timeout);
+        resolve();
+        return;
+      }
+
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        done = true;
+        clearTimeout(timeout);
+        reject(new Error(`[Voice] ${label} subscribe failed (${status})${err ? `: ${JSON.stringify(err)}` : ""}`));
+      }
+    });
+  });
+};
+
 export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const { user, profile } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
