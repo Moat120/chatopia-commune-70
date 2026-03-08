@@ -130,6 +130,11 @@ const PrivateCallPanel = ({
   useEffect(() => { pttEnabledRef.current = pttEnabled; }, [pttEnabled]);
   useEffect(() => { callStatusRef.current = callStatus; }, [callStatus]);
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+  useEffect(() => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.volume = Math.min(friendVolume, 1);
+    }
+  }, [friendVolume]);
 
   const channelId = useMemo(() => `private-call-${[user?.id, friend.id].sort().join('-')}`, [user?.id, friend.id]);
 
