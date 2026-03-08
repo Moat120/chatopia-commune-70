@@ -203,6 +203,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }, 3000);
   }, []);
 
+  const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
+
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
     const existing = peerConnectionsRef.current.get(remoteUserId);
     if (existing) {
@@ -215,7 +217,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     if (oldIceManager) oldIceManager.cleanup();
 
     console.log('[Voice] Creating peer connection for:', remoteUserId);
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection(rtcConfigRef.current);
     const iceManager = new ICERestartManager();
     iceRestartManagersRef.current.set(remoteUserId, iceManager);
 
