@@ -17,11 +17,11 @@ export interface ScreenShareUser {
 export type ScreenQuality = "720p30" | "1080p60" | "1080p120" | "1440p60" | "1440p120";
 
 export const QUALITY_PRESETS: Record<ScreenQuality, { width: number; height: number; frameRate: number; bitrate: number }> = {
-  "720p30": { width: 1280, height: 720, frameRate: 30, bitrate: 2500000 },
-  "1080p60": { width: 1920, height: 1080, frameRate: 60, bitrate: 5000000 },
-  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 8000000 },
-  "1440p60": { width: 2560, height: 1440, frameRate: 60, bitrate: 8000000 },
-  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 12000000 },
+  "720p30": { width: 1280, height: 720, frameRate: 30, bitrate: 6000000 },
+  "1080p60": { width: 1920, height: 1080, frameRate: 60, bitrate: 12000000 },
+  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 15000000 },
+  "1440p60": { width: 2560, height: 1440, frameRate: 60, bitrate: 15000000 },
+  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 20000000 },
 };
 
 interface SignalMessage {
