@@ -651,6 +651,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       localStreamRef.current = processedStream;
 
+      // Ensure no observer/stale channel is already joined on same realtime topics
+      await clearConflictingVoiceChannels();
+
       // Setup channels
       const signalingChannel = supabase.channel(`voice-sig-${channelId}`, {
         config: { broadcast: { self: false } },
