@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import AddMemberDialog from "./AddMemberDialog";
+import GroupVoiceSidebar from "./GroupVoiceSidebar";
 import GroupMembersPanel from "./GroupMembersPanel";
 
 interface GroupChatPanelProps {
