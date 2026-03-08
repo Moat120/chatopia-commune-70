@@ -553,11 +553,12 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     setIsInitialized(false);
   }, []);
 
+  // Cleanup on channelId change or unmount
   useEffect(() => {
     return () => {
       cleanup();
     };
-  }, []);
+  }, [channelId]);
 
   return {
     isSharing,
