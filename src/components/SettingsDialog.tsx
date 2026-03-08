@@ -405,6 +405,17 @@ const SettingsDialog = () => {
       animationRef.current = null;
     }
 
+    // Disconnect loopback
+    if (loopbackGainRef.current) {
+      loopbackGainRef.current.disconnect();
+      loopbackGainRef.current = null;
+    }
+    if (loopbackDelayRef.current) {
+      loopbackDelayRef.current.disconnect();
+      loopbackDelayRef.current = null;
+    }
+    sourceNodeRef.current = null;
+
     if (testStreamRef.current) {
       testStreamRef.current.getTracks().forEach(t => t.stop());
       testStreamRef.current = null;
@@ -417,7 +428,19 @@ const SettingsDialog = () => {
 
     analyserRef.current = null;
     setIsTesting(false);
+    setIsLoopback(false);
     setAudioLevel(0);
+  };
+
+  const toggleLoopback = () => {
+    if (!loopbackGainRef.current) return;
+    const next = !isLoopback;
+    setIsLoopback(next);
+    loopbackGainRef.current.gain.setTargetAtTime(
+      next ? 0.8 : 0,
+      audioContextRef.current?.currentTime || 0,
+      0.05
+    );
   };
 
   const handleSave = async () => {
