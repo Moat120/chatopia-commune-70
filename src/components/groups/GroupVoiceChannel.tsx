@@ -35,6 +35,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     connectionQuality,
     audioLevel,
     userVolumes,
+    noiseEngine,
     setUserVolume,
     join,
     leave,
