@@ -124,6 +124,7 @@ const SettingsDialog = () => {
   const [microphones, setMicrophones] = useState<AudioDevice[]>([]);
   const [selectedMic, setSelectedMic] = useState<string>(getSelectedMicrophone() || "");
   const [isTesting, setIsTesting] = useState(false);
+  const [isLoopback, setIsLoopback] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioQuality, setAudioQuality] = useState<"excellent" | "good" | "poor">("excellent");
   const [pttEnabled, setPttEnabledState] = useState(getPushToTalkEnabled());
@@ -138,6 +139,9 @@ const SettingsDialog = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const isTestingRef = useRef(false);
+  const loopbackGainRef = useRef<GainNode | null>(null);
+  const loopbackDelayRef = useRef<DelayNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const { toast } = useToast();
 
   // Load microphones
@@ -319,10 +323,20 @@ const SettingsDialog = () => {
 
       audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
+      sourceNodeRef.current = source;
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
       analyserRef.current.smoothingTimeConstant = 0.5;
       source.connect(analyserRef.current);
+
+      // Prepare loopback nodes (muted by default)
+      loopbackDelayRef.current = audioContextRef.current.createDelay(1.0);
+      loopbackDelayRef.current.delayTime.value = 0.05; // 50ms delay to avoid feedback
+      loopbackGainRef.current = audioContextRef.current.createGain();
+      loopbackGainRef.current.gain.value = 0; // muted until toggled
+      source.connect(loopbackDelayRef.current);
+      loopbackDelayRef.current.connect(loopbackGainRef.current);
+      loopbackGainRef.current.connect(audioContextRef.current.destination);
 
       isTestingRef.current = true;
       setIsTesting(true);
@@ -391,6 +405,17 @@ const SettingsDialog = () => {
       animationRef.current = null;
     }
 
+    // Disconnect loopback
+    if (loopbackGainRef.current) {
+      loopbackGainRef.current.disconnect();
+      loopbackGainRef.current = null;
+    }
+    if (loopbackDelayRef.current) {
+      loopbackDelayRef.current.disconnect();
+      loopbackDelayRef.current = null;
+    }
+    sourceNodeRef.current = null;
+
     if (testStreamRef.current) {
       testStreamRef.current.getTracks().forEach(t => t.stop());
       testStreamRef.current = null;
@@ -403,7 +428,19 @@ const SettingsDialog = () => {
 
     analyserRef.current = null;
     setIsTesting(false);
+    setIsLoopback(false);
     setAudioLevel(0);
+  };
+
+  const toggleLoopback = () => {
+    if (!loopbackGainRef.current) return;
+    const next = !isLoopback;
+    setIsLoopback(next);
+    loopbackGainRef.current.gain.setTargetAtTime(
+      next ? 0.8 : 0,
+      audioContextRef.current?.currentTime || 0,
+      0.05
+    );
   };
 
   const handleSave = async () => {
@@ -608,6 +645,23 @@ const SettingsDialog = () => {
                       <p className="text-xs text-muted-foreground/70">
                         Parlez dans votre microphone pour voir le niveau
                       </p>
+                      
+                      {/* Loopback toggle */}
+                      <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+                        <div className="flex items-center gap-2">
+                          <Volume2 className={cn("w-4 h-4", isLoopback ? "text-primary" : "text-muted-foreground/50")} />
+                          <span className="text-xs font-medium">Retour vocal (s'écouter)</span>
+                        </div>
+                        <Switch
+                          checked={isLoopback}
+                          onCheckedChange={toggleLoopback}
+                        />
+                      </div>
+                      {isLoopback && (
+                        <p className="text-[10px] text-warning/80 animate-fade-in">
+                          🎧 Utilisez un casque pour éviter le larsen
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
