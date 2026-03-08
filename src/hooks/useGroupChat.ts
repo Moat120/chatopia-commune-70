@@ -9,6 +9,7 @@ export interface GroupMessage {
   content: string;
   created_at: string;
   edited_at?: string | null;
+  reply_to_id?: string | null;
   sender?: {
     username: string;
     avatar_url: string | null;
