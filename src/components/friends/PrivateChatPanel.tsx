@@ -4,15 +4,21 @@ import { usePrivateChat } from "@/hooks/usePrivateChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
 import { useSound } from "@/hooks/useSound";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { smartTimestamp, dateSeparator, shouldShowDateSeparator } from "@/lib/timeUtils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Phone, X, Send, Loader2, MoreHorizontal, Sparkles } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Phone, X, Send, Loader2, Sparkles, CheckCheck, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-
 
 interface PrivateChatPanelProps {
   friend: Friend;
@@ -34,16 +40,21 @@ const PrivateChatPanel = ({
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, [friend.id]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onEscape: onClose,
+  });
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -62,6 +73,7 @@ const PrivateChatPanel = ({
     playMessageSent();
     setInput("");
     setSending(false);
+    inputRef.current?.focus();
   };
 
   const isOnline = friend.status === "online";
@@ -71,10 +83,10 @@ const PrivateChatPanel = ({
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Header */}
-      <div className="h-[76px] px-6 flex items-center justify-between glass-solid border-b border-white/[0.04]">
+      <div className="h-[72px] px-6 flex items-center justify-between glass-solid border-b border-white/[0.04]">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <Avatar className="h-12 w-12 ring-2 ring-white/10">
+            <Avatar className="h-11 w-11 ring-2 ring-white/10">
               <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
               <AvatarFallback className="bg-gradient-to-br from-muted to-muted/50 font-semibold">
                 {friend.username[0]?.toUpperCase()}
@@ -82,7 +94,7 @@ const PrivateChatPanel = ({
             </Avatar>
             <span
               className={cn(
-                "absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-card transition-all duration-300",
+                "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-card transition-all duration-300",
                 isOnline && "bg-success status-online",
                 isAway && "bg-warning",
                 !isActive && "bg-muted-foreground/40"
@@ -90,21 +102,21 @@ const PrivateChatPanel = ({
             />
           </div>
           <div>
-            <h3 className="font-bold text-lg">{friend.username}</h3>
-            <div className="h-5">
+            <h3 className="font-bold text-base">{friend.username}</h3>
+            <div className="h-4">
               {isTyping ? (
-                <p className="text-sm text-primary flex items-center gap-2">
-                  <span className="flex gap-1">
+                <p className="text-xs text-primary flex items-center gap-1.5 animate-fade-in">
+                  <span className="flex gap-0.5">
                     <span className="typing-dot" />
                     <span className="typing-dot" />
                     <span className="typing-dot" />
                   </span>
-                  <span className="animate-fade-in">est en train d'écrire...</span>
+                  écrit...
                 </p>
               ) : (
                 <p className={cn(
-                  "text-sm font-medium transition-colors duration-300",
-                  isOnline ? "text-success" : isAway ? "text-warning" : "text-muted-foreground/60"
+                  "text-xs font-medium transition-colors duration-300",
+                  isOnline ? "text-success" : isAway ? "text-warning" : "text-muted-foreground/50"
                 )}>
                   {isOnline ? "En ligne" : isAway ? "Absent" : "Hors ligne"}
                 </p>
@@ -112,35 +124,39 @@ const PrivateChatPanel = ({
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onStartCall}
-            disabled={!isActive}
-            className={cn(
-              "h-10 w-10 rounded-xl transition-all duration-300",
-              isActive && "hover:bg-success/15 hover:text-success"
-            )}
-          >
-            <Phone className="h-5 w-5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-10 w-10 rounded-xl hover:bg-white/[0.06]"
-            onClick={() => {}}
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={onClose}
-            className="h-10 w-10 rounded-xl hover:bg-white/[0.06]"
-          >
-            <X className="h-5 w-5" />
-          </Button>
+        <div className="flex gap-1.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onStartCall}
+                disabled={!isActive}
+                className={cn(
+                  "h-9 w-9 rounded-xl transition-all duration-300",
+                  isActive && "hover:bg-success/15 hover:text-success"
+                )}
+                silent
+              >
+                <Phone className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Appeler</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={onClose}
+                className="h-9 w-9 rounded-xl hover:bg-white/[0.06]"
+                silent
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Fermer (Échap)</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -154,115 +170,156 @@ const PrivateChatPanel = ({
           <div className="flex flex-col items-center justify-center h-full text-center animate-reveal">
             <div className="relative mb-8">
               <div className="absolute -inset-6 bg-primary/10 rounded-full blur-3xl" />
-              <Avatar className="h-28 w-28 ring-4 ring-white/10 relative">
+              <Avatar className="h-24 w-24 ring-4 ring-white/10 relative">
                 <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
-                <AvatarFallback className="text-4xl bg-gradient-to-br from-muted to-muted/50 font-bold">
+                <AvatarFallback className="text-3xl bg-gradient-to-br from-muted to-muted/50 font-bold">
                   {friend.username[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-primary" />
+              <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center">
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
               </div>
             </div>
-            <h4 className="font-bold text-2xl mb-2">{friend.username}</h4>
-            <p className="text-muted-foreground/70 max-w-xs text-lg font-light">
-              C'est le début de votre conversation privée. Dites bonjour !
+            <h4 className="font-bold text-xl mb-2">{friend.username}</h4>
+            <p className="text-muted-foreground/60 max-w-xs text-sm">
+              C'est le début de votre conversation. Dites bonjour ! 👋
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-1">
             {messages.map((msg, idx) => {
               const isMe = msg.sender_id === user?.id;
-              const showAvatar =
-                idx === 0 || messages[idx - 1].sender_id !== msg.sender_id;
-              const showTime =
-                idx === 0 ||
-                new Date(msg.created_at).getTime() -
-                  new Date(messages[idx - 1].created_at).getTime() >
-                  300000;
+              const prevMsg = messages[idx - 1];
+              const nextMsg = messages[idx + 1];
+              const showDateSep = shouldShowDateSeparator(msg.created_at, prevMsg?.created_at);
+              const isGroupStart = !prevMsg || prevMsg.sender_id !== msg.sender_id || showDateSep;
+              const isGroupEnd = !nextMsg || nextMsg.sender_id !== msg.sender_id;
+              const isRead = isMe && msg.read_at;
 
               return (
-                <div key={msg.id} className="message-new">
-                  {showTime && (
-                    <p className="text-xs text-center text-muted-foreground/50 mb-5 mt-8 font-medium">
-                      {format(new Date(msg.created_at), "PPp", { locale: fr })}
-                    </p>
+                <div key={msg.id}>
+                  {/* Date separator */}
+                  {showDateSep && (
+                    <div className="flex items-center gap-4 my-6">
+                      <div className="flex-1 h-px bg-white/[0.04]" />
+                      <span className="text-[11px] text-muted-foreground/40 font-semibold uppercase tracking-wider">
+                        {dateSeparator(msg.created_at)}
+                      </span>
+                      <div className="flex-1 h-px bg-white/[0.04]" />
+                    </div>
                   )}
                   <div
                     className={cn(
-                      "flex items-end gap-3",
-                      isMe && "flex-row-reverse"
+                      "flex items-end gap-2.5",
+                      isMe && "flex-row-reverse",
+                      isGroupStart ? "mt-3" : "mt-0.5"
                     )}
                   >
-                    {showAvatar ? (
-                      <Avatar className="h-9 w-9 ring-2 ring-white/5">
-                        <AvatarImage
-                          src={isMe ? profile?.avatar_url || "" : friend.avatar_url || ""}
-                          className="object-cover"
-                        />
+                    {/* Avatar only on group start */}
+                    {isGroupStart && !isMe ? (
+                      <Avatar className="h-8 w-8 ring-1 ring-white/5 shrink-0">
+                        <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
                         <AvatarFallback className="text-xs bg-muted font-semibold">
-                          {isMe
-                            ? profile?.username?.[0]?.toUpperCase()
-                            : friend.username[0]?.toUpperCase()}
+                          {friend.username[0]?.toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                    ) : (
-                      <div className="w-9" />
-                    )}
-                    <div
-                      className={cn(
-                        "max-w-[70%] px-4 py-3 rounded-2xl transition-all",
-                        isMe
-                          ? "message-own rounded-br-lg"
-                          : "message-other rounded-bl-lg"
-                      )}
-                    >
-                      <p className="text-sm leading-relaxed break-words">{msg.content}</p>
-                    </div>
+                    ) : !isMe ? (
+                      <div className="w-8 shrink-0" />
+                    ) : null}
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          className={cn(
+                            "max-w-[65%] px-3.5 py-2 transition-all",
+                            isMe
+                              ? cn(
+                                  "message-own",
+                                  isGroupStart && isGroupEnd && "rounded-2xl",
+                                  isGroupStart && !isGroupEnd && "rounded-2xl rounded-br-lg",
+                                  !isGroupStart && isGroupEnd && "rounded-2xl rounded-tr-lg",
+                                  !isGroupStart && !isGroupEnd && "rounded-xl rounded-r-lg",
+                                )
+                              : cn(
+                                  "message-other",
+                                  isGroupStart && isGroupEnd && "rounded-2xl",
+                                  isGroupStart && !isGroupEnd && "rounded-2xl rounded-bl-lg",
+                                  !isGroupStart && isGroupEnd && "rounded-2xl rounded-tl-lg",
+                                  !isGroupStart && !isGroupEnd && "rounded-xl rounded-l-lg",
+                                )
+                          )}
+                        >
+                          <p className="text-[14px] leading-relaxed break-words">{msg.content}</p>
+                          {/* Read receipt + time on last message of group */}
+                          {isGroupEnd && (
+                            <div className={cn(
+                              "flex items-center gap-1 mt-1",
+                              isMe ? "justify-end" : "justify-start"
+                            )}>
+                              <span className="text-[10px] text-foreground/30">
+                                {smartTimestamp(msg.created_at)}
+                              </span>
+                              {isMe && (
+                                isRead ? (
+                                  <CheckCheck className="h-3 w-3 text-accent-foreground/50" />
+                                ) : (
+                                  <Check className="h-3 w-3 text-foreground/20" />
+                                )
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side={isMe ? "left" : "right"} className="text-xs">
+                        {format(new Date(msg.created_at), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               );
             })}
+            <div ref={bottomRef} />
           </div>
         )}
       </ScrollArea>
 
       {/* Typing indicator */}
       {isTyping && (
-        <div className="px-6 py-3 border-t border-white/[0.02] glass-subtle">
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <div className="flex gap-1">
+        <div className="px-6 py-2 border-t border-white/[0.02]">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground/60">
+            <div className="flex gap-0.5">
               <span className="typing-dot" />
               <span className="typing-dot" />
               <span className="typing-dot" />
             </div>
-            <span className="animate-fade-in font-medium">{friend.username} est en train d'écrire...</span>
+            <span className="animate-fade-in">{friend.username} écrit...</span>
           </div>
         </div>
       )}
 
       {/* Input */}
-      <form onSubmit={handleSend} className="p-5 glass-solid border-t border-white/[0.04]">
-        <div className="flex gap-3">
+      <form onSubmit={handleSend} className="p-4 glass-solid border-t border-white/[0.04]">
+        <div className="flex gap-2.5">
           <Input
             ref={inputRef}
             value={input}
             onChange={handleInputChange}
             onBlur={stopTyping}
             placeholder={`Message @${friend.username}`}
-            className="flex-1 h-13 input-modern text-base px-5"
+            className="flex-1 h-12 input-modern text-sm px-4"
             disabled={sending}
           />
           <Button 
             type="submit" 
             size="icon" 
             disabled={!input.trim() || sending}
-            className="h-13 w-13 rounded-xl btn-premium"
+            className="h-12 w-12 rounded-xl btn-premium shrink-0"
+            silent
           >
             {sending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Send className="h-5 w-5" />
+              <Send className="h-4 w-4" />
             )}
           </Button>
         </div>
