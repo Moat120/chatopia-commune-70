@@ -293,6 +293,8 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
       </div>
     </TooltipProvider>
   );
+
+  return createPortal(callUI, document.body);
 };
 
 export default GroupVoiceChannel;
