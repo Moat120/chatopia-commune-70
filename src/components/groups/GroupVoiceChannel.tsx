@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Volume2, Users, Sparkles, MicOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -6,6 +6,7 @@ import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
 import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
 import { useSimpleLatency } from "@/hooks/useConnectionLatency";
 import { useAuth } from "@/contexts/AuthContext";
+import { playUserJoinedSound, playUserLeftSound, playDeafenSound, playUndeafenSound, playScreenShareStartSound, playScreenShareStopSound } from "@/hooks/useSound";
 import VoiceUserCard from "@/components/voice/VoiceUserCard";
 import VoiceControlsWithScreenShare from "@/components/voice/VoiceControlsWithScreenShare";
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
