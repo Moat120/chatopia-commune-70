@@ -409,7 +409,7 @@ const SettingsDialog = () => {
       isTestingRef.current = true;
       setIsTesting(true);
 
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      // dataArray created inside drawSpectrum
       let noiseFloor = 255;
       let peakLevel = 0;
       let sampleCount = 0;
