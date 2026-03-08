@@ -263,7 +263,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
     if (conflicting.length > 0) {
       console.warn("[Voice] Removing conflicting realtime channels:", conflicting.map((c: any) => c?.topic));
-      await Promise.all(conflicting.map((ch) => supabase.removeChannel(ch)));
+      await Promise.all(conflicting.map((ch) => supabase.removeChannel(ch).catch(() => {})));
+      // Small delay to let the server process unsubscribes before re-subscribing
+      await new Promise(r => setTimeout(r, 300));
     }
   }, [channelId]);
 
@@ -565,18 +567,20 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       joinWatchdogRef.current = null;
     }
 
+    // Untrack presence before removing channel
     if (presenceChannelRef.current) {
-      await supabase.removeChannel(presenceChannelRef.current);
+      try { await presenceChannelRef.current.untrack(); } catch {}
+      try { await supabase.removeChannel(presenceChannelRef.current); } catch {}
       presenceChannelRef.current = null;
     }
 
     if (signalingChannelRef.current) {
-      await supabase.removeChannel(signalingChannelRef.current);
+      try { await supabase.removeChannel(signalingChannelRef.current); } catch {}
       signalingChannelRef.current = null;
     }
 
     if (rosterChannelRef.current) {
-      await supabase.removeChannel(rosterChannelRef.current);
+      try { await supabase.removeChannel(rosterChannelRef.current); } catch {}
       rosterChannelRef.current = null;
     }
 
@@ -788,7 +792,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       });
 
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
+        if (key.startsWith("observer-")) return;
         if (key !== currentUserId) {
+          console.log('[Voice] Presence leave:', key);
           const pc = peerConnectionsRef.current.get(key);
           if (pc) {
             pc.close();
@@ -804,6 +810,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
             audio.srcObject = null;
             remoteAudiosRef.current.delete(key);
           }
+          // Immediately re-sync to update the user list
+          syncPresenceState();
         }
       });
 
@@ -825,6 +833,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       } catch (trackError) {
         console.warn("[Voice] Presence track delayed, continuing join", trackError);
       }
+
+      // Mark connected BEFORE syncing so the self-add fallback works
+      isConnectedRef.current = true;
 
       // Immediately sync presence state (ensures self + any existing users are visible)
       syncPresenceState();
@@ -851,7 +862,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         joinWatchdogRef.current = null;
       }
 
-      isConnectedRef.current = true;
       setIsConnected(true);
       setIsConnecting(false);
       setConnectionQuality("good");

@@ -111,11 +111,16 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   };
 
   const handleLeave = async () => {
-    setIsDeafened(false);
-    if (isSharing) await stopScreenShare();
-    await cleanupScreenShare();
-    await leave();
-    onEnd();
+    try {
+      setIsDeafened(false);
+      if (isSharing) await stopScreenShare().catch(() => {});
+      await cleanupScreenShare().catch(() => {});
+      await leave().catch(() => {});
+    } catch (err) {
+      console.error('[GroupVoice] Leave error:', err);
+    } finally {
+      onEnd();
+    }
   };
 
   const handleToggleDeafen = useCallback(() => {
