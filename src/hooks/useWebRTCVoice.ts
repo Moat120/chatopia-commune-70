@@ -535,6 +535,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       joinWatchdogRef.current = null;
     }
 
+    // Cancel all pending leave timers
+    leaveTimersRef.current.forEach(t => clearTimeout(t));
+    leaveTimersRef.current.clear();
+
     // Cleanup ICE restart managers
     iceRestartManagersRef.current.forEach(m => m.cleanup());
     iceRestartManagersRef.current.clear();

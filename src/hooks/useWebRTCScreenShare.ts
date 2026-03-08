@@ -371,9 +371,11 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
         setScreenSharers(sharers);
 
-        // Request streams from sharers we're not yet connected to
+        // Request streams from sharers we're not yet connected to (only if not already connected or connecting)
         sharers.forEach((sharer) => {
-          if (sharer.odId !== currentUserId && !incomingConnectionsRef.current.has(sharer.odId)) {
+          const inPc = incomingConnectionsRef.current.get(sharer.odId);
+          const alreadyConnected = inPc && (inPc.connectionState === 'connected' || inPc.connectionState === 'connecting' || inPc.signalingState !== 'closed');
+          if (sharer.odId !== currentUserId && !alreadyConnected) {
             console.log(`[ScreenShare] Requesting stream from ${sharer.username} (${sharer.odId})`);
             signalingChannel.send({
               type: "broadcast",

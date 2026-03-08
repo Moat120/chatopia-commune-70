@@ -355,7 +355,7 @@ const PrivateCallPanel = ({
     if (!user) return;
     const ch = supabase.channel(`private-signaling-${channelId}`);
     signalingChannelRef.current = ch;
-    ch.on("broadcast", { event: "webrtc-signal" }, ({ payload }) => handleSignal(payload));
+    ch.on("broadcast", { event: "webrtc-signal" }, ({ payload }) => handleSignalRef.current?.(payload));
     ch.subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user, channelId]);
