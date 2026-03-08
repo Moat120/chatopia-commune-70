@@ -80,7 +80,7 @@ const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> =>
 const subscribeChannel = (
   channel: ReturnType<typeof supabase.channel>,
   label: string,
-  timeoutMs = 8000
+  timeoutMs = 15000
 ): Promise<void> => {
   return new Promise((resolve, reject) => {
     let done = false;
