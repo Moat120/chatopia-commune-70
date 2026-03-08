@@ -332,8 +332,10 @@ const PrivateCallPanel = ({
       const detectVoice = () => {
         if (!analyserRef.current || callStatusRef.current === "ended") return;
         analyserRef.current.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        setIsSpeaking(average > 15 && !isMutedRef.current);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+        const rms = Math.sqrt(sum / dataArray.length);
+        setIsSpeaking(rms > 12 && !isMutedRef.current);
         animationRef.current = requestAnimationFrame(detectVoice);
       };
       detectVoice();
@@ -347,6 +349,8 @@ const PrivateCallPanel = ({
 
       if (!isIncoming) {
         const offer = await pc.createOffer({ offerToReceiveAudio: true });
+        // Munge offer SDP for Opus HD
+        offer.sdp = mungeOpusSDP(offer.sdp || '');
         await pc.setLocalDescription(offer);
         signalingChannelRef.current?.send({
           type: 'broadcast', event: 'webrtc-signal',
@@ -360,6 +364,7 @@ const PrivateCallPanel = ({
 
   const cleanup = () => {
     callStatusRef.current = "ended";
+    iceRestartManagerRef.current.cleanup();
     if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current = null; }
     if (noiseProcessorRef.current) { noiseProcessorRef.current.cleanup(); noiseProcessorRef.current = null; }
     if (rawStreamRef.current) { rawStreamRef.current.getTracks().forEach((track) => track.stop()); rawStreamRef.current = null; }
