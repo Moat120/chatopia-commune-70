@@ -59,6 +59,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
+  const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
 
   const currentUserId = user?.id || "";
   const currentUsername = profile?.username || "Utilisateur";
