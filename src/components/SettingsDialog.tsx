@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard, Sparkles, Zap } from "lucide-react";
+import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard, Sparkles, Zap, Headphones } from "lucide-react";
 import { 
   getPushToTalkEnabled, 
   getPushToTalkKey, 
@@ -27,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { cn } from "@/lib/utils";
-import { getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/hooks/useNoiseProcessor";
+import { AdvancedNoiseProcessor, getNoiseSuppressionMode, setNoiseSuppressionMode, type NoiseSuppressionMode } from "@/hooks/useNoiseProcessor";
 
 // Audio settings keys
 const NOISE_SUPPRESSION_KEY = "noiseSuppressionEnabled";
@@ -142,6 +142,8 @@ const SettingsDialog = () => {
   const loopbackGainRef = useRef<GainNode | null>(null);
   const loopbackDelayRef = useRef<DelayNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const noiseProcessorRef = useRef<AdvancedNoiseProcessor | null>(null);
+  const processedSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const { toast } = useToast();
 
   // Load microphones
@@ -282,41 +284,80 @@ const SettingsDialog = () => {
     try {
       stopTest();
       
-      // Use ideal constraints for better compatibility
-      const constraints: MediaStreamConstraints = {
-        audio: {
-          deviceId: selectedMic ? { ideal: selectedMic } : undefined,
+      // Detect browser for optimized constraints
+      const isChrome = /Chrome/.test(navigator.userAgent) && !/Edge|OPR/.test(navigator.userAgent);
+      const isFirefox = /Firefox/.test(navigator.userAgent);
+      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+
+      const baseConstraints: MediaTrackConstraints = {
+        deviceId: selectedMic ? { exact: selectedMic } : undefined,
+        sampleRate: { ideal: 48000 },
+        sampleSize: { ideal: 16 },
+        channelCount: { exact: 1 },
+      };
+
+      // Browser-specific optimizations
+      if (isChrome) {
+        Object.assign(baseConstraints, {
+          echoCancellation: { exact: echoCancellation },
+          noiseSuppression: { exact: noiseSuppression },
+          autoGainControl: { exact: autoGain },
+          // Chrome-specific advanced constraints
+          googNoiseSuppression: noiseSuppression,
+          googHighpassFilter: true,
+          googTypingNoiseDetection: true,
+          googNoiseSuppression2: noiseSuppression,
+          googEchoCancellation: echoCancellation,
+          googEchoCancellation2: echoCancellation,
+          googAutoGainControl: autoGain,
+          googAutoGainControl2: autoGain,
+          googExperimentalNoiseSuppression: noiseSuppression,
+        } as any);
+      } else if (isFirefox) {
+        Object.assign(baseConstraints, {
+          echoCancellation: echoCancellation,
+          noiseSuppression: noiseSuppression,
+          autoGainControl: autoGain,
+          // Firefox prefers simple booleans
+          mediaSource: 'audioCapture',
+        } as any);
+      } else if (isSafari) {
+        Object.assign(baseConstraints, {
           echoCancellation: { ideal: echoCancellation },
           noiseSuppression: { ideal: noiseSuppression },
           autoGainControl: { ideal: autoGain },
-          sampleRate: { ideal: 48000 },
-          sampleSize: { ideal: 16 },
-          // Chrome-specific
-          ...(noiseSuppression && {
-            googNoiseSuppression: true,
-            googHighpassFilter: true,
-            googTypingNoiseDetection: true,
-          } as any),
-          ...(echoCancellation && {
-            googEchoCancellation: true,
-          } as any),
-          ...(autoGain && {
-            googAutoGainControl: true,
-          } as any),
-        },
-      };
+          // Safari needs 'ideal' for best compat
+        });
+      } else {
+        Object.assign(baseConstraints, {
+          echoCancellation: { ideal: echoCancellation },
+          noiseSuppression: { ideal: noiseSuppression },
+          autoGainControl: { ideal: autoGain },
+        });
+      }
 
-      console.log('[SettingsDialog] Starting test with constraints:', constraints);
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log(`[SettingsDialog] Starting test (${isChrome ? 'Chrome' : isFirefox ? 'Firefox' : isSafari ? 'Safari' : 'Other'}) with constraints:`, baseConstraints);
       
-      // Log what was actually applied
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
+      } catch {
+        // Fallback to basic constraints if exact fails
+        console.warn('[SettingsDialog] Exact constraints failed, falling back to basic');
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: selectedMic ? { ideal: selectedMic } : undefined,
+            echoCancellation: { ideal: echoCancellation },
+            noiseSuppression: { ideal: noiseSuppression },
+            autoGainControl: { ideal: autoGain },
+          },
+        });
+      }
+      
       const track = stream.getAudioTracks()[0];
       if (track) {
         const settings = track.getSettings();
         console.log('[SettingsDialog] Applied settings:', settings);
-        console.log('[SettingsDialog] Noise suppression:', settings.noiseSuppression);
-        console.log('[SettingsDialog] Echo cancellation:', settings.echoCancellation);
-        console.log('[SettingsDialog] Auto gain:', settings.autoGainControl);
       }
       
       testStreamRef.current = stream;
@@ -329,12 +370,28 @@ const SettingsDialog = () => {
       analyserRef.current.smoothingTimeConstant = 0.5;
       source.connect(analyserRef.current);
 
-      // Prepare loopback nodes (muted by default)
+      // Apply AdvancedNoiseProcessor for loopback (RNNoise + filters)
+      if (noiseSuppression) {
+        try {
+          noiseProcessorRef.current = new AdvancedNoiseProcessor();
+          const processedStream = await noiseProcessorRef.current.process(stream);
+          const processedSource = audioContextRef.current.createMediaStreamSource(processedStream);
+          processedSourceRef.current = processedSource;
+          console.log('[SettingsDialog] ✅ Noise processor active for loopback, RNNoise:', noiseProcessorRef.current.isRnnoiseActive());
+        } catch (err) {
+          console.warn('[SettingsDialog] Noise processor failed for loopback:', err);
+          noiseProcessorRef.current = null;
+        }
+      }
+
+      // Loopback: route processed audio to speakers (muted by default)
       loopbackDelayRef.current = audioContextRef.current.createDelay(1.0);
-      loopbackDelayRef.current.delayTime.value = 0.05; // 50ms delay to avoid feedback
+      loopbackDelayRef.current.delayTime.value = 0.04; // 40ms
       loopbackGainRef.current = audioContextRef.current.createGain();
-      loopbackGainRef.current.gain.value = 0; // muted until toggled
-      source.connect(loopbackDelayRef.current);
+      loopbackGainRef.current.gain.value = 0;
+
+      const loopbackSource = processedSourceRef.current || source;
+      loopbackSource.connect(loopbackDelayRef.current);
       loopbackDelayRef.current.connect(loopbackGainRef.current);
       loopbackGainRef.current.connect(audioContextRef.current.destination);
 
@@ -404,6 +461,13 @@ const SettingsDialog = () => {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
+
+    // Cleanup noise processor
+    if (noiseProcessorRef.current) {
+      noiseProcessorRef.current.cleanup();
+      noiseProcessorRef.current = null;
+    }
+    processedSourceRef.current = null;
 
     // Disconnect loopback
     if (loopbackGainRef.current) {
@@ -497,7 +561,7 @@ const SettingsDialog = () => {
           <Settings className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg glass-premium border-white/[0.08] rounded-3xl p-0 flex flex-col">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] glass-premium border-white/[0.08] rounded-3xl p-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-3 text-xl">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/25 to-primary/10 border border-primary/20 flex items-center justify-center">
@@ -649,8 +713,13 @@ const SettingsDialog = () => {
                       {/* Loopback toggle */}
                       <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
                         <div className="flex items-center gap-2">
-                          <Volume2 className={cn("w-4 h-4", isLoopback ? "text-primary" : "text-muted-foreground/50")} />
-                          <span className="text-xs font-medium">Retour vocal (s'écouter)</span>
+                          <Headphones className={cn("w-4 h-4", isLoopback ? "text-primary" : "text-muted-foreground/50")} />
+                          <div>
+                            <span className="text-xs font-medium">Retour vocal (s'écouter)</span>
+                            {isLoopback && noiseProcessorRef.current && (
+                              <span className="ml-1.5 text-[10px] text-success">• RNNoise actif</span>
+                            )}
+                          </div>
                         </div>
                         <Switch
                           checked={isLoopback}
@@ -659,7 +728,7 @@ const SettingsDialog = () => {
                       </div>
                       {isLoopback && (
                         <p className="text-[10px] text-warning/80 animate-fade-in">
-                          🎧 Utilisez un casque pour éviter le larsen
+                          🎧 Utilisez un casque pour éviter le larsen — vous entendez le son traité par la suppression de bruit
                         </p>
                       )}
                     </div>
