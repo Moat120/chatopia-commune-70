@@ -164,7 +164,7 @@ const VoiceControlsWithScreenShare = ({
           activeColor="amber"
           icon={<Volume2 className="h-5 w-5" />}
           activeIcon={<VolumeX className="h-5 w-5" />}
-          label={isDeafened ? "Réactiver le son" : "Couper le son"}
+          label={isDeafened ? "Activer le son" : "Désactiver le son"}
         />
       )}
 

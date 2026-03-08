@@ -160,7 +160,7 @@ const VoiceControls = ({
             "opacity-0 group-hover:opacity-100 transition-all duration-200",
             "pointer-events-none whitespace-nowrap shadow-xl"
           )}>
-            {isDeafened ? "Réactiver le son" : "Se rendre sourd"}
+            {isDeafened ? "Activer le son" : "Désactiver le son"}
           </span>
         </Button>
       )}
