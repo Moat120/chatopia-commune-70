@@ -640,6 +640,33 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
             isSpeaking: false,
             isMuted: false,
           });
+
+          // Immediately include self in connected users
+          // (presence sync may not have fired yet)
+          setConnectedUsers(prev => {
+            if (prev.some(u => u.odId === currentUserId)) return prev;
+            return [...prev, {
+              odId: currentUserId,
+              username: currentUsername,
+              avatarUrl: currentAvatarUrl,
+              isSpeaking: false,
+              isMuted: false,
+            }];
+          });
+
+          // Broadcast initial roster to observers
+          const selfUser = {
+            odId: currentUserId,
+            username: currentUsername,
+            avatarUrl: currentAvatarUrl,
+            isSpeaking: false,
+            isMuted: false,
+          };
+          rosterChannelRef.current?.send({
+            type: "broadcast",
+            event: "voice-roster",
+            payload: { users: [selfUser] },
+          });
         }
       });
 
