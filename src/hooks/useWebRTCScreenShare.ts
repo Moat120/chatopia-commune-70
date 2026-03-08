@@ -17,11 +17,11 @@ export interface ScreenShareUser {
 export type ScreenQuality = "720p30" | "1080p60" | "1080p120" | "1440p60" | "1440p120";
 
 export const QUALITY_PRESETS: Record<ScreenQuality, { width: number; height: number; frameRate: number; bitrate: number }> = {
-  "720p30": { width: 1280, height: 720, frameRate: 30, bitrate: 6000000 },
-  "1080p60": { width: 1920, height: 1080, frameRate: 60, bitrate: 12000000 },
-  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 15000000 },
-  "1440p60": { width: 2560, height: 1440, frameRate: 60, bitrate: 15000000 },
-  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 20000000 },
+  "720p30": { width: 1280, height: 720, frameRate: 30, bitrate: 6_000_000 },
+  "1080p60": { width: 1920, height: 1080, frameRate: 60, bitrate: 12_000_000 },
+  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 15_000_000 },
+  "1440p60": { width: 2560, height: 1440, frameRate: 60, bitrate: 20_000_000 },
+  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 25_000_000 },
 };
 
 interface SignalMessage {
@@ -73,11 +73,22 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     pc.ontrack = (event) => {
       console.log(`[ScreenShare] Received track from ${sharerId}`, event.streams);
       if (event.streams && event.streams[0]) {
+        const stream = event.streams[0];
         setRemoteStreams((prev) => {
           const next = new Map(prev);
-          next.set(sharerId, event.streams[0]);
+          next.set(sharerId, stream);
           return next;
         });
+
+        // If the track ends, request a fresh offer
+        event.track.onended = () => {
+          console.log(`[ScreenShare] Remote track ended from ${sharerId}, requesting refresh`);
+          setRemoteStreams((prev) => {
+            const next = new Map(prev);
+            next.delete(sharerId);
+            return next;
+          });
+        };
       }
     };
 
@@ -98,9 +109,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     pc.onconnectionstatechange = () => {
       console.log(`[ScreenShare] Incoming connection state with ${sharerId}: ${pc.connectionState}`);
-      if (pc.connectionState === "failed") {
-        iceManager.scheduleRestart(pc);
-      } else if (pc.connectionState === "disconnected") {
+      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
         iceManager.scheduleRestart(pc);
       } else if (pc.connectionState === "connected") {
         iceManager.reset();
@@ -133,22 +142,19 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
-        console.log(`[ScreenShare] Adding track to outgoing connection: ${track.kind}`);
         const sender = pc.addTrack(track, localStreamRef.current!);
         
-        // Configure video sender for high quality
         if (track.kind === 'video') {
           const preset = QUALITY_PRESETS[currentQualityRef.current];
           configureScreenShareSender(sender, preset);
         }
         
-        // Configure audio sender if system audio is captured
         if (track.kind === 'audio') {
           const params = sender.getParameters();
           if (!params.encodings || params.encodings.length === 0) {
             params.encodings = [{}];
           }
-          params.encodings[0].maxBitrate = 128000;
+          params.encodings[0].maxBitrate = 192_000; // 192kbps stereo audio
           sender.setParameters(params).catch(() => {});
         }
       });
@@ -171,9 +177,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     pc.onconnectionstatechange = () => {
       console.log(`[ScreenShare] Outgoing connection state with ${viewerId}: ${pc.connectionState}`);
-      if (pc.connectionState === "failed") {
-        iceManager.scheduleRestart(pc);
-      } else if (pc.connectionState === "disconnected") {
+      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
         iceManager.scheduleRestart(pc);
       } else if (pc.connectionState === "connected") {
         iceManager.reset();
@@ -192,7 +196,6 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     try {
       const offer = await pc.createOffer();
-      // Munge SDP for screen share video quality
       offer.sdp = mungeScreenShareSDP(offer.sdp || '');
       await pc.setLocalDescription(offer);
 
@@ -287,7 +290,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     const init = async () => {
       console.log(`[ScreenShare] Initializing channels for ${channelId}`);
 
-      const signalingChannel = supabase.channel(`screen-sig-${channelId}`);
+      const signalingChannel = supabase.channel(`screen-sig-${channelId}-${Date.now()}`);
       signalingChannelRef.current = signalingChannel;
 
       signalingChannel.on("broadcast", { event: "screen-signal" }, ({ payload }) => {
@@ -303,7 +306,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
       await signalingChannel.subscribe();
 
-      const presenceChannel = supabase.channel(`screen-pres-${channelId}`, {
+      const presenceChannel = supabase.channel(`screen-pres-${channelId}-${Date.now()}`, {
         config: { presence: { key: currentUserId } },
       });
       presenceChannelRef.current = presenceChannel;
@@ -357,7 +360,6 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           outgoingConnectionsRef.current.delete(key);
         }
 
-        // Cleanup ICE managers
         const inIce = iceManagersRef.current.get(`in-${key}`);
         if (inIce) { inIce.cleanup(); iceManagersRef.current.delete(`in-${key}`); }
         const outIce = iceManagersRef.current.get(`out-${key}`);
@@ -388,7 +390,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     };
   }, [channelId, currentUserId, currentUsername, handleSignal, sendOfferToViewer]);
 
-  // Start screen share with quality selection + system audio
+  // Start screen share — called directly from click handler
   const startScreenShare = useCallback(async (quality: ScreenQuality = "1080p60") => {
     if (!isInitialized) {
       console.log("[ScreenShare] Not initialized yet");
@@ -400,13 +402,13 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     console.log(`[ScreenShare] Starting with quality: ${quality}`, preset);
 
     try {
-      // Request system audio alongside screen
+      // CRITICAL: getDisplayMedia called directly in user gesture handler
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: preset.width, max: preset.width },
           height: { ideal: preset.height, max: preset.height },
           frameRate: { ideal: preset.frameRate, max: preset.frameRate },
-          // @ts-ignore - Chrome-specific
+          // @ts-ignore
           cursor: "always",
         },
         audio: {
@@ -416,19 +418,17 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           sampleRate: { ideal: 48000 },
           channelCount: { ideal: 2 },
         },
-        // @ts-ignore - Chrome-specific: prefer current tab or window
+        // @ts-ignore
         preferCurrentTab: false,
         selfBrowserSurface: "exclude",
         surfaceSwitching: "include",
       } as any);
 
-      // Set content hint and degradation preference for video track
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        try {
-          (videoTrack as any).contentHint = 'detail';
-        } catch {}
-        // Apply constraints to maintain resolution quality
+        // Set content hint for sharp text/UI
+        try { (videoTrack as any).contentHint = 'detail'; } catch {}
+        // Apply resolution constraints
         try {
           await videoTrack.applyConstraints({
             width: { ideal: preset.width },
@@ -438,12 +438,9 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         } catch {}
       }
 
-      // Log if system audio was captured
       const audioTracks = stream.getAudioTracks();
       if (audioTracks.length > 0) {
         console.log('[ScreenShare] ✅ System audio captured:', audioTracks[0].label);
-      } else {
-        console.log('[ScreenShare] ⚠️ No system audio - user may not have selected it');
       }
 
       localStreamRef.current = stream;
@@ -451,11 +448,22 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       setLocalStream(stream);
       setIsSharing(true);
 
-      // Handle stop from browser UI
-      videoTrack.onended = () => {
-        console.log("[ScreenShare] Stream ended by browser");
-        stopScreenShare();
-      };
+      // Handle stop from browser UI — both ended AND mute events
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          console.log("[ScreenShare] Stream ended by browser (onended)");
+          stopScreenShare();
+        };
+        videoTrack.onmute = () => {
+          // Chrome sometimes fires mute before ended when user clicks "Stop sharing"
+          console.log("[ScreenShare] Video track muted — checking if ended");
+          setTimeout(() => {
+            if (videoTrack.readyState === 'ended') {
+              stopScreenShare();
+            }
+          }, 500);
+        };
+      }
 
       // Update presence
       await presenceChannelRef.current?.track({
@@ -464,7 +472,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         isSharing: true,
       });
 
-      // Send offers to existing users
+      // Send offers to existing users (small delay for presence to propagate)
       setTimeout(() => {
         const state = presenceChannelRef.current?.presenceState() || {};
         Object.values(state).forEach((presences: any[]) => {
@@ -474,7 +482,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
             }
           });
         });
-      }, 500);
+      }, 300);
 
       return stream;
     } catch (error: any) {
