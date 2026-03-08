@@ -133,39 +133,40 @@ const Index = () => {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="h-screen w-screen p-2 md:p-3 parallax-bg parallax-stars overflow-hidden">
-        <div className="h-full w-full flex rounded-2xl overflow-hidden bg-background/80 backdrop-blur-xl border border-white/[0.08] shadow-2xl shadow-black/40">
         <div className="stars-layer stars-layer-1" />
         <div className="stars-layer stars-layer-2" />
-        {/* Unified Sidebar */}
-        <UnifiedSidebar
-          tab={viewMode}
-          onTabChange={setViewMode}
-          selectedFriend={selectedFriend}
-          onSelectFriend={setSelectedFriend}
-          selectedGroup={selectedGroup}
-          onSelectGroup={setSelectedGroup}
-          onStartCall={handleStartCall}
-          onStartGroupCall={handleStartGroupCall}
-          onOpenSearch={() => setSearchOpen(true)}
-        />
+        <div className="h-full w-full flex rounded-2xl overflow-hidden bg-background/80 backdrop-blur-xl border border-white/[0.08] shadow-2xl shadow-black/40">
+          {/* Unified Sidebar */}
+          <UnifiedSidebar
+            tab={viewMode}
+            onTabChange={setViewMode}
+            selectedFriend={selectedFriend}
+            onSelectFriend={setSelectedFriend}
+            selectedGroup={selectedGroup}
+            onSelectGroup={setSelectedGroup}
+            onStartCall={handleStartCall}
+            onStartGroupCall={handleStartGroupCall}
+            onOpenSearch={() => setSearchOpen(true)}
+          />
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {viewMode === "messages" && selectedFriend ? (
-            <PrivateChatPanel
-              friend={selectedFriend}
-              onClose={() => setSelectedFriend(null)}
-              onStartCall={() => handleStartCall(selectedFriend)}
-            />
-          ) : viewMode === "groups" && selectedGroup ? (
-            <GroupChatPanel
-              group={selectedGroup}
-              onClose={() => setSelectedGroup(null)}
-              onStartCall={() => handleStartGroupCall(selectedGroup)}
-            />
-          ) : (
-            <EmptyState viewMode={viewMode} />
-          )}
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {viewMode === "messages" && selectedFriend ? (
+              <PrivateChatPanel
+                friend={selectedFriend}
+                onClose={() => setSelectedFriend(null)}
+                onStartCall={() => handleStartCall(selectedFriend)}
+              />
+            ) : viewMode === "groups" && selectedGroup ? (
+              <GroupChatPanel
+                group={selectedGroup}
+                onClose={() => setSelectedGroup(null)}
+                onStartCall={() => handleStartGroupCall(selectedGroup)}
+              />
+            ) : (
+              <EmptyState viewMode={viewMode} />
+            )}
+          </div>
         </div>
 
         {/* Active Call */}
