@@ -834,6 +834,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         console.warn("[Voice] Presence track delayed, continuing join", trackError);
       }
 
+      // Mark connected BEFORE syncing so the self-add fallback works
+      isConnectedRef.current = true;
+
       // Immediately sync presence state (ensures self + any existing users are visible)
       syncPresenceState();
 
@@ -859,7 +862,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         joinWatchdogRef.current = null;
       }
 
-      isConnectedRef.current = true;
       setIsConnected(true);
       setIsConnecting(false);
       setConnectionQuality("good");
