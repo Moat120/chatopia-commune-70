@@ -8,6 +8,7 @@ interface Profile {
   avatar_url: string | null;
   friend_code: string;
   status: string;
+  custom_status: string | null;
 }
 
 interface AuthContextType {
