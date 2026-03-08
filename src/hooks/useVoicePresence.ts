@@ -23,12 +23,16 @@ const normalizeRoster = (users: unknown[]): VoicePresenceUser[] => {
 
 /**
  * Observe who is in a group voice call without joining audio.
- * Uses ONLY the roster broadcast channel to avoid conflicting with the
- * voice presence channel used by useWebRTCVoice.
+ *
+ * Uses a dedicated observer channel (`voice-obs-group-<groupId>`)
+ * that is completely separate from the channels used by useWebRTCVoice
+ * to avoid any channel name conflicts or race conditions.
+ *
+ * The voice hook broadcasts roster updates on this observer channel too.
  */
 export const useVoicePresence = (groupId: string | null) => {
   const [participants, setParticipants] = useState<VoicePresenceUser[]>([]);
-  const rosterChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     if (!groupId) {
@@ -36,26 +40,23 @@ export const useVoicePresence = (groupId: string | null) => {
       return;
     }
 
-    // Subscribe to the SAME roster broadcast channel that useWebRTCVoice broadcasts on.
-    // The voice hook broadcasts on `voice-status-group-${groupId}`.
-    // We use a unique config key to avoid channel name collision within this client.
-    const rosterChannel = supabase.channel(`voice-status-group-${groupId}`, {
+    const channel = supabase.channel(`voice-obs-group-${groupId}`, {
       config: { broadcast: { self: false } },
     });
-    rosterChannelRef.current = rosterChannel;
+    channelRef.current = channel;
 
-    rosterChannel.on("broadcast", { event: "voice-roster" }, ({ payload }) => {
+    channel.on("broadcast", { event: "voice-roster" }, ({ payload }) => {
       if (Array.isArray(payload?.users)) {
         setParticipants(normalizeRoster(payload.users));
       }
     });
 
-    rosterChannel.subscribe();
+    channel.subscribe();
 
     return () => {
-      if (rosterChannelRef.current) {
-        supabase.removeChannel(rosterChannelRef.current).catch(() => {});
-        rosterChannelRef.current = null;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current).catch(() => {});
+        channelRef.current = null;
       }
     };
   }, [groupId]);
