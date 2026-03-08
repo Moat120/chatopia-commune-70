@@ -554,6 +554,19 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setIsConnecting(true);
     setConnectionQuality("connecting");
 
+    if (joinWatchdogRef.current) {
+      clearTimeout(joinWatchdogRef.current);
+      joinWatchdogRef.current = null;
+    }
+
+    joinWatchdogRef.current = setTimeout(() => {
+      if (!isConnectedRef.current) {
+        console.error("[Voice] Join watchdog timeout");
+        onError?.("Connexion vocale expirée, réessaie.");
+        cleanup();
+      }
+    }, 20000);
+
     try {
       // Fetch dynamic TURN credentials first (fallback fast if function is slow)
       try {
