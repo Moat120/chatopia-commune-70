@@ -18,12 +18,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Copy, Pencil, Trash2 } from "lucide-react";
+import { Copy, Pencil, Trash2, Reply } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface GroupMessageContextMenuProps {
   message: GroupMessage;
   children: React.ReactNode;
+  onReply?: (message: GroupMessage) => void;
 }
 
 const GroupMessageContextMenu = ({ message, children }: GroupMessageContextMenuProps) => {
