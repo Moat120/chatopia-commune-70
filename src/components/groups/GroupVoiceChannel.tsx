@@ -186,7 +186,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary/30 border border-white/[0.03]">
                     <Users className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-semibold text-muted-foreground">
-                      {connectedUsers.length} {connectedUsers.length === 1 ? "participant" : "participants"}
+                      {effectiveConnectedUsers.length} {effectiveConnectedUsers.length === 1 ? "participant" : "participants"}
                     </span>
                   </div>
                   <div className={cn("flex gap-4", hasActiveScreenShare ? "flex-col" : "flex-wrap justify-center")}>
