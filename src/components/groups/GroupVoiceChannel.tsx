@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Volume2, Users, Sparkles, MicOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
