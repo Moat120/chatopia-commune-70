@@ -460,14 +460,15 @@ const GroupsList = ({
 
   return (
     <div className="space-y-0.5 py-2">
-      {groups.map((g) => (
-        <GroupRow
-          key={g.id}
-          group={g}
-          isSelected={selectedGroup?.id === g.id}
-          onSelect={() => onSelectGroup(g)}
-          onCall={() => onStartGroupCall(g)}
-        />
+      {groups.map((g, i) => (
+        <div key={g.id} className="animate-slide-up" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}>
+          <GroupRow
+            group={g}
+            isSelected={selectedGroup?.id === g.id}
+            onSelect={() => onSelectGroup(g)}
+            onCall={() => onStartGroupCall(g)}
+          />
+        </div>
       ))}
     </div>
   );
