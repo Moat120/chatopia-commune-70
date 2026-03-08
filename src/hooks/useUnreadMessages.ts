@@ -63,16 +63,13 @@ export const useUnreadMessages = () => {
     // Fallback polling every 10s
     pollRef.current = setInterval(fetchUnreadCounts, 10000);
 
-    const channel = supabase
-      .channel(`unread-messages-${user.id}-${Date.now()}`)
+    const ts = Date.now();
+    const insertChannel = supabase
+      .channel(`unread-ins-${user.id}-${ts}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "private_messages",
-          filter: `receiver_id=eq.${user.id}`,
-        },
+        { event: "INSERT", schema: "public", table: "private_messages",
+          filter: `receiver_id=eq.${user.id}` },
         (payload) => {
           const msg = payload.new as any;
           setUnreadCounts((prev) => ({
@@ -82,25 +79,22 @@ export const useUnreadMessages = () => {
           setTotalUnread((prev) => prev + 1);
         }
       )
+      .subscribe();
+
+    const updateChannel = supabase
+      .channel(`unread-upd-${user.id}-${ts}`)
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "private_messages",
-          filter: `receiver_id=eq.${user.id}`,
-        },
-        () => {
-          fetchUnreadCounts();
-        }
+        { event: "UPDATE", schema: "public", table: "private_messages",
+          filter: `receiver_id=eq.${user.id}` },
+        () => { fetchUnreadCounts(); }
       )
-      .subscribe((status, err) => {
-        if (err) console.error("[unread-messages] subscription error:", err);
-      });
+      .subscribe();
 
     return () => {
       clearInterval(pollRef.current);
-      supabase.removeChannel(channel);
+      supabase.removeChannel(insertChannel);
+      supabase.removeChannel(updateChannel);
     };
   }, [user, fetchUnreadCounts]);
 

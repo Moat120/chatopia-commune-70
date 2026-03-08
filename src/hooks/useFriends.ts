@@ -239,52 +239,48 @@ export const useFriends = () => {
       fetchPendingRequests();
     }, 10000);
 
-    // Realtime subscriptions with unique channel names
-    const friendshipsChannel = supabase
-      .channel(`friendships-${user.id}-${Date.now()}`)
+    // Split into separate channels to avoid "mismatch" errors
+    const ts = Date.now();
+    const friendshipsReqChannel = supabase
+      .channel(`fr-req-${user.id}-${ts}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "friendships",
           filter: `requester_id=eq.${user.id}` },
-        () => {
-          fetchFriends();
-          fetchPendingRequests();
-        }
+        () => { fetchFriends(); fetchPendingRequests(); }
       )
+      .subscribe();
+
+    const friendshipsAddrChannel = supabase
+      .channel(`fr-addr-${user.id}-${ts}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "friendships",
           filter: `addressee_id=eq.${user.id}` },
-        () => {
-          fetchFriends();
-          fetchPendingRequests();
-        }
+        () => { fetchFriends(); fetchPendingRequests(); }
       )
-      .subscribe((status, err) => {
-        if (err) console.error("[friendships] subscription error:", err);
-      });
+      .subscribe();
 
     const profilesChannel = supabase
-      .channel(`profiles-status-${user.id}-${Date.now()}`)
+      .channel(`prof-upd-${user.id}-${ts}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles" },
         (payload) => {
-          const updatedProfile = payload.new as any;
-          setFriends(prev => prev.map(friend => 
-            friend.id === updatedProfile.id 
-              ? { ...friend, status: updatedProfile.status, avatar_url: updatedProfile.avatar_url, username: updatedProfile.username, custom_status: updatedProfile.custom_status }
-              : friend
+          const p = payload.new as any;
+          setFriends(prev => prev.map(f => 
+            f.id === p.id 
+              ? { ...f, status: p.status, avatar_url: p.avatar_url, username: p.username, custom_status: p.custom_status }
+              : f
           ));
         }
       )
-      .subscribe((status, err) => {
-        if (err) console.error("[profiles-status] subscription error:", err);
-      });
+      .subscribe();
 
     return () => {
       clearInterval(pollRef.current);
-      supabase.removeChannel(friendshipsChannel);
+      supabase.removeChannel(friendshipsReqChannel);
+      supabase.removeChannel(friendshipsAddrChannel);
       supabase.removeChannel(profilesChannel);
     };
   }, [user?.id, fetchFriends, fetchPendingRequests]);

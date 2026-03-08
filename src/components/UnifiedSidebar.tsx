@@ -379,19 +379,20 @@ const FriendsList = ({
       {onlineFriends.length > 0 && (
         <div>
           <SectionLabel>
-            <span className="w-1.5 h-1.5 rounded-full bg-success" />
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
             En ligne — {onlineFriends.length}
           </SectionLabel>
           <div className="space-y-0.5">
-            {onlineFriends.map((f) => (
-              <FriendRow
-                key={f.id}
-                friend={f}
-                isSelected={selectedFriend?.id === f.id}
-                unreadCount={getUnreadCount(f.id)}
-                onSelect={() => onSelectFriend(f)}
-                onCall={() => onStartCall(f)}
-              />
+            {onlineFriends.map((f, i) => (
+              <div key={f.id} className="animate-slide-up" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}>
+                <FriendRow
+                  friend={f}
+                  isSelected={selectedFriend?.id === f.id}
+                  unreadCount={getUnreadCount(f.id)}
+                  onSelect={() => onSelectFriend(f)}
+                  onCall={() => onStartCall(f)}
+                />
+              </div>
             ))}
           </div>
         </div>
@@ -400,15 +401,16 @@ const FriendsList = ({
         <div>
           <SectionLabel>Hors ligne — {offlineFriends.length}</SectionLabel>
           <div className="space-y-0.5">
-            {offlineFriends.map((f) => (
-              <FriendRow
-                key={f.id}
-                friend={f}
-                isSelected={selectedFriend?.id === f.id}
-                unreadCount={getUnreadCount(f.id)}
-                onSelect={() => onSelectFriend(f)}
-                onCall={() => onStartCall(f)}
-              />
+            {offlineFriends.map((f, i) => (
+              <div key={f.id} className="animate-slide-up" style={{ animationDelay: `${(onlineFriends.length + i) * 30}ms`, animationFillMode: 'both' }}>
+                <FriendRow
+                  friend={f}
+                  isSelected={selectedFriend?.id === f.id}
+                  unreadCount={getUnreadCount(f.id)}
+                  onSelect={() => onSelectFriend(f)}
+                  onCall={() => onStartCall(f)}
+                />
+              </div>
             ))}
           </div>
         </div>
@@ -458,14 +460,15 @@ const GroupsList = ({
 
   return (
     <div className="space-y-0.5 py-2">
-      {groups.map((g) => (
-        <GroupRow
-          key={g.id}
-          group={g}
-          isSelected={selectedGroup?.id === g.id}
-          onSelect={() => onSelectGroup(g)}
-          onCall={() => onStartGroupCall(g)}
-        />
+      {groups.map((g, i) => (
+        <div key={g.id} className="animate-slide-up" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}>
+          <GroupRow
+            group={g}
+            isSelected={selectedGroup?.id === g.id}
+            onSelect={() => onSelectGroup(g)}
+            onCall={() => onStartGroupCall(g)}
+          />
+        </div>
       ))}
     </div>
   );
@@ -547,7 +550,7 @@ const FriendRow = ({
       </div>
 
       {unreadCount > 0 && (
-        <Badge className="h-5 min-w-5 px-1.5 text-[10px] font-bold bg-primary text-primary-foreground shrink-0 animate-scale-in">
+        <Badge className="h-5 min-w-5 px-1.5 text-[10px] font-bold bg-primary text-primary-foreground shrink-0 animate-pop-in">
           {unreadCount > 99 ? "99+" : unreadCount}
         </Badge>
       )}
