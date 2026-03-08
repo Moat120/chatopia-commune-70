@@ -563,19 +563,31 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         const state = presenceChannel.presenceState();
         const users: VoiceUser[] = [];
 
-        Object.values(state).forEach((presences: any[]) => {
+        Object.entries(state).forEach(([key, presences]: [string, any[]]) => {
+          // Skip observer keys (from useVoicePresence)
+          if (key.startsWith("observer-")) return;
+
           presences.forEach((presence) => {
-            users.push({
-              odId: presence.odId,
-              username: presence.username,
-              avatarUrl: presence.avatarUrl,
-              isSpeaking: presence.isSpeaking || false,
-              isMuted: presence.isMuted || false,
-            });
+            if (presence.odId && !presence._observer) {
+              users.push({
+                odId: presence.odId,
+                username: presence.username,
+                avatarUrl: presence.avatarUrl,
+                isSpeaking: presence.isSpeaking || false,
+                isMuted: presence.isMuted || false,
+              });
+            }
           });
         });
 
         setConnectedUsers(users);
+
+        // Broadcast roster to observers (GroupsSidebar, etc.)
+        rosterChannelRef.current?.send({
+          type: "broadcast",
+          event: "voice-roster",
+          payload: { users },
+        });
 
         users.forEach((u) => {
           if (u.odId !== currentUserId && currentUserId < u.odId) {
