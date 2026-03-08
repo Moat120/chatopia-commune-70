@@ -67,6 +67,11 @@ const GroupMessageContextMenu = ({ message, children, onReply }: GroupMessageCon
           <ContextMenuItem onClick={handleCopy} className="gap-2 rounded-lg">
             <Copy className="h-4 w-4" /> Copier
           </ContextMenuItem>
+          {onReply && (
+            <ContextMenuItem onClick={() => onReply(message)} className="gap-2 rounded-lg">
+              <Reply className="h-4 w-4" /> Répondre
+            </ContextMenuItem>
+          )}
           {isOwn && (
             <>
               <ContextMenuSeparator className="bg-white/[0.06]" />
