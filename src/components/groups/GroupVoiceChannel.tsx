@@ -129,33 +129,36 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="fixed inset-0 z-50 flex flex-col call-bg">
+      <div className="fixed inset-0 z-50 flex flex-col call-bg animate-fade-in">
         <div className="absolute inset-0 noise pointer-events-none" />
 
         {/* Header */}
         <div className={cn(
-          "shrink-0 px-5 py-4 flex items-center justify-between relative z-10",
+          "shrink-0 px-5 py-3.5 flex items-center justify-between relative z-10",
           "border-b border-white/[0.04] glass-solid"
         )}>
           <div className="flex items-center gap-3">
             <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center",
-              "bg-gradient-to-br from-primary/25 to-transparent",
-              "border border-primary/25",
-              isConnected && "border-success/30"
+              "w-9 h-9 rounded-xl flex items-center justify-center",
+              "bg-gradient-to-br from-primary/20 to-transparent",
+              "border border-primary/20 transition-all duration-500",
+              isConnected && "border-success/25 from-success/15"
             )}>
-              <Volume2 className={cn("h-5 w-5", isConnected ? "text-success" : "text-primary")} />
+              <Volume2 className={cn("h-4 w-4 transition-colors duration-500", isConnected ? "text-success" : "text-primary/80")} />
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight">{group.name}</h2>
-              <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
+              <h2 className="text-base font-bold tracking-tight">{group.name}</h2>
+              <p className="text-[11px] text-muted-foreground/40 flex items-center gap-1.5">
                 {isConnected 
                   ? `${effectiveConnectedUsers.length} participant${effectiveConnectedUsers.length > 1 ? 's' : ''}` 
                   : presenceParticipants.length > 0 
-                    ? `${presenceParticipants.length} participant${presenceParticipants.length > 1 ? 's' : ''} en vocal`
-                    : "Rejoindre l'appel"}
+                    ? `${presenceParticipants.length} en vocal`
+                    : "Aucun participant"}
                 {isConnected && noiseEngine && (
-                  <span className="text-[10px] text-success/70">• {noiseEngine}</span>
+                  <span className="text-[10px] text-success/50 flex items-center gap-1">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    {noiseEngine}
+                  </span>
                 )}
               </p>
             </div>
@@ -168,9 +171,8 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
 
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden min-h-0 relative z-10">
-          {/* Screen Share Area */}
           {hasActiveScreenShare && (
-            <div className="flex-1 min-w-0 bg-black/30">
+            <div className="flex-1 min-w-0 bg-black/20">
               <MultiScreenShareView screens={activeScreens} onStopLocal={stopScreenShare} />
             </div>
           )}
@@ -178,20 +180,20 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
           {/* Users Panel */}
           <div className={cn(
             "flex flex-col shrink-0",
-            hasActiveScreenShare ? "w-80 border-l border-white/[0.04] glass-subtle" : "flex-1"
+            hasActiveScreenShare ? "w-72 border-l border-white/[0.04] glass-subtle" : "flex-1"
           )}>
-            <div className="flex-1 p-5 overflow-y-auto min-h-0">
+            <div className="flex-1 p-4 overflow-y-auto min-h-0">
               {isConnected ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary/30 border border-white/[0.03]">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-semibold text-muted-foreground">
-                      {effectiveConnectedUsers.length} {effectiveConnectedUsers.length === 1 ? "participant" : "participants"}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/20 border border-white/[0.03]">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground/50" />
+                    <span className="text-xs font-medium text-muted-foreground/50">
+                      {effectiveConnectedUsers.length} connecté{effectiveConnectedUsers.length > 1 ? "s" : ""}
                     </span>
                   </div>
-                  <div className={cn("flex gap-4", hasActiveScreenShare ? "flex-col" : "flex-wrap justify-center")}>
+                  <div className={cn("flex gap-3", hasActiveScreenShare ? "flex-col" : "flex-wrap justify-center")}>
                     {effectiveConnectedUsers.map((user, index) => (
-                      <div key={user.odId} className="animate-scale-in" style={{ animationDelay: `${index * 0.08}s` }}>
+                      <div key={user.odId} className="animate-scale-in" style={{ animationDelay: `${index * 0.06}s` }}>
                         <VoiceUserCard
                           username={user.username}
                           avatarUrl={user.avatarUrl}
@@ -210,41 +212,44 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
               ) : (
                 <div className="h-full flex flex-col">
                   {presenceParticipants.length > 0 ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary/30 border border-white/[0.03]">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-semibold text-muted-foreground">
-                          {presenceParticipants.length} {presenceParticipants.length === 1 ? "participant" : "participants"}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/20 border border-white/[0.03]">
+                        <Users className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        <span className="text-xs font-medium text-muted-foreground/50">
+                          {presenceParticipants.length} en vocal
                         </span>
                       </div>
-                      <div className="flex flex-wrap justify-center gap-4">
+                      <div className="flex flex-wrap justify-center gap-3">
                         {presenceParticipants.map((p, index) => (
-                          <div key={p.odId} className="animate-scale-in flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/20 border border-white/[0.04]" style={{ animationDelay: `${index * 0.08}s` }}>
+                          <div key={p.odId} className="animate-scale-in flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/15 border border-white/[0.03]" style={{ animationDelay: `${index * 0.06}s` }}>
                             <div className="relative">
-                              <Avatar className={cn("h-14 w-14 ring-2", p.isSpeaking ? "ring-success/50" : "ring-transparent")}>
+                              <Avatar className={cn("h-12 w-12 ring-2 transition-all duration-300", p.isSpeaking ? "ring-success/40" : "ring-transparent")}>
                                 <AvatarImage src={p.avatarUrl || ""} className="object-cover" />
-                                <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
+                                <AvatarFallback className="bg-primary/10 text-primary font-bold text-base">
                                   {p.username[0]?.toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                               {p.isMuted && (
-                                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-destructive/80 flex items-center justify-center border-2 border-background">
-                                  <MicOff className="h-2.5 w-2.5 text-white" />
+                                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-destructive/80 flex items-center justify-center border-2 border-background">
+                                  <MicOff className="h-2 w-2 text-white" />
                                 </div>
                               )}
                             </div>
-                            <span className="text-xs font-medium text-muted-foreground/70">{p.username}</span>
+                            <span className="text-[11px] font-medium text-muted-foreground/60">{p.username}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   ) : (
                     <div className="h-full flex items-center justify-center">
-                      <div className="text-center space-y-4 animate-fade-in-up">
-                        <div className="mx-auto w-20 h-20 rounded-2xl bg-secondary/30 flex items-center justify-center border border-white/[0.04]">
-                          <Users className="h-10 w-10 text-muted-foreground/25" />
+                      <div className="text-center space-y-3 animate-reveal">
+                        <div className="mx-auto w-16 h-16 rounded-2xl bg-secondary/20 flex items-center justify-center border border-white/[0.03]">
+                          <Users className="h-8 w-8 text-muted-foreground/15" />
                         </div>
-                        <p className="text-muted-foreground/50 text-sm">Aucun participant dans l'appel</p>
+                        <div>
+                          <p className="text-muted-foreground/40 text-sm font-medium">Personne n'est en vocal</p>
+                          <p className="text-muted-foreground/25 text-xs mt-0.5">Rejoins pour démarrer</p>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -256,7 +261,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
 
         {/* Controls Bar */}
         <div className={cn(
-          "shrink-0 px-6 py-5 flex justify-center relative z-10",
+          "shrink-0 px-6 py-4 flex justify-center relative z-10",
           "border-t border-white/[0.04] glass-solid"
         )}>
           <VoiceControlsWithScreenShare
