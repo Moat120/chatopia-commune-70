@@ -190,7 +190,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
                     </span>
                   </div>
                   <div className={cn("flex gap-4", hasActiveScreenShare ? "flex-col" : "flex-wrap justify-center")}>
-                    {connectedUsers.map((user, index) => (
+                    {effectiveConnectedUsers.map((user, index) => (
                       <div key={user.odId} className="animate-scale-in" style={{ animationDelay: `${index * 0.08}s` }}>
                         <VoiceUserCard
                           username={user.username}
