@@ -14,13 +14,15 @@ export interface GroupMessage {
     username: string;
     avatar_url: string | null;
   };
+  _optimistic?: boolean;
 }
 
 export const useGroupChat = (groupId: string | null) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
+  const optimisticIdRef = useRef(0);
 
   const fetchMessages = useCallback(async () => {
     if (!groupId || !user) return;
@@ -45,7 +47,12 @@ export const useGroupChat = (groupId: string | null) => {
         sender: msg.sender,
       }));
 
-      setMessages(formattedMessages);
+      // Replace messages but keep optimistic ones that haven't been confirmed yet
+      setMessages(prev => {
+        const serverIds = new Set(formattedMessages.map((m: any) => m.id));
+        const pendingOptimistic = prev.filter(m => m._optimistic && !serverIds.has(m.id));
+        return [...formattedMessages, ...pendingOptimistic];
+      });
     } catch (error) {
       console.error("Error fetching messages:", error);
     } finally {
@@ -57,6 +64,24 @@ export const useGroupChat = (groupId: string | null) => {
     async (content: string, replyToId?: string) => {
       if (!groupId || !user || !content.trim()) return false;
 
+      // Optimistic update
+      const optimisticId = `optimistic-${++optimisticIdRef.current}-${Date.now()}`;
+      const optimisticMsg: GroupMessage = {
+        id: optimisticId,
+        group_id: groupId,
+        sender_id: user.id,
+        content: content.trim(),
+        created_at: new Date().toISOString(),
+        reply_to_id: replyToId || null,
+        sender: {
+          username: profile?.username || "Moi",
+          avatar_url: profile?.avatar_url || null,
+        },
+        _optimistic: true,
+      };
+
+      setMessages(prev => [...prev, optimisticMsg]);
+
       try {
         const { error } = await supabase.from("group_messages").insert({
           group_id: groupId,
@@ -65,25 +90,35 @@ export const useGroupChat = (groupId: string | null) => {
           reply_to_id: replyToId || null,
         } as any);
 
-        if (error) throw error;
+        if (error) {
+          // Remove optimistic message on error
+          setMessages(prev => prev.filter(m => m.id !== optimisticId));
+          throw error;
+        }
+
+        // Remove optimistic message (realtime will bring the real one)
+        setTimeout(() => {
+          setMessages(prev => prev.filter(m => m.id !== optimisticId));
+        }, 3000);
+
         return true;
       } catch (error) {
         console.error("Error sending message:", error);
         return false;
       }
     },
-    [groupId, user]
+    [groupId, user, profile]
   );
 
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription + fallback polling
+  // Realtime subscription + fallback polling (5s)
   useEffect(() => {
     if (!groupId || !user) return;
 
-    pollRef.current = setInterval(fetchMessages, 10000);
+    pollRef.current = setInterval(fetchMessages, 5000);
 
     const channel = supabase
       .channel(`group-messages-${groupId}`)
@@ -98,17 +133,24 @@ export const useGroupChat = (groupId: string | null) => {
         async (payload) => {
           const newMessage = payload.new as GroupMessage;
 
-          const { data: profile } = await supabase
+          const { data: senderProfile } = await supabase
             .from("profiles")
             .select("username, avatar_url")
             .eq("id", newMessage.sender_id)
             .single();
 
           setMessages((prev) => {
-            if (prev.some(m => m.id === newMessage.id)) return prev;
+            // Deduplicate: remove any optimistic message with same content from same sender
+            const deduped = prev.filter(m => {
+              if (!m._optimistic) return true;
+              if (m.sender_id === newMessage.sender_id && m.content === newMessage.content) return false;
+              return true;
+            });
+            // Don't add if already exists
+            if (deduped.some(m => m.id === newMessage.id)) return deduped;
             return [
-              ...prev,
-              { ...newMessage, sender: profile || undefined },
+              ...deduped,
+              { ...newMessage, sender: senderProfile || undefined },
             ];
           });
         }
