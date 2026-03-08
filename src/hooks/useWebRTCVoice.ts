@@ -526,7 +526,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       signalingChannelRef.current = signalingChannel;
 
       signalingChannel.on("broadcast", { event: "voice-signal" }, ({ payload }) => {
-        handleSignal(payload as SignalMessage);
+        handleSignalRef.current?.(payload as SignalMessage);
       });
 
       await signalingChannel.subscribe();
