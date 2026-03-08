@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard, Sparkles, Zap } from "lucide-react";
+import { Settings, Upload, Volume2, VolumeX, Mic, MicOff, Play, Square, Radio, Keyboard, Sparkles, Zap, Headphones } from "lucide-react";
 import { 
   getPushToTalkEnabled, 
   getPushToTalkKey, 
