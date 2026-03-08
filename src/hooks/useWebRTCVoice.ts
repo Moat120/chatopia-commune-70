@@ -420,31 +420,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
   }, [currentUserId, currentUsername, currentAvatarUrl]);
 
-  const initiateConnection = useCallback(async (remoteUserId: string) => {
-    if (remoteUserId === currentUserId || peerConnectionsRef.current.has(remoteUserId)) return;
-
-    const pc = createPeerConnection(remoteUserId);
-
-    try {
-      const offer = await pc.createOffer({ offerToReceiveAudio: true });
-      // Munge offer SDP for Opus HD
-      offer.sdp = mungeOpusSDP(offer.sdp || '');
-      await pc.setLocalDescription(offer);
-
-      signalingChannelRef.current?.send({
-        type: "broadcast",
-        event: "voice-signal",
-        payload: {
-          type: "voice-offer",
-          from: currentUserId,
-          to: remoteUserId,
-          data: offer,
-        },
-      });
-    } catch (error) {
-      console.error("[Voice] Offer error:", error);
-    }
-  }, [currentUserId, createPeerConnection]);
+  // initiateConnection is now via ref above
 
   const cleanup = useCallback(async () => {
     isConnectedRef.current = false;
