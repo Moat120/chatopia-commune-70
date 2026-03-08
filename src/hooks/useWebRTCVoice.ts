@@ -564,7 +564,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       presenceChannel.on("presence", { event: "join" }, ({ key }) => {
         if (key !== currentUserId) {
           if (currentUserId < key) {
-            initiateConnection(key);
+            initiateConnectionRef.current?.(key);
           }
         }
       });
