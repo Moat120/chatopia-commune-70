@@ -700,7 +700,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       presenceChannel.on("presence", { event: "sync" }, () => {
         const state = presenceChannel.presenceState();
-        const users: VoiceUser[] = [];
+        const userMap = new Map<string, VoiceUser>();
 
         Object.entries(state).forEach(([key, presences]: [string, any[]]) => {
           // Skip observer keys (from useVoicePresence)
@@ -708,7 +708,8 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
           presences.forEach((presence) => {
             if (presence.odId && !presence._observer) {
-              users.push({
+              // Keep the latest presence entry for each user (dedup)
+              userMap.set(presence.odId, {
                 odId: presence.odId,
                 username: presence.username,
                 avatarUrl: presence.avatarUrl,
@@ -719,6 +720,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           });
         });
 
+        const users = Array.from(userMap.values());
         setConnectedUsers(users);
 
         // Broadcast roster to observers (GroupsSidebar, etc.)
