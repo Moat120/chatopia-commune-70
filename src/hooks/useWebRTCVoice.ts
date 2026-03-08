@@ -554,6 +554,13 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       await signalingChannel.subscribe();
 
+      // Setup roster broadcast channel for observers (GroupsSidebar)
+      const rosterChannel = supabase.channel(`voice-status-${channelId}`, {
+        config: { broadcast: { self: false } },
+      });
+      rosterChannelRef.current = rosterChannel;
+      await rosterChannel.subscribe();
+
       const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
         config: { presence: { key: currentUserId } },
       });
