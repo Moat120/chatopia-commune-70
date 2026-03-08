@@ -242,10 +242,20 @@ export const useFriends = () => {
 
     // Subscribe to realtime updates for friendships
     const friendshipsChannel = supabase
-      .channel("friendships-changes")
+      .channel(`friendships-changes-${user.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "friendships" },
+        { event: "*", schema: "public", table: "friendships",
+          filter: `requester_id=eq.${user.id}` },
+        () => {
+          fetchFriends();
+          fetchPendingRequests();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friendships",
+          filter: `addressee_id=eq.${user.id}` },
         () => {
           fetchFriends();
           fetchPendingRequests();
@@ -255,12 +265,11 @@ export const useFriends = () => {
 
     // Subscribe to profile status changes for real-time online/offline updates
     const profilesChannel = supabase
-      .channel("profiles-status-changes")
+      .channel(`profiles-status-${user.id}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles" },
         (payload) => {
-          // Update friend status in real-time without full refetch
           const updatedProfile = payload.new as any;
           setFriends(prev => prev.map(friend => 
             friend.id === updatedProfile.id 
