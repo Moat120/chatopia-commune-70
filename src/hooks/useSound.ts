@@ -69,7 +69,8 @@ const notification = () => {
 
 /** Soft pop - button clicks */
 const click = () => {
-  playTone({ frequency: 1200, duration: 0.04, volume: 0.08, type: "sine", fadeIn: 0.003, fadeOut: 0.02 });
+  playTone({ frequency: 980, duration: 0.05, volume: 0.14, type: "triangle", fadeIn: 0.002, fadeOut: 0.03 });
+  setTimeout(() => playTone({ frequency: 1320, duration: 0.03, volume: 0.07, type: "sine", fadeIn: 0.002, fadeOut: 0.02 }), 18);
 };
 
 /** Warm ascending two-tone - user joining */
