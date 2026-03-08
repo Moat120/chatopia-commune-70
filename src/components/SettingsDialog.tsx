@@ -757,6 +757,16 @@ const SettingsDialog = () => {
                           style={{ width: `${audioLevel}%` }}
                         />
                       </div>
+
+                      {/* Frequency Spectrum Visualizer */}
+                      <div className="rounded-xl overflow-hidden bg-black/30 border border-white/[0.04]">
+                        <canvas
+                          ref={spectrumCanvasRef}
+                          width={400}
+                          height={80}
+                          className="w-full h-20"
+                        />
+                      </div>
                       <p className="text-xs text-muted-foreground/70">
                         Parlez dans votre microphone pour voir le niveau
                       </p>
