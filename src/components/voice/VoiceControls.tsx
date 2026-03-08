@@ -65,7 +65,7 @@ const VoiceControls = ({
                 <Phone className="h-5 w-5" />
               </div>
             </div>
-            <span>Rejoindre le vocal</span>
+            <span>Rejoindre l'appel</span>
           </>
         )}
       </Button>
@@ -160,7 +160,7 @@ const VoiceControls = ({
             "opacity-0 group-hover:opacity-100 transition-all duration-200",
             "pointer-events-none whitespace-nowrap shadow-xl"
           )}>
-            {isDeafened ? "Réactiver le son" : "Se rendre sourd"}
+            {isDeafened ? "Activer le son" : "Désactiver le son"}
           </span>
         </Button>
       )}

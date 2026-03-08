@@ -139,7 +139,7 @@ const VoiceControlsWithScreenShare = ({
               <Phone className="h-4.5 w-4.5" />
               <Phone className="h-4.5 w-4.5 absolute inset-0 animate-ping opacity-20" />
             </div>
-            Rejoindre
+            Rejoindre l'appel
           </span>
         )}
       </Button>
@@ -164,7 +164,7 @@ const VoiceControlsWithScreenShare = ({
           activeColor="amber"
           icon={<Volume2 className="h-5 w-5" />}
           activeIcon={<VolumeX className="h-5 w-5" />}
-          label={isDeafened ? "Réactiver le son" : "Couper le son"}
+          label={isDeafened ? "Activer le son" : "Désactiver le son"}
         />
       )}
 
