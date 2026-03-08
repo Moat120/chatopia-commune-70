@@ -166,6 +166,13 @@ export type Database = {
             referencedRelation: "group_messages"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "group_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       groups: {

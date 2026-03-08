@@ -1,0 +1,2 @@
+ALTER TABLE public.group_messages DROP CONSTRAINT group_messages_sender_id_fkey;
+ALTER TABLE public.group_messages ADD CONSTRAINT group_messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.profiles(id) ON DELETE CASCADE;

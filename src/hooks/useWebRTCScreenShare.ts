@@ -340,6 +340,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         // Request streams from sharers we're not yet connected to
         sharers.forEach((sharer) => {
           if (sharer.odId !== currentUserId && !incomingConnectionsRef.current.has(sharer.odId)) {
+            console.log(`[ScreenShare] Requesting stream from ${sharer.username} (${sharer.odId})`);
             signalingChannel.send({
               type: "broadcast",
               event: "request-screen",
@@ -348,6 +349,48 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
                 viewerId: currentUserId,
               },
             });
+            // Retry after 2s in case the first request was missed
+            setTimeout(() => {
+              if (!incomingConnectionsRef.current.has(sharer.odId) || 
+                  incomingConnectionsRef.current.get(sharer.odId)?.connectionState === 'failed') {
+                console.log(`[ScreenShare] Retrying request from ${sharer.odId}`);
+                signalingChannel.send({
+                  type: "broadcast",
+                  event: "request-screen",
+                  payload: {
+                    broadcasterId: sharer.odId,
+                    viewerId: currentUserId,
+                  },
+                });
+              }
+            }, 2000);
+          }
+        });
+      });
+
+      // Also handle join events — when a new sharer joins, request their stream immediately
+      presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
+        if (!mounted) return;
+        newPresences.forEach((presence: any) => {
+          if (presence.isSharing && presence.odId !== currentUserId) {
+            console.log(`[ScreenShare] New sharer joined: ${presence.username}`);
+            setTimeout(() => {
+              signalingChannel.send({
+                type: "broadcast",
+                event: "request-screen",
+                payload: {
+                  broadcasterId: presence.odId,
+                  viewerId: currentUserId,
+                },
+              });
+            }, 500);
+          }
+          // If WE are sharing and someone new joins, send them an offer
+          if (isSharingRef.current && presence.odId !== currentUserId) {
+            console.log(`[ScreenShare] New viewer joined: ${presence.odId}, sending offer`);
+            setTimeout(() => {
+              sendOfferRef.current(presence.odId);
+            }, 500);
           }
         });
       });
@@ -480,17 +523,28 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         isSharing: true,
       });
 
-      // Send offers to existing users (small delay for presence to propagate)
-      setTimeout(() => {
+      // Send offers to existing users — retry to ensure presence has propagated
+      const broadcastOffers = () => {
         const state = presenceChannelRef.current?.presenceState() || {};
+        let sentCount = 0;
         Object.values(state).forEach((presences: any[]) => {
           presences.forEach((presence) => {
             if (presence.odId !== currentUserId) {
-              sendOfferToViewer(presence.odId);
+              sendOfferRef.current(presence.odId);
+              sentCount++;
             }
           });
         });
-      }, 300);
+        return sentCount;
+      };
+
+      // First attempt after short delay, retry after 1s if no peers found
+      setTimeout(() => {
+        const count = broadcastOffers();
+        if (count === 0) {
+          setTimeout(broadcastOffers, 1000);
+        }
+      }, 500);
 
       return stream;
     } catch (error: any) {

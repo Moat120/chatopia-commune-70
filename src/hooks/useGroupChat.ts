@@ -30,7 +30,7 @@ export const useGroupChat = (groupId: string | null) => {
         .from("group_messages")
         .select(`
           *,
-          profiles:sender_id (
+          sender:profiles!group_messages_sender_id_fkey (
             username,
             avatar_url
           )
@@ -42,7 +42,7 @@ export const useGroupChat = (groupId: string | null) => {
 
       const formattedMessages = (data || []).map((msg: any) => ({
         ...msg,
-        sender: msg.profiles,
+        sender: msg.sender,
       }));
 
       setMessages(formattedMessages);
@@ -86,7 +86,7 @@ export const useGroupChat = (groupId: string | null) => {
     pollRef.current = setInterval(fetchMessages, 10000);
 
     const channel = supabase
-      .channel(`group-messages-${user.id}-${groupId}-${Date.now()}`)
+      .channel(`group-messages-${groupId}`)
       .on(
         "postgres_changes",
         {
