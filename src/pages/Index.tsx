@@ -238,7 +238,7 @@ const Index = () => {
 /* ─── Empty State ─── */
 const EmptyState = ({ viewMode }: { viewMode: ViewMode }) => (
   <div className="flex-1 flex items-center justify-center h-full bg-background">
-    <div className="text-center">
+    <div className="text-center animate-fade-in-up">
       <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/30 border border-border flex items-center justify-center">
         <MessageCircle className="h-9 w-9 text-muted-foreground/40" />
       </div>
@@ -249,6 +249,12 @@ const EmptyState = ({ viewMode }: { viewMode: ViewMode }) => (
         {viewMode === "messages"
           ? "Sélectionne un ami pour démarrer une conversation"
           : "Sélectionne un groupe ou crée-en un nouveau"}
+      </p>
+      <p className="text-muted-foreground/40 text-xs mt-4">
+        <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border text-[10px] font-mono">Ctrl</kbd>
+        {" + "}
+        <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border text-[10px] font-mono">/</kbd>
+        {" pour les raccourcis"}
       </p>
     </div>
   </div>
