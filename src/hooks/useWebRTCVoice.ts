@@ -77,6 +77,15 @@ const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> =>
   };
 };
 
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`[Voice] ${label} timeout after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ]);
+};
+
 const subscribeChannel = (
   channel: ReturnType<typeof supabase.channel>,
   label: string,
@@ -540,10 +549,15 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     setConnectionQuality("connecting");
 
     try {
-      // Fetch dynamic TURN credentials first
-      const dynamicConfig = await getDynamicRtcConfig();
-      rtcConfigRef.current = dynamicConfig;
-      console.log('[Voice] Using ICE config with', dynamicConfig.iceServers?.length, 'servers');
+      // Fetch dynamic TURN credentials first (fallback fast if function is slow)
+      try {
+        const dynamicConfig = await withTimeout(getDynamicRtcConfig(), 8000, "TURN config");
+        rtcConfigRef.current = dynamicConfig;
+        console.log('[Voice] Using ICE config with', dynamicConfig.iceServers?.length, 'servers');
+      } catch (turnError) {
+        console.warn('[Voice] TURN config unavailable, fallback to static RTC config', turnError);
+        rtcConfigRef.current = RTC_CONFIG;
+      }
 
       const audioConstraints = await getOptimizedAudioConstraints();
       console.log('[Voice] Getting media with constraints:', audioConstraints);
@@ -693,13 +707,22 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       await subscribeChannel(presenceChannel, "presence");
 
-      await presenceChannel.track({
-        odId: currentUserId,
-        username: currentUsername,
-        avatarUrl: currentPresenceAvatar,
-        isSpeaking: false,
-        isMuted: false,
-      });
+      // Do not block connection forever on presence track ack
+      try {
+        await withTimeout(
+          presenceChannel.track({
+            odId: currentUserId,
+            username: currentUsername,
+            avatarUrl: currentPresenceAvatar,
+            isSpeaking: false,
+            isMuted: false,
+          }),
+          4000,
+          "presence track"
+        );
+      } catch (trackError) {
+        console.warn("[Voice] Presence track delayed, continuing join", trackError);
+      }
 
       // Immediately include self in connected users
       // (presence sync may not have fired yet)
