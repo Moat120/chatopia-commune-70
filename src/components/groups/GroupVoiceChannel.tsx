@@ -27,7 +27,6 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   const [qualityDialogOpen, setQualityDialogOpen] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const { ping } = useSimpleLatency();
-  const { participants: presenceParticipants } = useVoicePresence(isConnected ? null : group.id);
 
   const {
     isConnected,
