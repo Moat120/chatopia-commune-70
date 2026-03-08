@@ -166,6 +166,7 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     const preset = QUALITY_PRESETS[quality];
     const stream = await startScreenShare(quality);
     if (stream) {
+      playScreenShareStartSound();
       toast({ title: "Partage d'écran", description: `Tu partages ton écran en ${preset.height}p ${preset.frameRate}fps` });
     }
   };
