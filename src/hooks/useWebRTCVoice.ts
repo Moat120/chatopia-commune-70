@@ -146,6 +146,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const presencePollRef = useRef<NodeJS.Timeout | null>(null);
   const joinWatchdogRef = useRef<NodeJS.Timeout | null>(null);
+  const leaveTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const isSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -534,6 +535,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       joinWatchdogRef.current = null;
     }
 
+    // Cancel all pending leave timers
+    leaveTimersRef.current.forEach(t => clearTimeout(t));
+    leaveTimersRef.current.clear();
+
     // Cleanup ICE restart managers
     iceRestartManagersRef.current.forEach(m => m.cleanup());
     iceRestartManagersRef.current.clear();
@@ -773,6 +778,14 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         }
 
         joinedUserIds.forEach((joinedUserId) => {
+          // Cancel any pending leave timer — user is back
+          const leaveTimer = leaveTimersRef.current.get(joinedUserId);
+          if (leaveTimer) {
+            clearTimeout(leaveTimer);
+            leaveTimersRef.current.delete(joinedUserId);
+            console.log('[Voice] Cancelled leave timer for rejoining user:', joinedUserId);
+          }
+
           if (!peerConnectionsRef.current.has(joinedUserId) && currentUserId < joinedUserId) {
             console.log('[Voice] Join event → initiating connection to', joinedUserId);
             initiateConnectionRef.current?.(joinedUserId);
@@ -787,23 +800,27 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         if (key.startsWith("observer-")) return;
         if (key !== currentUserId) {
           console.log('[Voice] Presence leave:', key);
-          const pc = peerConnectionsRef.current.get(key);
-          if (pc) {
-            pc.close();
-            peerConnectionsRef.current.delete(key);
-          }
-          const iceManager = iceRestartManagersRef.current.get(key);
-          if (iceManager) {
-            iceManager.cleanup();
-            iceRestartManagersRef.current.delete(key);
-          }
-          const audio = remoteAudiosRef.current.get(key);
-          if (audio) {
-            audio.srcObject = null;
-            remoteAudiosRef.current.delete(key);
-          }
-          // Immediately re-sync to update the user list
-          syncPresenceState();
+          // Debounce: presence track() updates cause transient leave+rejoin.
+          // Wait before destroying the peer connection to avoid reconnection loops.
+          const existingTimer = leaveTimersRef.current.get(key);
+          if (existingTimer) clearTimeout(existingTimer);
+
+          leaveTimersRef.current.set(key, setTimeout(() => {
+            leaveTimersRef.current.delete(key);
+            // Check if the user actually rejoined during the debounce window
+            const state = presenceChannelRef.current?.presenceState() || {};
+            const stillPresent = Object.entries(state).some(([k, presences]: [string, any[]]) =>
+              k === key || presences.some((p: any) => p.odId === key)
+            );
+            if (stillPresent) {
+              console.log('[Voice] User', key, 'rejoined during debounce — keeping connection');
+              return;
+            }
+
+            console.log('[Voice] User', key, 'confirmed left — removing peer');
+            removePeer(key);
+            syncPresenceState();
+          }, 3000));
         }
       });
 
