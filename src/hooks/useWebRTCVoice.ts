@@ -143,6 +143,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const presencePollRef = useRef<NodeJS.Timeout | null>(null);
   const joinWatchdogRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
@@ -521,6 +522,11 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       statsIntervalRef.current = null;
     }
 
+    if (presencePollRef.current) {
+      clearInterval(presencePollRef.current);
+      presencePollRef.current = null;
+    }
+
     // Cleanup ICE restart managers
     iceRestartManagersRef.current.forEach(m => m.cleanup());
     iceRestartManagersRef.current.clear();
@@ -698,17 +704,17 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       });
       presenceChannelRef.current = presenceChannel;
 
-      presenceChannel.on("presence", { event: "sync" }, () => {
-        const state = presenceChannel.presenceState();
+      // Shared function to read presence state and update connectedUsers + initiate WebRTC
+      const syncPresenceState = () => {
+        const ch = presenceChannelRef.current;
+        if (!ch) return;
+        const state = ch.presenceState();
         const userMap = new Map<string, VoiceUser>();
 
         Object.entries(state).forEach(([key, presences]: [string, any[]]) => {
-          // Skip observer keys (from useVoicePresence)
           if (key.startsWith("observer-")) return;
-
           presences.forEach((presence) => {
             if (presence.odId && !presence._observer) {
-              // Keep the latest presence entry for each user (dedup)
               userMap.set(presence.odId, {
                 odId: presence.odId,
                 username: presence.username,
@@ -721,35 +727,64 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         });
 
         const users = Array.from(userMap.values());
+
+        // Ensure local user is always included (in case track hasn't propagated yet)
+        if (isConnectedRef.current && !userMap.has(currentUserId)) {
+          users.push({
+            odId: currentUserId,
+            username: currentUsername,
+            avatarUrl: currentPresenceAvatar,
+            isSpeaking: false,
+            isMuted: isMutedRef.current,
+          });
+        }
+
         setConnectedUsers(users);
 
-        // Broadcast roster to observers (GroupsSidebar, etc.)
+        // Broadcast roster to observers
         rosterChannelRef.current?.send({
           type: "broadcast",
           event: "voice-roster",
           payload: { users },
         });
 
+        // Initiate WebRTC connections for ALL remote users (both directions try)
         users.forEach((u) => {
-          if (u.odId !== currentUserId && currentUserId < u.odId) {
-            initiateConnectionRef.current?.(u.odId);
+          if (u.odId !== currentUserId && !peerConnectionsRef.current.has(u.odId)) {
+            // Only the user with the smaller ID initiates
+            if (currentUserId < u.odId) {
+              initiateConnectionRef.current?.(u.odId);
+            }
           }
         });
-      });
+      };
+
+      presenceChannel.on("presence", { event: "sync" }, syncPresenceState);
 
       presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
-        const joinedUserIds = [
-          key,
-          ...(Array.isArray(newPresences)
-            ? newPresences.map((p: any) => String(p?.odId || "")).filter(Boolean)
-            : []),
-        ];
+        // Skip observer joins
+        if (key.startsWith("observer-")) return;
+
+        const joinedUserIds = new Set<string>();
+        if (key && key !== currentUserId) joinedUserIds.add(key);
+        if (Array.isArray(newPresences)) {
+          newPresences.forEach((p: any) => {
+            const id = String(p?.odId || "");
+            if (id && id !== currentUserId && !id.startsWith("observer-") && !p?._observer) {
+              joinedUserIds.add(id);
+            }
+          });
+        }
 
         joinedUserIds.forEach((joinedUserId) => {
-          if (joinedUserId !== currentUserId && currentUserId < joinedUserId) {
+          if (!peerConnectionsRef.current.has(joinedUserId) && currentUserId < joinedUserId) {
+            console.log('[Voice] Join event → initiating connection to', joinedUserId);
             initiateConnectionRef.current?.(joinedUserId);
           }
         });
+
+        // Also re-sync presence state to update the user list
+        syncPresenceState();
       });
 
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
@@ -791,35 +826,25 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         console.warn("[Voice] Presence track delayed, continuing join", trackError);
       }
 
-      // Immediately include self in connected users
-      // (presence sync may not have fired yet)
-      setConnectedUsers(prev => {
-        if (prev.some(u => u.odId === currentUserId)) return prev;
-        return [...prev, {
-          odId: currentUserId,
-          username: currentUsername,
-          avatarUrl: currentPresenceAvatar,
-          isSpeaking: false,
-          isMuted: false,
-        }];
-      });
+      // Immediately sync presence state (ensures self + any existing users are visible)
+      syncPresenceState();
 
-      // Broadcast initial roster to observers
-      const selfUser = {
-        odId: currentUserId,
-        username: currentUsername,
-        avatarUrl: currentPresenceAvatar,
-        isSpeaking: false,
-        isMuted: false,
-      };
+      // Also broadcast initial roster to observers
       rosterChannelRef.current?.send({
         type: "broadcast",
         event: "voice-roster",
-        payload: { users: [selfUser] },
+        payload: { users: [{ odId: currentUserId, username: currentUsername, avatarUrl: currentPresenceAvatar, isSpeaking: false, isMuted: false }] },
       });
 
       startVoiceDetection(rawStream);
       startStatsMonitoring();
+
+      // Periodic presence state poll — catches missed sync events
+      if (presencePollRef.current) clearInterval(presencePollRef.current);
+      presencePollRef.current = setInterval(() => {
+        if (!isConnectedRef.current || !presenceChannelRef.current) return;
+        syncPresenceState();
+      }, 3000);
 
       if (joinWatchdogRef.current) {
         clearTimeout(joinWatchdogRef.current);
