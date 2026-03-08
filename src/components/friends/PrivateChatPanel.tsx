@@ -19,7 +19,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Phone, ArrowLeft, Send, Loader2, CheckCheck, Check, Pencil, X, Reply } from "lucide-react";
+import { Phone, ArrowLeft, Send, Loader2, CheckCheck, Check, Pencil, X, Reply, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
