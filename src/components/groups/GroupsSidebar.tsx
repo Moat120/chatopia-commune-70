@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Users, Plus, MessageCircle, Phone, ChevronLeft, Search, Sparkles } from "lucide-react";
+import { Users, Plus, MessageCircle, Phone, ChevronLeft, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import CreateGroupDialog from "./CreateGroupDialog";
 
