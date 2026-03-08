@@ -150,9 +150,11 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   };
 
   const handleToggleDeafen = useCallback(() => {
-    setIsDeafened(prev => !prev);
+    const newDeafened = !isDeafened;
+    setIsDeafened(newDeafened);
+    if (newDeafened) playDeafenSound(); else playUndeafenSound();
     document.querySelectorAll('audio').forEach(audio => {
-      if (audio.srcObject) { audio.muted = !isDeafened; }
+      if (audio.srcObject) { audio.muted = newDeafened; }
     });
   }, [isDeafened]);
 
