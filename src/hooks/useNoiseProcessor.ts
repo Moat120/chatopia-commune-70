@@ -74,18 +74,28 @@ export class AdvancedNoiseProcessor {
             console.log('[NoiseProcessor] SIMD WASM not available');
           }
 
+          console.log('[NoiseProcessor] Loading RNNoise from Vite bundle:', { rnnoiseWorkletUrl, rnnoiseWasmUrl, rnnoiseSimdWasmUrl });
           wasmBinary = await loadRnnoise({ url: rnnoiseWasmUrl, simdUrl: rnnoiseSimdWasmUrl });
           await this.audioContext.audioWorklet.addModule(rnnoiseWorkletUrl);
           rnnoiseSource = 'vite-bundled';
         } catch (bundledErr) {
-          await this.audioContext.audioWorklet.addModule('/rnnoise/rnnoiseWorklet.js');
+          console.warn('[NoiseProcessor] Vite RNNoise unavailable, trying public fallback:', bundledErr);
           try {
-            wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: '/rnnoise/rnnoise_simd.wasm' });
-          } catch {
-            wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: undefined });
+            await this.audioContext.audioWorklet.addModule('/rnnoise/rnnoiseWorklet.js');
+            try {
+              wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: '/rnnoise/rnnoise_simd.wasm' });
+            } catch {
+              wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: undefined });
+            }
+            rnnoiseSource = 'public/rnnoise';
+          } catch (publicErr) {
+            console.error('[NoiseProcessor] ❌ Public fallback also failed:', publicErr);
+            throw publicErr;
           }
-          rnnoiseSource = 'public/rnnoise';
-          console.warn('[NoiseProcessor] Vite RNNoise unavailable, fallback used:', bundledErr);
+        }
+
+        if (!wasmBinary) {
+          throw new Error('RNNoise WASM binary is null/undefined');
         }
 
         this.rnnoiseNode = new RnnoiseWorkletNode(this.audioContext, { wasmBinary, maxChannels: 1 });
