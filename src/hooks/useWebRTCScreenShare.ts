@@ -467,10 +467,9 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     console.log(`[ScreenShare] Starting with quality: ${quality}`, preset);
 
     try {
-      // Fetch dynamic TURN credentials before screen sharing
-      const dynamicConfig = await getDynamicRtcConfig();
-      rtcConfigRef.current = dynamicConfig;
-      // CRITICAL: getDisplayMedia called directly in user gesture handler
+      // CRITICAL: getDisplayMedia MUST be called FIRST, directly from user gesture.
+      // Any async operation before this (like fetching TURN credentials) will break
+      // the user gesture chain and browsers will deny the permission.
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: preset.width, max: preset.width },
@@ -510,6 +509,9 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       if (audioTracks.length > 0) {
         console.log('[ScreenShare] ✅ System audio captured:', audioTracks[0].label);
       }
+
+      // Fetch dynamic TURN credentials AFTER getDisplayMedia (non-blocking for user gesture)
+      getDynamicRtcConfig().then(config => { rtcConfigRef.current = config; }).catch(() => {});
 
       localStreamRef.current = stream;
       isSharingRef.current = true;
