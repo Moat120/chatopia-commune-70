@@ -306,7 +306,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
       await signalingChannel.subscribe();
 
-      const presenceChannel = supabase.channel(`screen-pres-${channelId}-${Date.now()}`, {
+      const presenceChannel = supabase.channel(`screen-pres-${channelId}`, {
         config: { presence: { key: currentUserId } },
       });
       presenceChannelRef.current = presenceChannel;
