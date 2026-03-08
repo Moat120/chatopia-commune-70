@@ -273,8 +273,9 @@ const PrivateCallPanel = ({
     });
   }, [toast]);
 
-  // Handle signaling messages
-  const handleSignal = async (payload: any) => {
+  // Handle signaling messages — use ref to avoid stale closures
+  const handleSignalRef = useRef<(payload: any) => Promise<void>>();
+  handleSignalRef.current = async (payload: any) => {
     if (payload.to !== user?.id) return;
     let pc = peerConnectionRef.current;
 
