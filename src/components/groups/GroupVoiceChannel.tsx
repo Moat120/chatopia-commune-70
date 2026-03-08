@@ -52,6 +52,20 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   // Observe participants when not connected
   const { participants: presenceParticipants } = useVoicePresence(isConnected ? null : group.id);
 
+  const effectiveConnectedUsers = useMemo(() => {
+    if (connectedUsers.length > 0) return connectedUsers;
+    if (isConnected && user && profile) {
+      return [{
+        odId: user.id,
+        username: profile.username,
+        avatarUrl: profile.avatar_url || undefined,
+        isSpeaking: false,
+        isMuted,
+      }];
+    }
+    return connectedUsers;
+  }, [connectedUsers, isConnected, user, profile, isMuted]);
+
   const {
     isSharing,
     localStream,
