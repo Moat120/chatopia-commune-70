@@ -89,6 +89,8 @@ const PrivateCallPanel = ({
   const [friendSpeaking, setFriendSpeaking] = useState(false);
   const [qualityDialogOpen, setQualityDialogOpen] = useState(false);
   const [isPttActive, setIsPttActive] = useState(false);
+  const [friendVolume, setFriendVolume] = useState(1);
+  const [friendPopoverOpen, setFriendPopoverOpen] = useState(false);
   
   const localStreamRef = useRef<MediaStream | null>(null);
   const rawStreamRef = useRef<MediaStream | null>(null);
