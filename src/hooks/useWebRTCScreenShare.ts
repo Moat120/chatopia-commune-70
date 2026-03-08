@@ -467,6 +467,9 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     console.log(`[ScreenShare] Starting with quality: ${quality}`, preset);
 
     try {
+      // Fetch dynamic TURN credentials before screen sharing
+      const dynamicConfig = await getDynamicRtcConfig();
+      rtcConfigRef.current = dynamicConfig;
       // CRITICAL: getDisplayMedia called directly in user gesture handler
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
