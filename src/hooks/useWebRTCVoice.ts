@@ -840,6 +840,13 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       startVoiceDetection(rawStream);
       startStatsMonitoring();
 
+      // Periodic presence state poll — catches missed sync events
+      if (presencePollRef.current) clearInterval(presencePollRef.current);
+      presencePollRef.current = setInterval(() => {
+        if (!isConnectedRef.current || !presenceChannelRef.current) return;
+        syncPresenceState();
+      }, 3000);
+
       if (joinWatchdogRef.current) {
         clearTimeout(joinWatchdogRef.current);
         joinWatchdogRef.current = null;
