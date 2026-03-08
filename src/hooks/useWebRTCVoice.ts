@@ -96,6 +96,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const signalingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const rosterChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
