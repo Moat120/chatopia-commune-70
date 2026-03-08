@@ -1,21 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-
 interface UnreadCounts {
-  [odId: string]: number;
+  [id: string]: number;
 }
 
 export const useUnreadMessages = () => {
   const { user } = useAuth();
   const [unreadCounts, setUnreadCounts] = useState<UnreadCounts>({});
   const [totalUnread, setTotalUnread] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const fetchUnreadCounts = useCallback(async () => {
     if (!user) return;
 
-    // Get all unread private messages grouped by sender
     const { data, error } = await supabase
       .from("private_messages")
       .select("sender_id")
@@ -47,7 +46,7 @@ export const useUnreadMessages = () => {
       delete updated[friendId];
       return updated;
     });
-    
+
     fetchUnreadCounts();
   }, [user, fetchUnreadCounts]);
 
@@ -61,9 +60,11 @@ export const useUnreadMessages = () => {
 
     fetchUnreadCounts();
 
-    // Listen for new messages
+    // Fallback polling every 10s
+    pollRef.current = setInterval(fetchUnreadCounts, 10000);
+
     const channel = supabase
-      .channel("unread-messages-global")
+      .channel(`unread-messages-${user.id}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
@@ -74,8 +75,6 @@ export const useUnreadMessages = () => {
         },
         (payload) => {
           const msg = payload.new as any;
-          
-          
           setUnreadCounts((prev) => ({
             ...prev,
             [msg.sender_id]: (prev[msg.sender_id] || 0) + 1,
@@ -92,13 +91,15 @@ export const useUnreadMessages = () => {
           filter: `receiver_id=eq.${user.id}`,
         },
         () => {
-          // Refetch when messages are marked as read
           fetchUnreadCounts();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[unread-messages] subscription error:", err);
+      });
 
     return () => {
+      clearInterval(pollRef.current);
       supabase.removeChannel(channel);
     };
   }, [user, fetchUnreadCounts]);

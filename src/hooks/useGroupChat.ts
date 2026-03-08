@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -20,6 +20,7 @@ export const useGroupChat = (groupId: string | null) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const fetchMessages = useCallback(async () => {
     if (!groupId || !user) return;
@@ -78,12 +79,14 @@ export const useGroupChat = (groupId: string | null) => {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription for messages — INSERT, UPDATE, DELETE
+  // Realtime subscription + fallback polling
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !user) return;
+
+    pollRef.current = setInterval(fetchMessages, 10000);
 
     const channel = supabase
-      .channel(`group-messages-${groupId}`)
+      .channel(`group-messages-${user.id}-${groupId}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
@@ -94,8 +97,7 @@ export const useGroupChat = (groupId: string | null) => {
         },
         async (payload) => {
           const newMessage = payload.new as GroupMessage;
-          
-          // Fetch sender info
+
           const { data: profile } = await supabase
             .from("profiles")
             .select("username, avatar_url")
@@ -143,12 +145,15 @@ export const useGroupChat = (groupId: string | null) => {
           setMessages(prev => prev.filter(m => m.id !== deletedId));
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[group-chat] subscription error:", err);
+      });
 
     return () => {
+      clearInterval(pollRef.current);
       supabase.removeChannel(channel);
     };
-  }, [groupId]);
+  }, [groupId, user, fetchMessages]);
 
   return {
     messages,

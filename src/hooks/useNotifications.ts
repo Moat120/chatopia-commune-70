@@ -26,17 +26,15 @@ export const useNotifications = () => {
     const n = new Notification(title, {
       body,
       icon: icon || "/favicon.ico",
-      tag: "chatopia-msg", // collapse rapid msgs
+      tag: "chatopia-msg",
       silent: false,
     });
 
-    // Focus tab on click
     n.onclick = () => {
       window.focus();
       n.close();
     };
 
-    // Auto-close after 5s
     setTimeout(() => n.close(), 5000);
   }, []);
 
@@ -45,7 +43,7 @@ export const useNotifications = () => {
     if (!user) return;
 
     const channel = supabase
-      .channel("notif-private")
+      .channel(`notif-private-${user.id}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
@@ -71,7 +69,9 @@ export const useNotifications = () => {
           );
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[notif-private] subscription error:", err);
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -83,7 +83,7 @@ export const useNotifications = () => {
     if (!user) return;
 
     const channel = supabase
-      .channel("notif-group")
+      .channel(`notif-group-${user.id}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
@@ -95,7 +95,6 @@ export const useNotifications = () => {
           const msg = payload.new as any;
           if (msg.sender_id === user.id) return;
 
-          // Check membership
           const { data: membership } = await supabase
             .from("group_members")
             .select("id")
@@ -117,7 +116,47 @@ export const useNotifications = () => {
           );
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[notif-group] subscription error:", err);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, notify]);
+
+  // Listen for friend requests
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notif-friend-req-${user.id}-${Date.now()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "friendships",
+          filter: `addressee_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const req = payload.new as any;
+          const { data: sender } = await supabase
+            .from("profiles")
+            .select("username, avatar_url")
+            .eq("id", req.requester_id)
+            .single();
+
+          notify(
+            "Demande d'ami",
+            `${sender?.username || "Quelqu'un"} vous a envoyé une demande d'ami`,
+            sender?.avatar_url || undefined
+          );
+        }
+      )
+      .subscribe((status, err) => {
+        if (err) console.error("[notif-friend-req] subscription error:", err);
+      });
 
     return () => {
       supabase.removeChannel(channel);

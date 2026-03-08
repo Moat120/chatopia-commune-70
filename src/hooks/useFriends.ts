@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
-
 export interface Friend {
   id: string;
   username: string;
@@ -25,8 +24,7 @@ export const useFriends = () => {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [pendingRequests, setPendingRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const previousRequestsCount = useRef(0);
-  const hasFetched = useRef(false);
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const fetchFriends = useCallback(async () => {
     if (!user) {
@@ -94,8 +92,6 @@ export const useFriends = () => {
         requester: r.requester as Friend,
         created_at: r.created_at,
       })).filter(r => r.requester) || [];
-
-      previousRequestsCount.current = requests.length;
 
       setPendingRequests(requests);
     } catch (err) {
@@ -215,19 +211,16 @@ export const useFriends = () => {
     toast({ title: "Ami supprimé" });
   };
 
+  // Initial fetch on every mount (no hasFetched guard)
   useEffect(() => {
     if (!user) {
       setLoading(false);
       setFriends([]);
       setPendingRequests([]);
-      hasFetched.current = false;
       return;
     }
 
     const loadData = async () => {
-      if (hasFetched.current) return;
-      hasFetched.current = true;
-      
       setLoading(true);
       try {
         await Promise.all([fetchFriends(), fetchPendingRequests()]);
@@ -240,9 +233,15 @@ export const useFriends = () => {
 
     loadData();
 
-    // Subscribe to realtime updates for friendships
+    // Fallback polling every 10s
+    pollRef.current = setInterval(() => {
+      fetchFriends();
+      fetchPendingRequests();
+    }, 10000);
+
+    // Realtime subscriptions with unique channel names
     const friendshipsChannel = supabase
-      .channel(`friendships-changes-${user.id}`)
+      .channel(`friendships-${user.id}-${Date.now()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "friendships",
@@ -261,11 +260,12 @@ export const useFriends = () => {
           fetchPendingRequests();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[friendships] subscription error:", err);
+      });
 
-    // Subscribe to profile status changes for real-time online/offline updates
     const profilesChannel = supabase
-      .channel(`profiles-status-${user.id}`)
+      .channel(`profiles-status-${user.id}-${Date.now()}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles" },
@@ -278,9 +278,12 @@ export const useFriends = () => {
           ));
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[profiles-status] subscription error:", err);
+      });
 
     return () => {
+      clearInterval(pollRef.current);
       supabase.removeChannel(friendshipsChannel);
       supabase.removeChannel(profilesChannel);
     };
