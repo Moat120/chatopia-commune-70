@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -24,15 +24,13 @@ export const useGroups = () => {
   const { user } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const fetchGroups = useCallback(async () => {
     if (!user) {
-      console.log("[useGroups] No user, skipping fetch");
       setLoading(false);
       return;
     }
-
-    console.log("[useGroups] Fetching groups for user:", user.id);
 
     try {
       const { data, error } = await supabase
@@ -49,14 +47,8 @@ export const useGroups = () => {
         `)
         .eq("user_id", user.id);
 
-      if (error) {
-        console.error("[useGroups] Fetch error:", error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log("[useGroups] Raw data:", data);
-
-      // Get member counts for each group
       const groupsList: Group[] = [];
       for (const item of data || []) {
         if (item.groups) {
@@ -72,7 +64,6 @@ export const useGroups = () => {
         }
       }
       
-      console.log("[useGroups] Groups list:", groupsList);
       setGroups(groupsList);
     } catch (error) {
       console.error("[useGroups] Error fetching groups:", error);
@@ -83,18 +74,9 @@ export const useGroups = () => {
 
   const createGroup = useCallback(
     async (name: string, avatarUrl?: string) => {
-      console.log("[useGroups] Creating group:", name);
-      console.log("[useGroups] User:", user);
-
-      if (!user) {
-        console.error("[useGroups] Cannot create group: no user logged in");
-        return null;
-      }
+      if (!user) return null;
 
       try {
-        console.log("[useGroups] Inserting group...");
-        
-        // Create the group
         const { data: group, error: groupError } = await supabase
           .from("groups")
           .insert({
@@ -105,15 +87,8 @@ export const useGroups = () => {
           .select()
           .single();
 
-        if (groupError) {
-          console.error("[useGroups] Group insert error:", groupError);
-          throw groupError;
-        }
+        if (groupError) throw groupError;
 
-        console.log("[useGroups] Group created:", group);
-
-        // Add owner as member with 'owner' role
-        console.log("[useGroups] Adding owner as member...");
         const { error: memberError } = await supabase
           .from("group_members")
           .insert({
@@ -122,12 +97,8 @@ export const useGroups = () => {
             role: "owner",
           });
 
-        if (memberError) {
-          console.error("[useGroups] Member insert error:", memberError);
-          throw memberError;
-        }
+        if (memberError) throw memberError;
 
-        console.log("[useGroups] Owner added as member, refreshing groups...");
         await fetchGroups();
         return group;
       } catch (error) {
@@ -141,7 +112,6 @@ export const useGroups = () => {
   const getGroupMembers = useCallback(
     async (groupId: string): Promise<GroupMember[]> => {
       try {
-        // Step 1: Get group members
         const { data: membersData, error: membersError } = await supabase
           .from("group_members")
           .select("id, user_id, role")
@@ -150,7 +120,6 @@ export const useGroups = () => {
         if (membersError) throw membersError;
         if (!membersData || membersData.length === 0) return [];
 
-        // Step 2: Get profiles for these users
         const userIds = membersData.map(m => m.user_id);
         const { data: profilesData, error: profilesError } = await supabase
           .from("profiles")
@@ -185,7 +154,6 @@ export const useGroups = () => {
   const addMember = useCallback(
     async (groupId: string, userId: string): Promise<boolean> => {
       try {
-        // Check member count
         const { count } = await supabase
           .from("group_members")
           .select("*", { count: "exact", head: true })
@@ -261,13 +229,14 @@ export const useGroups = () => {
     fetchGroups();
   }, [fetchGroups]);
 
-  // Realtime subscription for group changes
+  // Realtime subscription + fallback polling
   useEffect(() => {
     if (!user) return;
 
-    // Subscribe to group membership changes (own membership)
+    pollRef.current = setInterval(fetchGroups, 15000);
+
     const membershipChannel = supabase
-      .channel("groups-membership-changes")
+      .channel(`groups-membership-${user.id}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
@@ -280,11 +249,12 @@ export const useGroups = () => {
           fetchGroups();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[groups-membership] subscription error:", err);
+      });
 
-    // Subscribe to ALL group_members changes for member count sync
     const allMembersChannel = supabase
-      .channel("groups-all-members-sync")
+      .channel(`groups-all-members-${user.id}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
@@ -296,7 +266,6 @@ export const useGroups = () => {
           const groupId = (payload.new as any)?.group_id || (payload.old as any)?.group_id;
           if (!groupId) return;
           
-          // Update member count for the affected group
           const { count } = await supabase
             .from("group_members")
             .select("*", { count: "exact", head: true })
@@ -307,11 +276,12 @@ export const useGroups = () => {
           ));
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[groups-all-members] subscription error:", err);
+      });
 
-    // Subscribe to group updates (name, avatar changes)
     const groupsChannel = supabase
-      .channel("groups-updates")
+      .channel(`groups-updates-${user.id}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
@@ -340,9 +310,12 @@ export const useGroups = () => {
           setGroups(prev => prev.filter(g => g.id !== deletedGroupId));
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error("[groups-updates] subscription error:", err);
+      });
 
     return () => {
+      clearInterval(pollRef.current);
       supabase.removeChannel(membershipChannel);
       supabase.removeChannel(allMembersChannel);
       supabase.removeChannel(groupsChannel);
