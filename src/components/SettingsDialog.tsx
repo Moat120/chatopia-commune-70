@@ -284,41 +284,80 @@ const SettingsDialog = () => {
     try {
       stopTest();
       
-      // Use ideal constraints for better compatibility
-      const constraints: MediaStreamConstraints = {
-        audio: {
-          deviceId: selectedMic ? { ideal: selectedMic } : undefined,
+      // Detect browser for optimized constraints
+      const isChrome = /Chrome/.test(navigator.userAgent) && !/Edge|OPR/.test(navigator.userAgent);
+      const isFirefox = /Firefox/.test(navigator.userAgent);
+      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+
+      const baseConstraints: MediaTrackConstraints = {
+        deviceId: selectedMic ? { exact: selectedMic } : undefined,
+        sampleRate: { ideal: 48000 },
+        sampleSize: { ideal: 16 },
+        channelCount: { exact: 1 },
+      };
+
+      // Browser-specific optimizations
+      if (isChrome) {
+        Object.assign(baseConstraints, {
+          echoCancellation: { exact: echoCancellation },
+          noiseSuppression: { exact: noiseSuppression },
+          autoGainControl: { exact: autoGain },
+          // Chrome-specific advanced constraints
+          googNoiseSuppression: noiseSuppression,
+          googHighpassFilter: true,
+          googTypingNoiseDetection: true,
+          googNoiseSuppression2: noiseSuppression,
+          googEchoCancellation: echoCancellation,
+          googEchoCancellation2: echoCancellation,
+          googAutoGainControl: autoGain,
+          googAutoGainControl2: autoGain,
+          googExperimentalNoiseSuppression: noiseSuppression,
+        } as any);
+      } else if (isFirefox) {
+        Object.assign(baseConstraints, {
+          echoCancellation: echoCancellation,
+          noiseSuppression: noiseSuppression,
+          autoGainControl: autoGain,
+          // Firefox prefers simple booleans
+          mediaSource: 'audioCapture',
+        } as any);
+      } else if (isSafari) {
+        Object.assign(baseConstraints, {
           echoCancellation: { ideal: echoCancellation },
           noiseSuppression: { ideal: noiseSuppression },
           autoGainControl: { ideal: autoGain },
-          sampleRate: { ideal: 48000 },
-          sampleSize: { ideal: 16 },
-          // Chrome-specific
-          ...(noiseSuppression && {
-            googNoiseSuppression: true,
-            googHighpassFilter: true,
-            googTypingNoiseDetection: true,
-          } as any),
-          ...(echoCancellation && {
-            googEchoCancellation: true,
-          } as any),
-          ...(autoGain && {
-            googAutoGainControl: true,
-          } as any),
-        },
-      };
+          // Safari needs 'ideal' for best compat
+        });
+      } else {
+        Object.assign(baseConstraints, {
+          echoCancellation: { ideal: echoCancellation },
+          noiseSuppression: { ideal: noiseSuppression },
+          autoGainControl: { ideal: autoGain },
+        });
+      }
 
-      console.log('[SettingsDialog] Starting test with constraints:', constraints);
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log(`[SettingsDialog] Starting test (${isChrome ? 'Chrome' : isFirefox ? 'Firefox' : isSafari ? 'Safari' : 'Other'}) with constraints:`, baseConstraints);
       
-      // Log what was actually applied
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
+      } catch {
+        // Fallback to basic constraints if exact fails
+        console.warn('[SettingsDialog] Exact constraints failed, falling back to basic');
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: selectedMic ? { ideal: selectedMic } : undefined,
+            echoCancellation: { ideal: echoCancellation },
+            noiseSuppression: { ideal: noiseSuppression },
+            autoGainControl: { ideal: autoGain },
+          },
+        });
+      }
+      
       const track = stream.getAudioTracks()[0];
       if (track) {
         const settings = track.getSettings();
         console.log('[SettingsDialog] Applied settings:', settings);
-        console.log('[SettingsDialog] Noise suppression:', settings.noiseSuppression);
-        console.log('[SettingsDialog] Echo cancellation:', settings.echoCancellation);
-        console.log('[SettingsDialog] Auto gain:', settings.autoGainControl);
       }
       
       testStreamRef.current = stream;
@@ -331,12 +370,28 @@ const SettingsDialog = () => {
       analyserRef.current.smoothingTimeConstant = 0.5;
       source.connect(analyserRef.current);
 
-      // Prepare loopback nodes (muted by default)
+      // Apply AdvancedNoiseProcessor for loopback (RNNoise + filters)
+      if (noiseSuppression) {
+        try {
+          noiseProcessorRef.current = new AdvancedNoiseProcessor();
+          const processedStream = await noiseProcessorRef.current.process(stream);
+          const processedSource = audioContextRef.current.createMediaStreamSource(processedStream);
+          processedSourceRef.current = processedSource;
+          console.log('[SettingsDialog] ✅ Noise processor active for loopback, RNNoise:', noiseProcessorRef.current.isRnnoiseActive());
+        } catch (err) {
+          console.warn('[SettingsDialog] Noise processor failed for loopback:', err);
+          noiseProcessorRef.current = null;
+        }
+      }
+
+      // Loopback: route processed audio to speakers (muted by default)
       loopbackDelayRef.current = audioContextRef.current.createDelay(1.0);
-      loopbackDelayRef.current.delayTime.value = 0.05; // 50ms delay to avoid feedback
+      loopbackDelayRef.current.delayTime.value = 0.04; // 40ms
       loopbackGainRef.current = audioContextRef.current.createGain();
-      loopbackGainRef.current.gain.value = 0; // muted until toggled
-      source.connect(loopbackDelayRef.current);
+      loopbackGainRef.current.gain.value = 0;
+
+      const loopbackSource = processedSourceRef.current || source;
+      loopbackSource.connect(loopbackDelayRef.current);
       loopbackDelayRef.current.connect(loopbackGainRef.current);
       loopbackGainRef.current.connect(audioContextRef.current.destination);
 
