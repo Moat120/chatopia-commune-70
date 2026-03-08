@@ -703,6 +703,8 @@ const PrivateCallPanel = ({
       </div>
     </TooltipProvider>
   );
+
+  return createPortal(callUI, document.body);
 };
 
 export default PrivateCallPanel;
