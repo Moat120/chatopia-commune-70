@@ -281,7 +281,13 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     }
   }, [currentUserId, createIncomingConnection]);
 
-  // Initialize channels
+  // Stable refs for callbacks to avoid re-init loops
+  const handleSignalRef = useRef(handleSignal);
+  handleSignalRef.current = handleSignal;
+  const sendOfferRef = useRef(sendOfferToViewer);
+  sendOfferRef.current = sendOfferToViewer;
+
+  // Initialize channels — only re-runs on channelId/user change (not on callback changes)
   useEffect(() => {
     if (!channelId || !currentUserId) return;
 
@@ -294,13 +300,13 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
       signalingChannelRef.current = signalingChannel;
 
       signalingChannel.on("broadcast", { event: "screen-signal" }, ({ payload }) => {
-        if (mounted) handleSignal(payload as SignalMessage);
+        if (mounted) handleSignalRef.current(payload as SignalMessage);
       });
 
       signalingChannel.on("broadcast", { event: "request-screen" }, async ({ payload }) => {
         if (mounted && payload.broadcasterId === currentUserId && isSharingRef.current) {
           console.log(`[ScreenShare] Received request from ${payload.viewerId}`);
-          await sendOfferToViewer(payload.viewerId);
+          await sendOfferRef.current(payload.viewerId);
         }
       });
 
@@ -331,6 +337,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
         setScreenSharers(sharers);
 
+        // Request streams from sharers we're not yet connected to
         sharers.forEach((sharer) => {
           if (sharer.odId !== currentUserId && !incomingConnectionsRef.current.has(sharer.odId)) {
             signalingChannel.send({
@@ -387,8 +394,9 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     return () => {
       mounted = false;
+      cleanup();
     };
-  }, [channelId, currentUserId, currentUsername, handleSignal, sendOfferToViewer]);
+  }, [channelId, currentUserId, currentUsername]);
 
   // Start screen share — called directly from click handler
   const startScreenShare = useCallback(async (quality: ScreenQuality = "1080p60") => {
@@ -553,11 +561,12 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     setIsInitialized(false);
   }, []);
 
+  // Cleanup on channelId change or unmount
   useEffect(() => {
     return () => {
       cleanup();
     };
-  }, []);
+  }, [channelId]);
 
   return {
     isSharing,
