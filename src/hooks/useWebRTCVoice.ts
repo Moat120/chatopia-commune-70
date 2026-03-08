@@ -247,6 +247,25 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
   const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
 
+  const clearConflictingVoiceChannels = useCallback(async () => {
+    const topicSuffixes = [
+      `voice-sig-${channelId}`,
+      `voice-status-${channelId}`,
+      `voice-pres-${channelId}`,
+    ];
+
+    const channels = supabase.getChannels();
+    const conflicting = channels.filter((ch) => {
+      const topic = String((ch as any)?.topic || "");
+      return topicSuffixes.some((suffix) => topic.endsWith(suffix));
+    });
+
+    if (conflicting.length > 0) {
+      console.warn("[Voice] Removing conflicting realtime channels:", conflicting.map((c: any) => c?.topic));
+      await Promise.all(conflicting.map((ch) => supabase.removeChannel(ch)));
+    }
+  }, [channelId]);
+
   const createPeerConnection = useCallback((remoteUserId: string): RTCPeerConnection => {
     const existing = peerConnectionsRef.current.get(remoteUserId);
     if (existing) {
@@ -632,6 +651,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
       localStreamRef.current = processedStream;
 
+      // Ensure no observer/stale channel is already joined on same realtime topics
+      await clearConflictingVoiceChannels();
+
       // Setup channels
       const signalingChannel = supabase.channel(`voice-sig-${channelId}`, {
         config: { broadcast: { self: false } },
@@ -809,6 +831,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     currentUsername,
     currentPresenceAvatar,
     isConnecting,
+    clearConflictingVoiceChannels,
     startVoiceDetection,
     startStatsMonitoring,
     cleanup,
