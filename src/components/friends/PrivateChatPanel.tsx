@@ -1,12 +1,15 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Friend } from "@/hooks/useFriends";
-import { usePrivateChat } from "@/hooks/usePrivateChat";
+import { usePrivateChat, PrivateMessage } from "@/hooks/usePrivateChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
 import { useSound } from "@/hooks/useSound";
+import { useReactions } from "@/hooks/useReactions";
 import { smartTimestamp, dateSeparator, shouldShowDateSeparator } from "@/lib/timeUtils";
 import MessageContextMenu from "@/components/chat/MessageContextMenu";
+import MessageContent from "@/components/chat/MessageContent";
 import EmojiPicker from "@/components/chat/EmojiPicker";
+import { ReactionPills, QuickReactionPicker } from "@/components/chat/ReactionPills";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +19,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Phone, ArrowLeft, Send, Loader2, CheckCheck, Check, Pencil } from "lucide-react";
+import { Phone, ArrowLeft, Send, Loader2, CheckCheck, Check, Pencil, X, Reply } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -35,8 +38,12 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
   const { isTyping, startTyping, stopTyping } = useTypingIndicator(channelId);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<PrivateMessage | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+  const { toggleReaction, getReactionGroups } = useReactions("private", messageIds);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,9 +66,10 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
     if (!input.trim() || sending) return;
     stopTyping();
     setSending(true);
-    await sendMessage(input);
+    await sendMessage(input, replyTo?.id);
     playMessageSent();
     setInput("");
+    setReplyTo(null);
     setSending(false);
     inputRef.current?.focus();
   };
@@ -71,9 +79,21 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
     inputRef.current?.focus();
   };
 
+  const handleReply = useCallback((msg: PrivateMessage) => {
+    setReplyTo(msg);
+    inputRef.current?.focus();
+  }, []);
+
   const isOnline = friend.status === "online";
   const isAway = friend.status === "away";
   const isActive = isOnline || isAway;
+
+  // Build a map for reply lookups
+  const messageMap = useMemo(() => {
+    const map: Record<string, PrivateMessage> = {};
+    messages.forEach((m) => { map[m.id] = m; });
+    return map;
+  }, [messages]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background">
@@ -84,6 +104,7 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
           size="icon"
           onClick={onClose}
           className="h-8 w-8 rounded-lg hover:bg-white/[0.06] md:hidden"
+          silent
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -95,14 +116,12 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
               {friend.username[0]?.toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <span
-            className={cn(
-              "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card",
-              isOnline && "bg-success",
-              isAway && "bg-warning",
-              !isActive && "bg-muted-foreground/30"
-            )}
-          />
+          <span className={cn(
+            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card",
+            isOnline && "bg-success",
+            isAway && "bg-warning",
+            !isActive && "bg-muted-foreground/30"
+          )} />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -177,6 +196,8 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
               const isGroupEnd = !nextMsg || nextMsg.sender_id !== msg.sender_id;
               const isRead = isMe && msg.read_at;
               const isEdited = !!msg.edited_at;
+              const replyMsg = msg.reply_to_id ? messageMap[msg.reply_to_id] : null;
+              const reactionGroups = getReactionGroups(msg.id);
 
               return (
                 <div key={msg.id}>
@@ -191,7 +212,7 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
                   )}
                   <div
                     className={cn(
-                      "flex items-end gap-2 group/msg",
+                      "flex items-end gap-2 group/msg relative",
                       isMe && "flex-row-reverse",
                       isGroupStart ? "mt-2.5" : "mt-0.5"
                     )}
@@ -207,54 +228,84 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
                       <div className="w-7 shrink-0" />
                     ) : null}
 
-                    <MessageContextMenu message={msg}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div
-                            className={cn(
-                              "max-w-[70%] px-3 py-2 transition-all cursor-default",
-                              isMe
-                                ? cn(
-                                    "message-own",
-                                    isGroupStart && isGroupEnd && "rounded-2xl",
-                                    isGroupStart && !isGroupEnd && "rounded-2xl rounded-br-md",
-                                    !isGroupStart && isGroupEnd && "rounded-2xl rounded-tr-md",
-                                    !isGroupStart && !isGroupEnd && "rounded-lg rounded-r-md"
-                                  )
-                                : cn(
-                                    "message-other",
-                                    isGroupStart && isGroupEnd && "rounded-2xl",
-                                    isGroupStart && !isGroupEnd && "rounded-2xl rounded-bl-md",
-                                    !isGroupStart && isGroupEnd && "rounded-2xl rounded-tl-md",
-                                    !isGroupStart && !isGroupEnd && "rounded-lg rounded-l-md"
-                                  )
-                            )}
-                          >
-                            <p className="text-[13.5px] leading-relaxed break-words">{msg.content}</p>
-                            {isGroupEnd && (
-                              <div className={cn(
-                                "flex items-center gap-1 mt-0.5",
-                                isMe ? "justify-end" : "justify-start"
-                              )}>
-                                {isEdited && <Pencil className="h-2.5 w-2.5 text-foreground/15" />}
-                                <span className="text-[10px] text-foreground/25">
-                                  {smartTimestamp(msg.created_at)}
-                                </span>
-                                {isMe && (
-                                  isRead
-                                    ? <CheckCheck className="h-3 w-3 text-accent-foreground/40" />
-                                    : <Check className="h-3 w-3 text-foreground/15" />
-                                )}
-                              </div>
-                            )}
+                    <MessageContextMenu message={msg} onReply={handleReply}>
+                      <div className="max-w-[70%]">
+                        {/* Reply preview */}
+                        {replyMsg && (
+                          <div className={cn(
+                            "flex items-center gap-1.5 mb-0.5 px-2 py-1 rounded-lg bg-white/[0.03] border-l-2 border-primary/30 text-[11px] text-muted-foreground/50 truncate max-w-full",
+                            isMe && "ml-auto"
+                          )}>
+                            <Reply className="h-3 w-3 shrink-0 text-primary/40" />
+                            <span className="truncate">
+                              {replyMsg.sender_id === user?.id ? "Toi" : friend.username}: {replyMsg.content}
+                            </span>
                           </div>
-                        </TooltipTrigger>
-                        <TooltipContent side={isMe ? "left" : "right"} className="text-xs">
-                          {format(new Date(msg.created_at), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
-                          {isEdited && " (modifié)"}
-                        </TooltipContent>
-                      </Tooltip>
+                        )}
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className={cn(
+                                "px-3 py-2 transition-all cursor-default",
+                                isMe
+                                  ? cn(
+                                      "message-own",
+                                      isGroupStart && isGroupEnd && "rounded-2xl",
+                                      isGroupStart && !isGroupEnd && "rounded-2xl rounded-br-md",
+                                      !isGroupStart && isGroupEnd && "rounded-2xl rounded-tr-md",
+                                      !isGroupStart && !isGroupEnd && "rounded-lg rounded-r-md"
+                                    )
+                                  : cn(
+                                      "message-other",
+                                      isGroupStart && isGroupEnd && "rounded-2xl",
+                                      isGroupStart && !isGroupEnd && "rounded-2xl rounded-bl-md",
+                                      !isGroupStart && isGroupEnd && "rounded-2xl rounded-tl-md",
+                                      !isGroupStart && !isGroupEnd && "rounded-lg rounded-l-md"
+                                    )
+                              )}
+                            >
+                              <p className="text-[13.5px] leading-relaxed break-words">
+                                <MessageContent content={msg.content} />
+                              </p>
+                              {isGroupEnd && (
+                                <div className={cn(
+                                  "flex items-center gap-1 mt-0.5",
+                                  isMe ? "justify-end" : "justify-start"
+                                )}>
+                                  {isEdited && <Pencil className="h-2.5 w-2.5 text-foreground/15" />}
+                                  <span className="text-[10px] text-foreground/25">
+                                    {smartTimestamp(msg.created_at)}
+                                  </span>
+                                  {isMe && (
+                                    isRead
+                                      ? <CheckCheck className="h-3 w-3 text-accent-foreground/40" />
+                                      : <Check className="h-3 w-3 text-foreground/15" />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side={isMe ? "left" : "right"} className="text-xs">
+                            {format(new Date(msg.created_at), "EEEE d MMMM yyyy à HH:mm", { locale: fr })}
+                            {isEdited && " (modifié)"}
+                          </TooltipContent>
+                        </Tooltip>
+
+                        {/* Reactions */}
+                        <ReactionPills
+                          reactions={reactionGroups}
+                          onToggle={(emoji) => toggleReaction(msg.id, emoji)}
+                          isOwn={isMe}
+                        />
+                      </div>
                     </MessageContextMenu>
+
+                    {/* Quick reaction picker on hover */}
+                    <QuickReactionPicker
+                      onSelect={(emoji) => toggleReaction(msg.id, emoji)}
+                      side={isMe ? "left" : "right"}
+                    />
                   </div>
                 </div>
               );
@@ -278,6 +329,28 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
         </div>
       )}
 
+      {/* ─── Reply preview bar ─── */}
+      {replyTo && (
+        <div className="px-4 py-2 border-t border-white/[0.04] bg-card/20 flex items-center gap-2 animate-fade-in">
+          <Reply className="h-4 w-4 text-primary/60 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-primary/60 font-medium">
+              Réponse à {replyTo.sender_id === user?.id ? "toi" : friend.username}
+            </p>
+            <p className="text-xs text-muted-foreground/50 truncate">{replyTo.content}</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 rounded-md hover:bg-white/[0.06]"
+            onClick={() => setReplyTo(null)}
+            silent
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
       {/* ─── Input ─── */}
       <form onSubmit={handleSend} className="px-4 py-3 border-t border-white/[0.06] bg-card/20">
         <div className="flex gap-2 items-center">
@@ -287,7 +360,7 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
             value={input}
             onChange={handleInputChange}
             onBlur={stopTyping}
-            placeholder={`Message @${friend.username}`}
+            placeholder={replyTo ? "Écrire une réponse…" : `Message @${friend.username}`}
             className="flex-1 h-10 text-sm input-modern rounded-lg px-3"
             disabled={sending}
           />
