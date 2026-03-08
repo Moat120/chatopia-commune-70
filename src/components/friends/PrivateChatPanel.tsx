@@ -245,24 +245,40 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
                   )}
                   <div
                     className={cn(
-                      "flex items-end gap-2 group/msg relative",
+                      "flex items-start gap-2.5 group/msg relative",
                       isMe && "flex-row-reverse",
-                      isGroupStart ? "mt-2.5" : "mt-0.5"
+                      isGroupStart ? "mt-3" : "mt-0.5"
                     )}
                   >
-                    {isGroupStart && !isMe ? (
-                      <Avatar className="h-7 w-7 shrink-0">
-                        <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
-                        <AvatarFallback className="text-[10px] bg-muted/50 font-semibold">
-                          {friend.username[0]?.toUpperCase()}
+                    {/* Avatar */}
+                    {isGroupStart ? (
+                      <Avatar className="h-8 w-8 shrink-0 mt-0.5 ring-2 ring-background">
+                        <AvatarImage src={isMe ? (profile?.avatar_url || "") : (friend.avatar_url || "")} className="object-cover" />
+                        <AvatarFallback className="text-[11px] bg-muted/50 font-bold">
+                          {(isMe ? profile?.username : friend.username)?.[0]?.toUpperCase() || "?"}
                         </AvatarFallback>
                       </Avatar>
-                    ) : !isMe ? (
-                      <div className="w-7 shrink-0" />
-                    ) : null}
+                    ) : (
+                      <div className="w-8 shrink-0" />
+                    )}
 
                     <MessageContextMenu message={msg} onReply={handleReply}>
                       <div className="max-w-[70%]">
+                        {/* Username + timestamp header */}
+                        {isGroupStart && (
+                          <div className={cn("flex items-baseline gap-2 mb-0.5", isMe && "flex-row-reverse")}>
+                            <span className={cn(
+                              "text-[12px] font-semibold",
+                              isMe ? "text-primary/70" : "text-foreground/70"
+                            )}>
+                              {isMe ? "Toi" : friend.username}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/30">
+                              {smartTimestamp(msg.created_at)}
+                            </span>
+                          </div>
+                        )}
+
                         {/* Reply preview */}
                         {replyMsg && (
                           <div className={cn(
@@ -280,7 +296,7 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
                           <TooltipTrigger asChild>
                             <div
                               className={cn(
-                                "px-3 py-2 transition-all cursor-default",
+                                "px-3.5 py-2 transition-all cursor-default",
                                 isMe
                                   ? cn(
                                       "message-own",
@@ -301,7 +317,7 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
                               <p className="text-[13.5px] leading-relaxed break-words">
                                 <MessageContent content={msg.content} />
                               </p>
-                              {isGroupEnd && (
+                              {isGroupEnd && !isGroupStart && (
                                 <div className={cn(
                                   "flex items-center gap-1 mt-0.5",
                                   isMe ? "justify-end" : "justify-start"
@@ -310,6 +326,15 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
                                   <span className="text-[10px] text-foreground/25">
                                     {smartTimestamp(msg.created_at)}
                                   </span>
+                                  {isMe && (
+                                    isRead
+                                      ? <CheckCheck className="h-3 w-3 text-accent-foreground/40" />
+                                      : <Check className="h-3 w-3 text-foreground/15" />
+                                  )}
+                                </div>
+                              )}
+                              {isGroupEnd && isGroupStart && isMe && (
+                                <div className="flex items-center gap-1 mt-0.5 justify-end">
                                   {isMe && (
                                     isRead
                                       ? <CheckCheck className="h-3 w-3 text-accent-foreground/40" />
