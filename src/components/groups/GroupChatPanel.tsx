@@ -33,7 +33,7 @@ interface GroupChatPanelProps {
 }
 
 const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { messages, loading, sendMessage } = useGroupChat(group.id);
   const { getGroupMembers } = useGroups();
   const { playMessageSent, playMessageReceived } = useSound();
@@ -236,10 +236,28 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
 
                     {/* Group-style message (Discord-like for others, bubble for own) */}
                     {isOwn ? (
-                      /* ─── Own messages: right-aligned bubble ─── */
-                      <div className={cn("flex justify-end group/msg relative", isGStart ? "mt-3" : "mt-0.5")}>
+                      /* ─── Own messages: right-aligned with avatar + name ─── */
+                      <div className={cn("flex items-start gap-2.5 group/msg relative flex-row-reverse", isGStart ? "mt-3" : "mt-0.5")}>
+                        {isGStart ? (
+                          <Avatar className="h-8 w-8 shrink-0 mt-0.5 ring-2 ring-background">
+                            <AvatarImage src={profile?.avatar_url || ""} className="object-cover" />
+                            <AvatarFallback className="text-[11px] bg-primary/20 text-primary font-bold">
+                              {profile?.username?.[0]?.toUpperCase() || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <div className="w-8 shrink-0" />
+                        )}
                         <GroupMessageContextMenu message={msg} onReply={handleReply}>
                           <div className="max-w-[70%]">
+                            {isGStart && (
+                              <div className="flex items-baseline gap-2 mb-0.5 flex-row-reverse">
+                                <span className="text-[12px] font-semibold text-primary/70">Toi</span>
+                                <span className="text-[10px] text-muted-foreground/30">
+                                  {smartTimestamp(msg.created_at)}
+                                </span>
+                              </div>
+                            )}
                             {replyMsg && (
                               <div className="flex items-center gap-1.5 mb-1 px-2.5 py-1 rounded-lg bg-white/[0.03] border-l-2 border-primary/30 text-[11px] text-muted-foreground/50 truncate ml-auto max-w-[90%]">
                                 <Reply className="h-3 w-3 shrink-0 text-primary/40" />
@@ -260,7 +278,7 @@ const GroupChatPanel = ({ group, onClose, onStartCall }: GroupChatPanelProps) =>
                                   <p className="text-[13.5px] leading-relaxed break-words">
                                     <MessageContent content={msg.content} />
                                   </p>
-                                  {isGEnd && (
+                                  {isGEnd && !isGStart && (
                                     <div className="flex items-center gap-1 mt-0.5 justify-end">
                                       {isEdited && <Pencil className="h-2.5 w-2.5 text-foreground/15" />}
                                       <span className="text-[10px] text-foreground/25">{smartTimestamp(msg.created_at)}</span>
