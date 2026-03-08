@@ -8,6 +8,7 @@ export interface GroupMessage {
   sender_id: string;
   content: string;
   created_at: string;
+  edited_at?: string | null;
   sender?: {
     username: string;
     avatar_url: string | null;
@@ -75,7 +76,7 @@ export const useGroupChat = (groupId: string | null) => {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription for messages
+  // Realtime subscription for messages — INSERT, UPDATE, DELETE
   useEffect(() => {
     if (!groupId) return;
 
@@ -100,13 +101,31 @@ export const useGroupChat = (groupId: string | null) => {
             .single();
 
           setMessages((prev) => {
-            // Avoid duplicates
             if (prev.some(m => m.id === newMessage.id)) return prev;
             return [
               ...prev,
               { ...newMessage, sender: profile || undefined },
             ];
           });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "group_messages",
+          filter: `group_id=eq.${groupId}`,
+        },
+        (payload) => {
+          const updated = payload.new as GroupMessage;
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === updated.id
+                ? { ...m, content: updated.content, edited_at: updated.edited_at }
+                : m
+            )
+          );
         }
       )
       .on(
