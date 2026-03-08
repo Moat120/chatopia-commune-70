@@ -104,8 +104,10 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
   }, [isSharing, localStream, remoteStreams, screenSharers, user, profile]);
 
   const handleJoin = async () => {
-    await join();
-    toast({ title: "Connecté", description: `Tu as rejoint l'appel de ${group.name}` });
+    const ok = await join();
+    if (ok) {
+      toast({ title: "Connecté", description: `Tu as rejoint l'appel de ${group.name}` });
+    }
   };
 
   const handleLeave = async () => {

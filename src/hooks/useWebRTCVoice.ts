@@ -766,12 +766,14 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       setIsConnected(true);
       setIsConnecting(false);
       setConnectionQuality("good");
+      return true;
 
     } catch (error: any) {
       console.error("[Voice] Join error:", error);
       onError?.(error.message || "Failed to join voice channel");
       setIsConnecting(false);
       cleanup();
+      return false;
     }
   }, [
     channelId,
