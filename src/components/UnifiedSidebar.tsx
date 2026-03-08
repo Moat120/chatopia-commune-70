@@ -220,7 +220,7 @@ const UnifiedSidebar = ({
 
       {/* ─── Friend Code (Messages tab only) ─── */}
       {tab === "messages" && (
-        <div className="px-3 py-2 border-t border-white/[0.03]">
+        <div className="px-3 py-2 border-t border-border">
           <button
             onClick={copyFriendCode}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-all duration-200 group"
