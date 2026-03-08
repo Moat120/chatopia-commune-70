@@ -713,8 +713,13 @@ const SettingsDialog = () => {
                       {/* Loopback toggle */}
                       <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
                         <div className="flex items-center gap-2">
-                          <Volume2 className={cn("w-4 h-4", isLoopback ? "text-primary" : "text-muted-foreground/50")} />
-                          <span className="text-xs font-medium">Retour vocal (s'écouter)</span>
+                          <Headphones className={cn("w-4 h-4", isLoopback ? "text-primary" : "text-muted-foreground/50")} />
+                          <div>
+                            <span className="text-xs font-medium">Retour vocal (s'écouter)</span>
+                            {isLoopback && noiseProcessorRef.current && (
+                              <span className="ml-1.5 text-[10px] text-success">• RNNoise actif</span>
+                            )}
+                          </div>
                         </div>
                         <Switch
                           checked={isLoopback}
@@ -723,7 +728,7 @@ const SettingsDialog = () => {
                       </div>
                       {isLoopback && (
                         <p className="text-[10px] text-warning/80 animate-fade-in">
-                          🎧 Utilisez un casque pour éviter le larsen
+                          🎧 Utilisez un casque pour éviter le larsen — vous entendez le son traité par la suppression de bruit
                         </p>
                       )}
                     </div>
