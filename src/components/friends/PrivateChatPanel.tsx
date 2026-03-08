@@ -348,6 +348,21 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
         )}
       </ScrollArea>
 
+      {/* Scroll to bottom button */}
+      {!isNearBottomRef.current && messages.length > 5 && (
+        <div className="absolute bottom-32 right-8 z-10">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-full bg-card/80 backdrop-blur-lg border border-white/[0.08] shadow-lg hover:bg-card animate-fade-in-up"
+            onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
+            silent
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {/* ─── Typing indicator ─── */}
       {isTyping && (
         <div className="px-4 py-1.5">
