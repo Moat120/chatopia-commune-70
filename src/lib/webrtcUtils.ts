@@ -3,29 +3,60 @@
  * Includes SDP munging, adaptive bitrate, connection monitoring
  */
 
-// Optimized ICE servers for low latency
-export const ICE_SERVERS: RTCIceServer[] = [
+import { supabase } from "@/integrations/supabase/client";
+
+// Fallback STUN-only servers
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun2.l.google.com:19302" },
-  { urls: "stun:stun3.l.google.com:19302" },
-  { urls: "stun:stun4.l.google.com:19302" },
-  {
-    urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443?transport=tcp",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
 ];
+
+// Cache for TURN credentials
+let cachedIceServers: RTCIceServer[] | null = null;
+let cacheExpiry = 0;
+
+/**
+ * Fetch dynamic TURN credentials from edge function.
+ * Falls back to STUN-only if unavailable.
+ */
+export async function getDynamicIceServers(): Promise<RTCIceServer[]> {
+  const now = Date.now();
+  if (cachedIceServers && now < cacheExpiry) {
+    return cachedIceServers;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke("turn-credentials");
+    if (error) throw error;
+
+    const servers = data?.iceServers;
+    if (Array.isArray(servers) && servers.length > 0) {
+      cachedIceServers = servers;
+      // Cache for 1 hour (Twilio TTL is 24h, refresh early)
+      cacheExpiry = now + 3600_000;
+      console.log("[WebRTC] Got dynamic TURN credentials:", servers.length, "servers");
+      return servers;
+    }
+  } catch (err) {
+    console.warn("[WebRTC] Failed to fetch TURN credentials, using fallback:", err);
+  }
+
+  return FALLBACK_ICE_SERVERS;
+}
+
+export async function getDynamicRtcConfig(): Promise<RTCConfiguration> {
+  const iceServers = await getDynamicIceServers();
+  return {
+    iceServers,
+    iceCandidatePoolSize: 10,
+    bundlePolicy: "max-bundle",
+    rtcpMuxPolicy: "require",
+    iceTransportPolicy: "all",
+  };
+}
+
+// Legacy static config (kept for compatibility but prefer getDynamicRtcConfig)
+export const ICE_SERVERS: RTCIceServer[] = FALLBACK_ICE_SERVERS;
 
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: ICE_SERVERS,
