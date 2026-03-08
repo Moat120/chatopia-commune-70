@@ -556,7 +556,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
         users.forEach((u) => {
           if (u.odId !== currentUserId && currentUserId < u.odId) {
-            initiateConnection(u.odId);
+            initiateConnectionRef.current?.(u.odId);
           }
         });
       });
