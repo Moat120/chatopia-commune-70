@@ -155,19 +155,14 @@ const PrivateCallPanel = ({
 
   const setupPeerConnection = (stream: MediaStream) => {
     if (peerConnectionRef.current) peerConnectionRef.current.close();
+    iceRestartManagerRef.current.reset();
     const pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnectionRef.current = pc;
 
     stream.getTracks().forEach(track => {
       const sender = pc.addTrack(track, stream);
       if (track.kind === 'audio') {
-        const params = sender.getParameters();
-        if (params.encodings && params.encodings.length > 0) {
-          params.encodings[0].maxBitrate = 128000;
-          params.encodings[0].priority = "high";
-          params.encodings[0].networkPriority = "high";
-          sender.setParameters(params).catch(() => {});
-        }
+        configureAudioSender(sender);
       }
     });
 
@@ -185,15 +180,17 @@ const PrivateCallPanel = ({
         const remoteAudioContext = new AudioContext({ sampleRate: 48000 });
         const source = remoteAudioContext.createMediaStreamSource(remoteStream);
         const analyser = remoteAudioContext.createAnalyser();
-        analyser.fftSize = 128;
-        analyser.smoothingTimeConstant = 0.3;
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.4;
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const detectFriendSpeaking = () => {
           if (callStatusRef.current === "ended") { remoteAudioContext.close(); return; }
           analyser.getByteFrequencyData(dataArray);
-          const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-          setFriendSpeaking(avg > 15);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+          const rms = Math.sqrt(sum / dataArray.length);
+          setFriendSpeaking(rms > 12);
           requestAnimationFrame(detectFriendSpeaking);
         };
         detectFriendSpeaking();
@@ -210,7 +207,13 @@ const PrivateCallPanel = ({
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') pc.restartIce();
+      const state = pc.connectionState;
+      console.log('[PrivateCall] Connection state:', state);
+      if (state === 'connected') {
+        iceRestartManagerRef.current.reset();
+      } else if (state === 'failed' || state === 'disconnected') {
+        iceRestartManagerRef.current.scheduleRestart(pc);
+      }
     };
 
     return pc;
@@ -229,21 +232,27 @@ const PrivateCallPanel = ({
           analyserRef.current = audioContextRef.current.createAnalyser();
           const source = audioContextRef.current.createMediaStreamSource(stream);
           source.connect(analyserRef.current);
-          analyserRef.current.fftSize = 128;
-          analyserRef.current.smoothingTimeConstant = 0.3;
+          analyserRef.current.fftSize = 256;
+          analyserRef.current.smoothingTimeConstant = 0.4;
           const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
           const detectVoice = () => {
             if (!analyserRef.current || callStatusRef.current === "ended") return;
             analyserRef.current.getByteFrequencyData(dataArray);
-            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-            setIsSpeaking(average > 15 && !isMutedRef.current);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+            const rms = Math.sqrt(sum / dataArray.length);
+            setIsSpeaking(rms > 12 && !isMutedRef.current);
             animationRef.current = requestAnimationFrame(detectVoice);
           };
           detectVoice();
         }
         if (!pc) pc = setupPeerConnection(localStreamRef.current);
-        await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
+        // Munge incoming offer SDP for Opus HD
+        const mungedOffer = { ...payload.data, sdp: mungeOpusSDP(payload.data.sdp) };
+        await pc.setRemoteDescription(new RTCSessionDescription(mungedOffer));
         const answer = await pc.createAnswer();
+        // Munge answer SDP
+        answer.sdp = mungeOpusSDP(answer.sdp || '');
         await pc.setLocalDescription(answer);
         signalingChannelRef.current?.send({
           type: 'broadcast', event: 'webrtc-signal',
@@ -251,7 +260,10 @@ const PrivateCallPanel = ({
         });
       } catch (error) { console.error('[PrivateCall] Error handling offer:', error); }
     } else if (payload.type === 'answer') {
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(payload.data));
+      if (pc) {
+        const mungedAnswer = { ...payload.data, sdp: mungeOpusSDP(payload.data.sdp) };
+        await pc.setRemoteDescription(new RTCSessionDescription(mungedAnswer));
+      }
     } else if (payload.type === 'ice-candidate') {
       if (pc) { try { await pc.addIceCandidate(new RTCIceCandidate(payload.data)); } catch (error) { console.error('[PrivateCall] ICE error:', error); } }
     }
