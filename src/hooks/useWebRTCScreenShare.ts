@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   RTC_CONFIG, 
+  getDynamicRtcConfig,
   mungeScreenShareSDP, 
   configureScreenShareSender, 
   ICERestartManager 
