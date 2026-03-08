@@ -12,6 +12,7 @@ import { usePushToTalk, getPushToTalkEnabled } from "@/hooks/usePushToTalk";
 import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
 import { 
   RTC_CONFIG, 
+  getDynamicRtcConfig,
   mungeOpusSDP, 
   configureAudioSender, 
   getConnectionStats,
