@@ -836,26 +836,32 @@
       hsl(var(--primary)) 0%,
       hsl(var(--primary) / 0.85) 100%
     );
+    color: hsl(0 0% 100%);
   }
 
   .message-other {
-    background: hsl(var(--secondary) / 0.8);
+    background: hsl(var(--secondary) / 0.7);
     border: 1px solid hsl(var(--foreground) / 0.04);
   }
 
   .message-new {
-    animation: message-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation: message-appear 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
   }
 
   @keyframes message-appear {
     from {
       opacity: 0;
-      transform: translateY(10px) scale(0.95);
+      transform: translateY(6px);
     }
     to {
       opacity: 1;
-      transform: translateY(0) scale(1);
+      transform: translateY(0);
     }
+  }
+
+  /* Active/pressed state for interactive elements */
+  .active\:scale-down:active {
+    transform: scale(0.97);
   }
 
   /* ============================================

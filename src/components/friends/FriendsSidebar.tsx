@@ -57,7 +57,6 @@ const FriendsSidebar = ({
       navigator.clipboard.writeText(profile.friend_code);
       setCopied(true);
       toast({ title: "Code copié !" });
-      toast({ title: "Code copié !" });
       setTimeout(() => setCopied(false), 2000);
     }
   };
