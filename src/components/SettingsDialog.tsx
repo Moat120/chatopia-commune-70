@@ -909,7 +909,7 @@ const SettingsDialog = () => {
               </div>
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         <div className="p-6 pt-4 shrink-0 border-t border-white/[0.04]">
           <Button onClick={handleSave} className="w-full h-12 rounded-2xl btn-premium text-base font-semibold" disabled={uploading}>
