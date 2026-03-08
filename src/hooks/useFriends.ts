@@ -42,8 +42,8 @@ export const useFriends = () => {
           requester_id,
           addressee_id,
           status,
-          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code),
-          addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url, status, friend_code)
+          requester:profiles!friendships_requester_id_fkey(id, username, avatar_url, status, friend_code, custom_status),
+          addressee:profiles!friendships_addressee_id_fkey(id, username, avatar_url, status, friend_code, custom_status)
         `)
         .eq("status", "accepted")
         .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
