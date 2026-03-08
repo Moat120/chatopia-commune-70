@@ -499,16 +499,17 @@ const FriendRow = ({
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200",
+        "group flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer",
+        "transition-all duration-200 ease-out",
         isSelected
-          ? "bg-primary/10 text-foreground"
-          : "hover:bg-white/[0.04] text-foreground/80",
-        unreadCount > 0 && !isSelected && "bg-primary/[0.04]"
+          ? "bg-primary/10 border border-primary/15 text-foreground shadow-sm shadow-primary/5"
+          : "hover:bg-white/[0.04] text-foreground/80 border border-transparent",
+        unreadCount > 0 && !isSelected && "bg-primary/[0.03]"
       )}
       onClick={onSelect}
     >
       <div className="relative shrink-0">
-        <Avatar className="h-9 w-9">
+        <Avatar className="h-9 w-9 transition-transform duration-200 group-hover:scale-105">
           <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
           <AvatarFallback className="bg-muted/50 font-semibold text-xs">
             {friend.username[0]?.toUpperCase()}
@@ -516,29 +517,29 @@ const FriendRow = ({
         </Avatar>
         <span
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card",
+            "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card transition-colors duration-300",
             isOnline && "bg-success",
             isAway && "bg-warning",
-            !isActive && "bg-muted-foreground/30"
+            !isActive && "bg-muted-foreground/25"
           )}
         />
       </div>
 
       <div className="flex-1 min-w-0">
         <p className={cn(
-          "text-sm truncate",
+          "text-sm truncate transition-colors duration-200",
           unreadCount > 0 ? "font-bold" : "font-medium"
         )}>
           {friend.username}
         </p>
         {friend.custom_status ? (
-          <p className="text-[11px] text-muted-foreground/60 truncate">
+          <p className="text-[11px] text-muted-foreground/50 truncate">
             {friend.custom_status}
           </p>
         ) : (
           <p className={cn(
-            "text-[11px]",
-            isOnline ? "text-success/80" : isAway ? "text-warning/80" : "text-muted-foreground/40"
+            "text-[11px] transition-colors duration-200",
+            isOnline ? "text-success/70" : isAway ? "text-warning/70" : "text-muted-foreground/35"
           )}>
             {isOnline ? "En ligne" : isAway ? "Absent" : "Hors ligne"}
           </p>
@@ -546,7 +547,7 @@ const FriendRow = ({
       </div>
 
       {unreadCount > 0 && (
-        <Badge className="h-5 min-w-5 px-1.5 text-[10px] font-bold bg-primary text-primary-foreground shrink-0">
+        <Badge className="h-5 min-w-5 px-1.5 text-[10px] font-bold bg-primary text-primary-foreground shrink-0 animate-scale-in">
           {unreadCount > 99 ? "99+" : unreadCount}
         </Badge>
       )}
