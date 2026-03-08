@@ -17,11 +17,11 @@ export interface ScreenShareUser {
 export type ScreenQuality = "720p30" | "1080p60" | "1080p120" | "1440p60" | "1440p120";
 
 export const QUALITY_PRESETS: Record<ScreenQuality, { width: number; height: number; frameRate: number; bitrate: number }> = {
-  "720p30": { width: 1280, height: 720, frameRate: 30, bitrate: 2500000 },
-  "1080p60": { width: 1920, height: 1080, frameRate: 60, bitrate: 5000000 },
-  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 8000000 },
-  "1440p60": { width: 2560, height: 1440, frameRate: 60, bitrate: 8000000 },
-  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 12000000 },
+  "720p30": { width: 1280, height: 720, frameRate: 30, bitrate: 6000000 },
+  "1080p60": { width: 1920, height: 1080, frameRate: 60, bitrate: 12000000 },
+  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 15000000 },
+  "1440p60": { width: 2560, height: 1440, frameRate: 60, bitrate: 15000000 },
+  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 20000000 },
 };
 
 interface SignalMessage {
@@ -406,22 +406,35 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           width: { ideal: preset.width, max: preset.width },
           height: { ideal: preset.height, max: preset.height },
           frameRate: { ideal: preset.frameRate, max: preset.frameRate },
+          // @ts-ignore - Chrome-specific
+          cursor: "always",
         },
         audio: {
-          // System audio capture
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
           sampleRate: { ideal: 48000 },
-          channelCount: { ideal: 2 }, // Stereo for system audio
+          channelCount: { ideal: 2 },
         },
+        // @ts-ignore - Chrome-specific: prefer current tab or window
+        preferCurrentTab: false,
+        selfBrowserSurface: "exclude",
+        surfaceSwitching: "include",
       } as any);
 
-      // Set content hint for video track
+      // Set content hint and degradation preference for video track
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         try {
           (videoTrack as any).contentHint = 'detail';
+        } catch {}
+        // Apply constraints to maintain resolution quality
+        try {
+          await videoTrack.applyConstraints({
+            width: { ideal: preset.width },
+            height: { ideal: preset.height },
+            frameRate: { ideal: preset.frameRate },
+          });
         } catch {}
       }
 

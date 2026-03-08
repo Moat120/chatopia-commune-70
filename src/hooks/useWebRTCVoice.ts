@@ -54,8 +54,10 @@ const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> =>
     noiseSuppression: { ideal: noiseSuppression },
     autoGainControl: { ideal: autoGain },
     sampleRate: { ideal: 48000 },
-    sampleSize: { ideal: 16 },
+    sampleSize: { ideal: 24 },
     channelCount: { ideal: 1 },
+    // Reduce latency for voice
+    latency: { ideal: 0.01, max: 0.05 },
     ...(noiseSuppression && {
       googNoiseSuppression: true,
       googHighpassFilter: true,
@@ -65,6 +67,7 @@ const getOptimizedAudioConstraints = async (): Promise<MediaTrackConstraints> =>
     ...(echoCancellation && {
       googEchoCancellation: true,
       googEchoCancellation2: true,
+      googEchoCancellation3: true,
     } as any),
     ...(autoGain && {
       googAutoGainControl: true,

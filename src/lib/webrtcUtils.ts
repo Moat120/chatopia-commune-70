@@ -95,22 +95,24 @@ function findOpusPayload(lines: string[]): string | null {
 
 /**
  * Munge SDP for screen sharing video:
- * - Prefer VP9 or H264 for screen content
- * - Higher bitrate for video
+ * - High bitrate for crisp screen content
+ * - Prefer VP9/H264 for screen content
  */
 export function mungeScreenShareSDP(sdp: string): string {
-  // Set video bitrate high for screen content
   const lines = sdp.split('\r\n');
   const result: string[] = [];
   
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    let line = lines[i];
+    
+    // Remove any existing bandwidth lines
+    if (line.startsWith('b=AS:') || line.startsWith('b=TIAS:')) continue;
+    
     result.push(line);
     
-    // After video m-line, add bandwidth
+    // After video m-line, add high bandwidth
     if (line.startsWith('m=video')) {
-      // Add bandwidth line for video
-      result.push('b=AS:8000'); // 8 Mbps max for screen share
+      result.push('b=AS:20000'); // 20 Mbps max for screen share
     }
   }
   
@@ -152,10 +154,17 @@ export async function configureScreenShareSender(
     params.encodings = [{}];
   }
   
-  // High bitrate for screen content
+  // Much higher bitrate for crisp screen content
   const pixels = quality.width * quality.height;
-  const baseBitrate = pixels > 2073600 ? 8000000 : 5000000; // 8Mbps for 1440p, 5Mbps for 1080p
-  const framerateMultiplier = quality.frameRate > 60 ? 1.5 : 1;
+  let baseBitrate: number;
+  if (pixels > 2073600) {
+    baseBitrate = 15000000; // 15Mbps for 1440p
+  } else if (pixels > 921600) {
+    baseBitrate = 10000000; // 10Mbps for 1080p
+  } else {
+    baseBitrate = 6000000; // 6Mbps for 720p
+  }
+  const framerateMultiplier = quality.frameRate > 60 ? 1.5 : quality.frameRate > 30 ? 1.2 : 1;
   
   params.encodings[0].maxBitrate = Math.round(baseBitrate * framerateMultiplier);
   params.encodings[0].priority = "high";
@@ -166,7 +175,7 @@ export async function configureScreenShareSender(
   try {
     const track = sender.track;
     if (track && 'contentHint' in track) {
-      (track as any).contentHint = 'detail'; // Optimize for text/detail
+      (track as any).contentHint = 'detail';
     }
   } catch {}
   
