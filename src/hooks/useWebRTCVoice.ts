@@ -249,10 +249,9 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const rtcConfigRef = useRef<RTCConfiguration>(RTC_CONFIG);
 
   const clearOwnVoiceChannels = useCallback(async () => {
-    // Only remove channels that WE previously created (exact topic match)
+    // Only remove signaling and presence channels (NOT roster/status — observer may share it)
     const exactTopics = [
       `realtime:voice-sig-${channelId}`,
-      `realtime:voice-status-${channelId}`,
       `realtime:voice-pres-${channelId}`,
     ];
 
@@ -263,7 +262,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     });
 
     if (ours.length > 0) {
-      console.log("[Voice] Cleaning up own stale channels:", ours.map((c: any) => c?.topic));
+      console.log("[Voice] Cleaning up stale channels:", ours.map((c: any) => c?.topic));
       await Promise.all(ours.map((ch) => supabase.removeChannel(ch).catch(() => {})));
       await new Promise(r => setTimeout(r, 200));
     }
