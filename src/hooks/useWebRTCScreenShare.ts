@@ -148,7 +148,7 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
     const oldIce = iceManagersRef.current.get(`out-${viewerId}`);
     if (oldIce) oldIce.cleanup();
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection(rtcConfigRef.current);
     const iceManager = new ICERestartManager();
     iceManagersRef.current.set(`out-${viewerId}`, iceManager);
 
