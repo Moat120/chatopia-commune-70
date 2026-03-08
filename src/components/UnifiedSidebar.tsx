@@ -104,7 +104,7 @@ const UnifiedSidebar = ({
   const loading = tab === "messages" ? friendsLoading : groupsLoading;
 
   return (
-    <div className="w-[320px] h-full flex flex-col bg-card/40 backdrop-blur-2xl border-r border-white/[0.06]">
+    <div className="w-[320px] h-full flex flex-col bg-card/30 backdrop-blur-2xl border-r border-white/[0.04]">
       {/* ─── Header ─── */}
       <div className="px-4 pt-4 pb-2 space-y-3">
         {/* Tab switcher */}
