@@ -526,32 +526,76 @@ const PrivateCallPanel = ({
                 )}
               </div>
 
-              {/* Friend's Avatar */}
-              <div className="relative flex flex-col items-center">
-                {callStatus === "active" && friendSpeaking && (
-                  <>
-                    <div className="absolute inset-0 rounded-full border-2 border-success/40 animate-speaking-ring" />
-                    <div className="absolute inset-0 rounded-full border-2 border-success/20 animate-speaking-ring" style={{ animationDelay: '0.5s' }} />
-                  </>
-                )}
-                <div className={cn("absolute -inset-6 rounded-full blur-2xl transition-all duration-500", friendSpeaking ? "bg-success/25" : "bg-primary/10")} />
-                <Avatar className={cn(
-                  "relative transition-all duration-300 ring-[3px] ring-offset-2 ring-offset-background shadow-2xl",
-                  friendSpeaking ? "ring-success shadow-success/20" : "ring-white/10",
-                  hasScreenShare ? "h-16 w-16" : "h-24 w-24"
-                )}>
-                  <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
-                  <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-2xl">
-                    {friend.username[0]?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <p className="text-xs text-muted-foreground/60 mt-3 font-medium">{friend.username}</p>
-                {friendSpeaking && (
-                  <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-success flex items-center justify-center ring-2 ring-background speaking-glow">
-                    <Volume2 className="h-3.5 w-3.5 text-success-foreground" />
+              {/* Friend's Avatar — clickable for volume control */}
+              <Popover open={friendPopoverOpen} onOpenChange={setFriendPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <div className="relative flex flex-col items-center cursor-pointer">
+                    {callStatus === "active" && friendSpeaking && friendVolume > 0 && (
+                      <>
+                        <div className="absolute inset-0 rounded-full border-2 border-success/40 animate-speaking-ring" />
+                        <div className="absolute inset-0 rounded-full border-2 border-success/20 animate-speaking-ring" style={{ animationDelay: '0.5s' }} />
+                      </>
+                    )}
+                    <div className={cn("absolute -inset-6 rounded-full blur-2xl transition-all duration-500", friendSpeaking && friendVolume > 0 ? "bg-success/25" : "bg-primary/10")} />
+                    <Avatar className={cn(
+                      "relative transition-all duration-300 ring-[3px] ring-offset-2 ring-offset-background shadow-2xl",
+                      friendVolume === 0 ? "ring-amber-500 opacity-60" : friendSpeaking ? "ring-success shadow-success/20" : "ring-white/10",
+                      hasScreenShare ? "h-16 w-16" : "h-24 w-24"
+                    )}>
+                      <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
+                      <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-2xl">
+                        {friend.username[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <p className="text-xs text-muted-foreground/60 mt-3 font-medium">{friend.username}</p>
+                    {friendVolume === 0 ? (
+                      <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center ring-2 ring-background">
+                        <VolumeOff className="h-3.5 w-3.5 text-white" />
+                      </div>
+                    ) : friendSpeaking ? (
+                      <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-success flex items-center justify-center ring-2 ring-background speaking-glow">
+                        <Volume2 className="h-3.5 w-3.5 text-success-foreground" />
+                      </div>
+                    ) : null}
+                    {friendVolume === 0 && (
+                      <p className="text-[10px] text-amber-500/80 font-medium mt-0.5">Son coupé</p>
+                    )}
                   </div>
-                )}
-              </div>
+                </PopoverTrigger>
+                <PopoverContent side="bottom" align="center" className="w-56 p-3 space-y-3 bg-card border-border shadow-xl">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={friend.avatar_url || ""} className="object-cover" />
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                        {friend.username[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-semibold truncate">{friend.username}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground font-medium">Volume</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">{Math.round(friendVolume * 100)}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setFriendVolume(friendVolume === 0 ? 1 : 0)} className="shrink-0 p-1 rounded hover:bg-muted transition-colors">
+                        {friendVolume === 0 ? <VolumeOff className="h-4 w-4 text-muted-foreground" /> : <Volume2 className="h-4 w-4 text-muted-foreground" />}
+                      </button>
+                      <Slider value={[friendVolume]} min={0} max={2} step={0.05} onValueChange={([v]) => setFriendVolume(v)} className="flex-1" />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setFriendVolume(friendVolume === 0 ? 1 : 0)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                      friendVolume === 0 ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "hover:bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {friendVolume === 0 ? <VolumeOff className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                    {friendVolume === 0 ? "Rétablir le son" : "Couper le son"}
+                  </button>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* PTT Indicator */}
