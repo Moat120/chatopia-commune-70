@@ -98,20 +98,7 @@ export class AdvancedNoiseProcessor {
         let rnnoiseSource = 'public/rnnoise';
 
         try {
-          // Priorité aux fichiers locaux (public/rnnoise/*)
-          await this.audioContext.audioWorklet.addModule('/rnnoise/rnnoiseWorklet.js');
-          try {
-            wasmBinary = await loadRnnoise({
-              url: '/rnnoise/rnnoise.wasm',
-              simdUrl: '/rnnoise/rnnoise_simd.wasm',
-            });
-          } catch {
-            wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: undefined });
-          }
-        } catch (localAssetsError) {
-          // Fallback Vite-bundled assets
-          rnnoiseSource = 'vite-bundled';
-
+          // Priorité au bundle Vite (plus fiable en AudioWorklet)
           const rnnoiseWorkletUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url')).default;
           const rnnoiseWasmUrl = (await import('@sapphi-red/web-noise-suppressor/rnnoise.wasm?url')).default;
 
@@ -128,7 +115,20 @@ export class AdvancedNoiseProcessor {
           });
 
           await this.audioContext.audioWorklet.addModule(rnnoiseWorkletUrl);
-          console.warn('[AdvancedNoiseProcessor] Local RNNoise assets unavailable, fallback used:', localAssetsError);
+          rnnoiseSource = 'vite-bundled';
+        } catch (bundledAssetsError) {
+          // Fallback aux fichiers locaux fournis (public/rnnoise/*)
+          await this.audioContext.audioWorklet.addModule('/rnnoise/rnnoiseWorklet.js');
+          try {
+            wasmBinary = await loadRnnoise({
+              url: '/rnnoise/rnnoise.wasm',
+              simdUrl: '/rnnoise/rnnoise_simd.wasm',
+            });
+          } catch {
+            wasmBinary = await loadRnnoise({ url: '/rnnoise/rnnoise.wasm', simdUrl: undefined });
+          }
+          rnnoiseSource = 'public/rnnoise';
+          console.warn('[AdvancedNoiseProcessor] Vite RNNoise assets unavailable, fallback local used:', bundledAssetsError);
         }
 
         // Créer le node RNNoise

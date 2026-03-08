@@ -321,6 +321,7 @@ const PrivateCallPanel = ({
       if (getNoiseSuppression()) {
         noiseProcessorRef.current = new AdvancedNoiseProcessor();
         processedStream = await noiseProcessorRef.current.process(rawStream);
+        console.log('[PrivateCall] Noise processing applied | rnnoiseActive=', noiseProcessorRef.current.isRnnoiseActive(), '| latency=', noiseProcessorRef.current.getLatency(), 'ms');
       }
       
       localStreamRef.current = processedStream;
