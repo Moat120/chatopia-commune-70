@@ -27,6 +27,7 @@ import { Slider } from "@/components/ui/slider";
 import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
 import { 
   RTC_CONFIG, 
+  getDynamicRtcConfig,
   mungeOpusSDP, 
   configureAudioSender,
   ICERestartManager 
