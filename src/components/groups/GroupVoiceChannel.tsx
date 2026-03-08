@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { Volume2, Users, Sparkles } from "lucide-react";
+import { Volume2, Users, Sparkles, MicOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
 import { useWebRTCScreenShare, ScreenQuality, QUALITY_PRESETS } from "@/hooks/useWebRTCScreenShare";
