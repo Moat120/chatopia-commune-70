@@ -1,14 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 
 interface ShortcutHandlers {
   onEscape?: () => void;
   onSearch?: () => void;
+  onToggleMute?: () => void;
+  onToggleDeafen?: () => void;
 }
 
 export const useKeyboardShortcuts = (handlers: ShortcutHandlers) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore when typing in inputs/textareas
       const tag = (e.target as HTMLElement)?.tagName;
       const isInput = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
 
@@ -19,8 +20,27 @@ export const useKeyboardShortcuts = (handlers: ShortcutHandlers) => {
         return;
       }
 
-      // Escape (only when not in input)
-      if (e.key === "Escape" && !isInput) {
+      // Ctrl/Cmd + Shift + M → Toggle mute (works even in inputs)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        handlers.onToggleMute?.();
+        return;
+      }
+
+      // Ctrl/Cmd + Shift + D → Toggle deafen (works even in inputs)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        handlers.onToggleDeafen?.();
+        return;
+      }
+
+      // Escape
+      if (e.key === "Escape") {
+        // In inputs: blur the input instead of navigating
+        if (isInput) {
+          (e.target as HTMLElement)?.blur();
+          return;
+        }
         handlers.onEscape?.();
       }
     };

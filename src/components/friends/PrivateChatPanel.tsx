@@ -19,7 +19,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Phone, ArrowLeft, Send, Loader2, CheckCheck, Check, Pencil, X, Reply } from "lucide-react";
+import { Phone, ArrowLeft, Send, Loader2, CheckCheck, Check, Pencil, X, Reply, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -33,7 +33,7 @@ interface PrivateChatPanelProps {
 const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProps) => {
   const { user } = useAuth();
   const { messages, loading, sendMessage } = usePrivateChat(friend.id);
-  const { playMessageSent } = useSound();
+  const { playMessageSent, playMessageReceived } = useSound();
   const channelId = `private-${[user?.id, friend.id].sort().join("-")}`;
   const { isTyping, startTyping, stopTyping } = useTypingIndicator(channelId);
   const [input, setInput] = useState("");
@@ -47,8 +47,24 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const { toggleReaction, getReactionGroups } = useReactions("private", messageIds);
 
-  // Smart scroll
+  const prevMsgCountRef = useRef(messages.length);
+
+  // Smart scroll + play sound for incoming messages
   useEffect(() => {
+    const newCount = messages.length;
+    const isNewIncoming = newCount > prevMsgCountRef.current && messages[newCount - 1]?.sender_id !== user?.id;
+    prevMsgCountRef.current = newCount;
+
+    if (isNewIncoming && !isNearBottomRef.current) {
+      // Don't auto-scroll, user is reading history
+      playMessageReceived();
+      return;
+    }
+
+    if (isNewIncoming) {
+      playMessageReceived();
+    }
+
     if (isNearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
@@ -331,6 +347,21 @@ const PrivateChatPanel = ({ friend, onClose, onStartCall }: PrivateChatPanelProp
           </div>
         )}
       </ScrollArea>
+
+      {/* Scroll to bottom button */}
+      {!isNearBottomRef.current && messages.length > 5 && (
+        <div className="absolute bottom-32 right-8 z-10">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-full bg-card/80 backdrop-blur-lg border border-white/[0.08] shadow-lg hover:bg-card animate-fade-in-up"
+            onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
+            silent
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       {/* ─── Typing indicator ─── */}
       {isTyping && (
