@@ -645,7 +645,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           await presenceChannel.track({
             odId: currentUserId,
             username: currentUsername,
-            avatarUrl: currentAvatarUrl,
+            avatarUrl: currentPresenceAvatar,
             isSpeaking: false,
             isMuted: false,
           });
@@ -657,7 +657,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
             return [...prev, {
               odId: currentUserId,
               username: currentUsername,
-              avatarUrl: currentAvatarUrl,
+              avatarUrl: currentPresenceAvatar,
               isSpeaking: false,
               isMuted: false,
             }];
@@ -667,7 +667,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           const selfUser = {
             odId: currentUserId,
             username: currentUsername,
-            avatarUrl: currentAvatarUrl,
+            avatarUrl: currentPresenceAvatar,
             isSpeaking: false,
             isMuted: false,
           };
