@@ -27,12 +27,14 @@ import {
   Plus,
   Settings,
   Hash,
+  Smile,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AddFriendDialog from "@/components/friends/AddFriendDialog";
 import FriendRequestsDialog from "@/components/friends/FriendRequestsDialog";
 import CreateGroupDialog from "@/components/groups/CreateGroupDialog";
 import SettingsDialog from "@/components/SettingsDialog";
+import StatusPicker from "@/components/StatusPicker";
 import { useToast } from "@/hooks/use-toast";
 
 type Tab = "messages" | "groups";
