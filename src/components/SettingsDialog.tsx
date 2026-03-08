@@ -323,10 +323,20 @@ const SettingsDialog = () => {
 
       audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
+      sourceNodeRef.current = source;
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
       analyserRef.current.smoothingTimeConstant = 0.5;
       source.connect(analyserRef.current);
+
+      // Prepare loopback nodes (muted by default)
+      loopbackDelayRef.current = audioContextRef.current.createDelay(1.0);
+      loopbackDelayRef.current.delayTime.value = 0.05; // 50ms delay to avoid feedback
+      loopbackGainRef.current = audioContextRef.current.createGain();
+      loopbackGainRef.current.gain.value = 0; // muted until toggled
+      source.connect(loopbackDelayRef.current);
+      loopbackDelayRef.current.connect(loopbackGainRef.current);
+      loopbackGainRef.current.connect(audioContextRef.current.destination);
 
       isTestingRef.current = true;
       setIsTesting(true);
