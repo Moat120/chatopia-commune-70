@@ -406,15 +406,20 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           width: { ideal: preset.width, max: preset.width },
           height: { ideal: preset.height, max: preset.height },
           frameRate: { ideal: preset.frameRate, max: preset.frameRate },
+          // @ts-ignore - Chrome-specific
+          cursor: "always",
         },
         audio: {
-          // System audio capture
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
           sampleRate: { ideal: 48000 },
-          channelCount: { ideal: 2 }, // Stereo for system audio
+          channelCount: { ideal: 2 },
         },
+        // @ts-ignore - Chrome-specific: prefer current tab or window
+        preferCurrentTab: false,
+        selfBrowserSurface: "exclude",
+        surfaceSwitching: "include",
       } as any);
 
       // Set content hint for video track
