@@ -510,6 +510,9 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
         console.log('[ScreenShare] ✅ System audio captured:', audioTracks[0].label);
       }
 
+      // Fetch dynamic TURN credentials AFTER getDisplayMedia (non-blocking for user gesture)
+      getDynamicRtcConfig().then(config => { rtcConfigRef.current = config; }).catch(() => {});
+
       localStreamRef.current = stream;
       isSharingRef.current = true;
       setLocalStream(stream);
