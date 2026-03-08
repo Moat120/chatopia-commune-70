@@ -13,6 +13,8 @@ import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialo
 import { Group } from "@/hooks/useGroups";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useVoicePresence } from "@/hooks/useVoicePresence";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface GroupVoiceChannelProps {
   group: Group;
