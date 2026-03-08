@@ -181,7 +181,8 @@ const Index = () => {
             ) : (
               <EmptyState viewMode={viewMode} />
             )}
-          </div>
+           </div>
+         </div>
         </div>
 
         {/* Active Call */}
@@ -226,6 +227,9 @@ const Index = () => {
             setSelectedGroup(group);
           }}
         />
+
+        {/* Keyboard Shortcuts */}
+        <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       </div>
     </TooltipProvider>
   );
