@@ -22,35 +22,20 @@ import ScreenShareQualityDialog from "@/components/voice/ScreenShareQualityDialo
 import ConnectionQualityIndicator from "@/components/voice/ConnectionQualityIndicator";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
+import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
+import { 
+  RTC_CONFIG, 
+  mungeOpusSDP, 
+  configureAudioSender,
+  ICERestartManager 
+} from "@/lib/webrtcUtils";
+
 interface PrivateCallPanelProps {
   friend: Friend;
   onEnd: () => void;
   isIncoming?: boolean;
   callId?: string;
 }
-
-// Optimized ICE servers for low latency
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  {
-    urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-];
-
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: ICE_SERVERS,
-  iceCandidatePoolSize: 10,
-  bundlePolicy: "max-bundle",
-  rtcpMuxPolicy: "require",
-};
 
 const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
   const selectedMic = getSelectedMicrophone();
@@ -82,9 +67,6 @@ const getOptimizedAudioConstraints = (): MediaTrackConstraints => {
     } as any),
   };
 };
-
-import { AdvancedNoiseProcessor } from "@/hooks/useNoiseProcessor";
-
 const PrivateCallPanel = ({
   friend,
   onEnd,
