@@ -124,6 +124,7 @@ const SettingsDialog = () => {
   const [microphones, setMicrophones] = useState<AudioDevice[]>([]);
   const [selectedMic, setSelectedMic] = useState<string>(getSelectedMicrophone() || "");
   const [isTesting, setIsTesting] = useState(false);
+  const [isLoopback, setIsLoopback] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioQuality, setAudioQuality] = useState<"excellent" | "good" | "poor">("excellent");
   const [pttEnabled, setPttEnabledState] = useState(getPushToTalkEnabled());
@@ -138,6 +139,9 @@ const SettingsDialog = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const isTestingRef = useRef(false);
+  const loopbackGainRef = useRef<GainNode | null>(null);
+  const loopbackDelayRef = useRef<DelayNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const { toast } = useToast();
 
   // Load microphones
