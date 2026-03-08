@@ -145,9 +145,9 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
 
   const hasActiveScreenShare = activeScreens.length > 0;
 
-  return (
+  const callUI = (
     <TooltipProvider delayDuration={200}>
-      <div className="fixed inset-0 z-50 flex flex-col bg-background animate-fade-in">
+      <div className="fixed inset-0 z-[9999] flex flex-col bg-background animate-fade-in" style={{ isolation: 'isolate' }}>
 
         {/* Header */}
         <header className="shrink-0 h-16 px-5 flex items-center justify-between border-b border-border bg-card">
