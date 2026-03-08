@@ -7,17 +7,19 @@ import PrivateCallPanel from "@/components/friends/PrivateCallPanel";
 import GroupChatPanel from "@/components/groups/GroupChatPanel";
 import GroupVoiceChannel from "@/components/groups/GroupVoiceChannel";
 import SearchPalette from "@/components/chat/SearchPalette";
+import KeyboardShortcutsDialog from "@/components/KeyboardShortcutsDialog";
 import { Friend } from "@/hooks/useFriends";
 import { Group } from "@/hooks/useGroups";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Phone, PhoneOff } from "lucide-react";
+import { MessageCircle, Phone, PhoneOff, WifiOff } from "lucide-react";
 import { playNotificationSound, RingtoneManager } from "@/hooks/useSound";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { usePresence } from "@/hooks/usePresence";
 import { useCallCleanup } from "@/hooks/useCallCleanup";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTabTitle } from "@/hooks/useTabTitle";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
