@@ -74,6 +74,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       (event, newSession) => {
         if (!mounted) return;
 
+        // Only update session/user on meaningful auth events, NOT token refreshes
+        if (event === 'TOKEN_REFRESHED') {
+          // Just update session silently without triggering profile refetch
+          setSession(newSession);
+          return;
+        }
+
         // Synchronous state updates only
         setSession(newSession);
         setUser(newSession?.user ?? null);
