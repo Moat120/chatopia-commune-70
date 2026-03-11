@@ -266,7 +266,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     if (ours.length > 0) {
       console.log("[Voice] Cleaning up stale channels:", ours.map((c: any) => c?.topic));
       await Promise.all(ours.map((ch) => supabase.removeChannel(ch).catch(() => {})));
-      await new Promise(r => setTimeout(r, 200));
     }
   }, [channelId]);
 
