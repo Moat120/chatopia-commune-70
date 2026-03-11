@@ -102,7 +102,7 @@ export const useSimpleLatency = () => {
   const [ping, setPing] = useState(0);
   const [quality, setQuality] = useState<LatencyStats['quality']>('excellent');
   const lastPingRef = useRef<number>(Date.now());
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const measure = async () => {

@@ -31,7 +31,7 @@ export const useVoiceChannel = ({ channelId, onError }: UseVoiceChannelProps) =>
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const isSpeakingRef = useRef(false);
-  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastPingRef = useRef<number>(Date.now());
 
   const currentUser = getCurrentUser();

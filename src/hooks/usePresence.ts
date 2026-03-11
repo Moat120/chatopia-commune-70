@@ -7,8 +7,8 @@ const IDLE_THRESHOLD = 3 * 60 * 1000; // 3 min → away
 
 export const usePresence = () => {
   const { user, profile } = useAuth();
-  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
-  const idleCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const idleCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const currentStatusRef = useRef<"online" | "away" | "offline">("online");

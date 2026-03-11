@@ -260,7 +260,7 @@ export async function getConnectionStats(pc: RTCPeerConnection): Promise<Connect
 export class ICERestartManager {
   private attempts = 0;
   private maxAttempts = 5;
-  private timeout: NodeJS.Timeout | null = null;
+  private timeout: ReturnType<typeof setTimeout> | null = null;
   private onGiveUp: (() => void) | null = null;
   
   constructor(onGiveUp?: () => void) {
