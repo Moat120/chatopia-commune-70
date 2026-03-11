@@ -234,25 +234,18 @@ const ScreenTile = ({
 };
 
 const MultiScreenShareView = ({ screens, onStopLocal }: MultiScreenShareViewProps) => {
-  const [mainScreenId, setMainScreenId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
-  // Default to first screen or local screen as main
+  // Reset focus if the focused screen disappears
   useEffect(() => {
-    if (screens.length === 0) {
-      setMainScreenId(null);
-      return;
+    if (focusedId && !screens.find(s => s.odId === focusedId)) {
+      setFocusedId(null);
     }
-    if (!mainScreenId || !screens.find(s => s.odId === mainScreenId)) {
-      // Prefer first remote screen, fallback to first
-      const remote = screens.find(s => !s.isLocal);
-      setMainScreenId(remote?.odId || screens[0].odId);
-    }
-  }, [screens, mainScreenId]);
+  }, [screens, focusedId]);
 
   if (screens.length === 0) return null;
 
-  const mainScreen = screens.find(s => s.odId === mainScreenId) || screens[0];
-  const thumbnails = screens.filter(s => s.odId !== mainScreen.odId);
+  const focusedScreen = focusedId ? screens.find(s => s.odId === focusedId) : null;
 
   // Single screen — full view
   if (screens.length === 1) {
@@ -268,34 +261,66 @@ const MultiScreenShareView = ({ screens, onStopLocal }: MultiScreenShareViewProp
     );
   }
 
-  // Multiple screens — main + sidebar thumbnails
-  return (
-    <div className="w-full h-full p-3 flex gap-3">
-      {/* Main view */}
-      <div className="flex-1 min-w-0">
-        <ScreenTile
-          screen={mainScreen}
-          isMain={true}
-          onSelect={() => {}}
-          onStopLocal={mainScreen.isLocal ? onStopLocal : undefined}
-        />
+  // Focused mode: one big + rest as strip (like Discord when you click a stream)
+  if (focusedScreen) {
+    const others = screens.filter(s => s.odId !== focusedScreen.odId);
+    return (
+      <div className="w-full h-full p-3 flex flex-col gap-2">
+        {/* Main focused view */}
+        <div className="flex-1 min-h-0">
+          <ScreenTile
+            screen={focusedScreen}
+            isMain={true}
+            onSelect={() => {}}
+            onStopLocal={focusedScreen.isLocal ? onStopLocal : undefined}
+          />
+        </div>
+        {/* Bottom strip of other streams */}
+        <div className="shrink-0 flex gap-2 overflow-x-auto pb-1" style={{ height: '140px' }}>
+          {others.map((screen) => (
+            <div key={screen.odId} className="aspect-video h-full flex-shrink-0">
+              <ScreenTile
+                screen={screen}
+                isMain={false}
+                onSelect={() => setFocusedId(screen.odId)}
+                onStopLocal={screen.isLocal ? onStopLocal : undefined}
+              />
+            </div>
+          ))}
+        </div>
       </div>
+    );
+  }
 
-      {/* Sidebar thumbnails */}
-      <div className="w-48 flex flex-col gap-2 overflow-y-auto">
-        {thumbnails.map((screen) => (
-          <div key={screen.odId} className="aspect-video flex-shrink-0">
-            <ScreenTile
-              screen={screen}
-              isMain={false}
-              onSelect={() => setMainScreenId(screen.odId)}
-              onStopLocal={screen.isLocal ? onStopLocal : undefined}
-            />
-          </div>
-        ))}
-      </div>
+  // Grid mode (Discord-style): dynamic grid based on count
+  const gridClass = getGridClass(screens.length);
+
+  return (
+    <div className={cn("w-full h-full p-3 grid gap-2", gridClass)}>
+      {screens.map((screen) => (
+        <div key={screen.odId} className="min-h-0 min-w-0">
+          <ScreenTile
+            screen={screen}
+            isMain={screens.length <= 2}
+            onSelect={() => setFocusedId(screen.odId)}
+            onStopLocal={screen.isLocal ? onStopLocal : undefined}
+          />
+        </div>
+      ))}
     </div>
   );
 };
+
+/** Discord-style dynamic grid classes based on participant count */
+function getGridClass(count: number): string {
+  switch (count) {
+    case 2: return "grid-cols-2 grid-rows-1";
+    case 3: return "grid-cols-2 grid-rows-2 [&>*:last-child]:col-span-2 [&>*:last-child]:max-h-[50%] [&>*:last-child]:mx-auto [&>*:last-child]:w-1/2";
+    case 4: return "grid-cols-2 grid-rows-2";
+    case 5:
+    case 6: return "grid-cols-3 grid-rows-2";
+    default: return "grid-cols-3 auto-rows-fr";
+  }
+}
 
 export default MultiScreenShareView;
