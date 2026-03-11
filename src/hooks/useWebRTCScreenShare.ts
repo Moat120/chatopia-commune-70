@@ -166,11 +166,25 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           if (!params.encodings || params.encodings.length === 0) {
             params.encodings = [{}];
           }
-          params.encodings[0].maxBitrate = 192_000; // 192kbps stereo audio
+          params.encodings[0].maxBitrate = 256_000; // 256kbps stereo system audio
+          params.encodings[0].priority = "high";
+          params.encodings[0].networkPriority = "high";
           sender.setParameters(params).catch(() => {});
         }
       });
     }
+    
+    // Re-apply sender config when connection is established (some browsers reset params)
+    pc.addEventListener('connectionstatechange', () => {
+      if (pc.connectionState === 'connected') {
+        pc.getSenders().forEach(sender => {
+          if (sender.track?.kind === 'video') {
+            const preset = QUALITY_PRESETS[currentQualityRef.current];
+            configureScreenShareSender(sender, preset);
+          }
+        });
+      }
+    });
 
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
