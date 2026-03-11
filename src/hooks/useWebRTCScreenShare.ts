@@ -210,10 +210,14 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     console.log(`[ScreenShare] Sending offer to viewer ${viewerId}`);
     const pc = createOutgoingConnection(viewerId);
+    const preset = QUALITY_PRESETS[currentQualityRef.current];
 
     try {
-      const offer = await pc.createOffer();
-      offer.sdp = mungeScreenShareSDP(offer.sdp || '');
+      const offer = await pc.createOffer({
+        offerToReceiveVideo: false,
+        offerToReceiveAudio: false,
+      });
+      offer.sdp = mungeScreenShareSDP(offer.sdp || '', preset.bitrate);
       await pc.setLocalDescription(offer);
 
       signalingChannelRef.current?.send({
