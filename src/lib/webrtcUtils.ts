@@ -113,11 +113,17 @@ function findOpusPayload(lines: string[]): string | null {
 }
 
 /**
- * Munge SDP for screen sharing video - very high bitrate ceiling
+ * Munge SDP for screen sharing video — force VP8/VP9/H264 high profile, high bitrate
  */
-export function mungeScreenShareSDP(sdp: string): string {
+export function mungeScreenShareSDP(sdp: string, bitrateBps?: number): string {
   const lines = sdp.split('\r\n');
   const result: string[] = [];
+  const targetBitrate = bitrateBps || 50_000_000;
+  const targetBitrateKbps = Math.round(targetBitrate / 1000);
+  
+  // Find H264 high-profile payload for preferring it
+  const h264HighPayload = findH264HighProfilePayload(lines);
+  const vp9Payload = findCodecPayload(lines, 'VP9');
   
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
@@ -125,15 +131,76 @@ export function mungeScreenShareSDP(sdp: string): string {
     // Remove any existing bandwidth lines
     if (line.startsWith('b=AS:') || line.startsWith('b=TIAS:')) continue;
     
-    result.push(line);
-    
-    // After video m-line, add very high bandwidth ceiling
+    // Prioritize codec: H264 High > VP9 > VP8
     if (line.startsWith('m=video')) {
-      result.push('b=AS:50000'); // 50 Mbps ceiling — browser will self-regulate
+      const parts = line.split(' ');
+      if (parts.length > 3) {
+        const payloads = parts.slice(3);
+        const prioritized: string[] = [];
+        
+        // Prefer H264 High profile, then VP9
+        if (h264HighPayload && payloads.includes(h264HighPayload)) {
+          prioritized.push(h264HighPayload);
+        }
+        if (vp9Payload && payloads.includes(vp9Payload)) {
+          prioritized.push(vp9Payload);
+        }
+        
+        // Add remaining codecs
+        payloads.forEach(p => {
+          if (!prioritized.includes(p)) prioritized.push(p);
+        });
+        
+        line = `${parts[0]} ${parts[1]} ${parts[2]} ${prioritized.join(' ')}`;
+      }
+      
+      result.push(line);
+      // Add both AS and TIAS bandwidth limits
+      result.push(`b=AS:${targetBitrateKbps}`);
+      result.push(`b=TIAS:${targetBitrate}`);
+      continue;
     }
+    
+    // Boost H264 profile-level-id to High profile (4264xx → 6400xx)
+    if (line.includes('profile-level-id=42') && line.includes('a=fmtp:')) {
+      line = line.replace(/profile-level-id=42\w{4}/, 'profile-level-id=640032');
+    }
+    
+    // Set H264 max-mbps and max-fs for high resolution
+    if (line.includes('a=fmtp:') && line.includes('profile-level-id')) {
+      if (!line.includes('max-mbps')) {
+        line += ';max-mbps=983040;max-fs=8160;max-br=' + targetBitrateKbps;
+      }
+    }
+    
+    // For VP9, set profile-id=0 (best for screen content)
+    if (vp9Payload && line.startsWith(`a=fmtp:${vp9Payload}`)) {
+      if (!line.includes('profile-id')) {
+        line += ';profile-id=0';
+      }
+    }
+
+    result.push(line);
   }
   
   return result.join('\r\n');
+}
+
+function findH264HighProfilePayload(lines: string[]): string | null {
+  // Find H264 payload with highest profile
+  for (const line of lines) {
+    const match = line.match(/^a=rtpmap:(\d+)\s+H264\//i);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function findCodecPayload(lines: string[], codec: string): string | null {
+  for (const line of lines) {
+    const match = line.match(new RegExp(`^a=rtpmap:(\\d+)\\s+${codec}\\/`, 'i'));
+    if (match) return match[1];
+  }
+  return null;
 }
 
 /**
@@ -158,13 +225,13 @@ export async function configureAudioSender(sender: RTCRtpSender): Promise<void> 
 }
 
 /**
- * Configure video sender for screen sharing — maintain resolution, never degrade
+ * Configure video sender for screen sharing — maximize quality, never degrade resolution
  */
 export async function configureScreenShareSender(
   sender: RTCRtpSender, 
   quality: { width: number; height: number; frameRate: number; bitrate?: number }
 ): Promise<void> {
-  // Set content hint FIRST before touching parameters
+  // Set content hint FIRST — tells the encoder to prioritize sharpness over motion
   try {
     const track = sender.track;
     if (track && 'contentHint' in track) {
@@ -190,11 +257,17 @@ export async function configureScreenShareSender(
   params.encodings[0].networkPriority = "high";
   (params.encodings[0] as any).maxFramerate = quality.frameRate;
   
-  // CRITICAL: prevent the browser from reducing resolution when bandwidth is tight
+  // CRITICAL: Prevent the browser from reducing resolution under bandwidth pressure
+  // "maintain-resolution" = keep pixels sharp, drop frames if needed
+  // "maintain-framerate" would keep fps but degrade resolution — bad for screen share
   params.degradationPreference = "maintain-resolution";
+  
+  // Scale resolution down factor = 1.0 means NO downscaling
+  params.encodings[0].scaleResolutionDownBy = 1.0;
   
   try {
     await sender.setParameters(params);
+    console.log(`[WebRTC] Screen share sender configured: ${quality.width}x${quality.height}@${quality.frameRate}fps, ${Math.round(bitrate / 1_000_000)}Mbps`);
   } catch (e) {
     console.warn('[WebRTC] Failed to set screen share sender params:', e);
   }

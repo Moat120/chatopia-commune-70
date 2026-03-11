@@ -18,11 +18,11 @@ export interface ScreenShareUser {
 export type ScreenQuality = "720p30" | "1080p60" | "1080p120" | "1440p60" | "1440p120";
 
 export const QUALITY_PRESETS: Record<ScreenQuality, { width: number; height: number; frameRate: number; bitrate: number }> = {
-  "720p30": { width: 1280, height: 720, frameRate: 30, bitrate: 6_000_000 },
-  "1080p60": { width: 1920, height: 1080, frameRate: 60, bitrate: 12_000_000 },
-  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 15_000_000 },
-  "1440p60": { width: 2560, height: 1440, frameRate: 60, bitrate: 20_000_000 },
-  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 25_000_000 },
+  "720p30":   { width: 1280, height: 720,  frameRate: 30,  bitrate: 4_000_000 },
+  "1080p60":  { width: 1920, height: 1080, frameRate: 60,  bitrate: 8_000_000 },
+  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 12_000_000 },
+  "1440p60":  { width: 2560, height: 1440, frameRate: 60,  bitrate: 15_000_000 },
+  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 20_000_000 },
 };
 
 interface ScreenIcePayload {
@@ -166,11 +166,25 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
           if (!params.encodings || params.encodings.length === 0) {
             params.encodings = [{}];
           }
-          params.encodings[0].maxBitrate = 192_000; // 192kbps stereo audio
+          params.encodings[0].maxBitrate = 256_000; // 256kbps stereo system audio
+          params.encodings[0].priority = "high";
+          params.encodings[0].networkPriority = "high";
           sender.setParameters(params).catch(() => {});
         }
       });
     }
+    
+    // Re-apply sender config when connection is established (some browsers reset params)
+    pc.addEventListener('connectionstatechange', () => {
+      if (pc.connectionState === 'connected') {
+        pc.getSenders().forEach(sender => {
+          if (sender.track?.kind === 'video') {
+            const preset = QUALITY_PRESETS[currentQualityRef.current];
+            configureScreenShareSender(sender, preset);
+          }
+        });
+      }
+    });
 
     pc.onicecandidate = (event) => {
       if (event.candidate && signalingChannelRef.current) {
@@ -210,10 +224,14 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     console.log(`[ScreenShare] Sending offer to viewer ${viewerId}`);
     const pc = createOutgoingConnection(viewerId);
+    const preset = QUALITY_PRESETS[currentQualityRef.current];
 
     try {
-      const offer = await pc.createOffer();
-      offer.sdp = mungeScreenShareSDP(offer.sdp || '');
+      const offer = await pc.createOffer({
+        offerToReceiveVideo: false,
+        offerToReceiveAudio: false,
+      });
+      offer.sdp = mungeScreenShareSDP(offer.sdp || '', preset.bitrate);
       await pc.setLocalDescription(offer);
 
       signalingChannelRef.current?.send({
@@ -470,41 +488,50 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     try {
       // CRITICAL: getDisplayMedia MUST be called FIRST, directly from user gesture.
-      // Any async operation before this (like fetching TURN credentials) will break
-      // the user gesture chain and browsers will deny the permission.
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: preset.width, max: preset.width },
           height: { ideal: preset.height, max: preset.height },
           frameRate: { ideal: preset.frameRate, max: preset.frameRate },
-          // @ts-ignore
+          // @ts-ignore — Chrome-specific for sharp screen content
           cursor: "always",
+          // @ts-ignore — Hint to encoder: prioritize detail (text sharpness) over motion
+          resizeMode: "none",
         },
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
           sampleRate: { ideal: 48000 },
+          sampleSize: { ideal: 16 },
           channelCount: { ideal: 2 },
         },
         // @ts-ignore
         preferCurrentTab: false,
         selfBrowserSurface: "exclude",
         surfaceSwitching: "include",
+        systemAudio: "include",
       } as any);
 
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        // Set content hint for sharp text/UI
+        // Content hint: 'detail' = sharp text, 'motion' = smooth video
         try { (videoTrack as any).contentHint = 'detail'; } catch {}
-        // Apply resolution constraints
+        
+        // Force exact resolution + framerate constraints
         try {
           await videoTrack.applyConstraints({
-            width: { ideal: preset.width },
-            height: { ideal: preset.height },
-            frameRate: { ideal: preset.frameRate },
+            width: { ideal: preset.width, max: preset.width },
+            height: { ideal: preset.height, max: preset.height },
+            frameRate: { ideal: preset.frameRate, max: preset.frameRate },
           });
-        } catch {}
+        } catch (e) {
+          console.warn('[ScreenShare] Could not apply exact constraints:', e);
+        }
+        
+        // Log actual captured settings
+        const settings = videoTrack.getSettings();
+        console.log(`[ScreenShare] Captured: ${settings.width}x${settings.height}@${settings.frameRate}fps (requested: ${preset.width}x${preset.height}@${preset.frameRate}fps)`);
       }
 
       const audioTracks = stream.getAudioTracks();
