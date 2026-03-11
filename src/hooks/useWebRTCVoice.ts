@@ -89,7 +89,7 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: st
 const subscribeChannel = (
   channel: ReturnType<typeof supabase.channel>,
   label: string,
-  timeoutMs = 15000
+  timeoutMs = 5000
 ): Promise<void> => {
   return new Promise((resolve, reject) => {
     let done = false;
