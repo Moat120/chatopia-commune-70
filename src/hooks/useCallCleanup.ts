@@ -7,7 +7,7 @@ const CALL_TIMEOUT = 60000; // 60 seconds - calls ringing for more than this are
 
 export const useCallCleanup = () => {
   const { user } = useAuth();
-  const cleanupRef = useRef<NodeJS.Timeout | null>(null);
+  const cleanupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!user) return;

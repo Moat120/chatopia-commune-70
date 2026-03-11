@@ -14,7 +14,7 @@ interface TypingState {
 export const useTypingIndicator = (channelId: string) => {
   const { user, profile } = useAuth();
   const [typingUsers, setTypingUsers] = useState<TypingState>({});
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingBroadcast = useRef<number>(0);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 

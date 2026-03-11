@@ -143,10 +143,10 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
-  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const presencePollRef = useRef<NodeJS.Timeout | null>(null);
-  const joinWatchdogRef = useRef<NodeJS.Timeout | null>(null);
-  const leaveTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const presencePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const joinWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const leaveTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const isSpeakingRef = useRef(false);
   const isMutedRef = useRef(false);
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
