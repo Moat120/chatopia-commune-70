@@ -18,11 +18,11 @@ export interface ScreenShareUser {
 export type ScreenQuality = "720p30" | "1080p60" | "1080p120" | "1440p60" | "1440p120";
 
 export const QUALITY_PRESETS: Record<ScreenQuality, { width: number; height: number; frameRate: number; bitrate: number }> = {
-  "720p30": { width: 1280, height: 720, frameRate: 30, bitrate: 6_000_000 },
-  "1080p60": { width: 1920, height: 1080, frameRate: 60, bitrate: 12_000_000 },
-  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 15_000_000 },
-  "1440p60": { width: 2560, height: 1440, frameRate: 60, bitrate: 20_000_000 },
-  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 25_000_000 },
+  "720p30":   { width: 1280, height: 720,  frameRate: 30,  bitrate: 4_000_000 },
+  "1080p60":  { width: 1920, height: 1080, frameRate: 60,  bitrate: 8_000_000 },
+  "1080p120": { width: 1920, height: 1080, frameRate: 120, bitrate: 12_000_000 },
+  "1440p60":  { width: 2560, height: 1440, frameRate: 60,  bitrate: 15_000_000 },
+  "1440p120": { width: 2560, height: 1440, frameRate: 120, bitrate: 20_000_000 },
 };
 
 interface ScreenIcePayload {
