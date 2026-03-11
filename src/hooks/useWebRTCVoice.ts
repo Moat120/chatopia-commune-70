@@ -652,13 +652,13 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         console.log('[Voice] Applied audio settings:', audioTrack.getSettings());
       }
 
-      // Apply noise processor (can run while channels subscribe below)
+      // Apply noise processor (non-blocking, runs in parallel)
       let processedStream = rawStream;
       const noisePromise = getNoiseSuppression()
         ? (async () => {
             try {
               noiseProcessorRef.current = new AdvancedNoiseProcessor();
-              processedStream = await withTimeout(noiseProcessorRef.current.process(rawStream), 4000, "noise processor");
+              processedStream = await withTimeout(noiseProcessorRef.current.process(rawStream), 3000, "noise processor");
               const rnnoiseActive = noiseProcessorRef.current.isRnnoiseActive();
               const impulseActive = noiseProcessorRef.current.isImpulseGateActive();
               const engines = [rnnoiseActive ? 'RNNoise' : null, impulseActive ? 'ImpulseGate' : null].filter(Boolean).join('+') || 'Filters';
@@ -671,7 +671,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
           })()
         : (() => { setNoiseEngine(null); return Promise.resolve(); })();
 
-      // Setup channels in parallel with noise processing
+      // Setup ALL channels
       const signalingChannel = supabase.channel(`voice-sig-${channelId}`, {
         config: { broadcast: { self: false } },
       });
@@ -689,17 +689,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         config: { broadcast: { self: false } },
       });
       observerChannelRef.current = observerChannel;
-
-      // Subscribe all channels + noise processing in parallel
-      await Promise.all([
-        noisePromise,
-        subscribeChannel(signalingChannel, "signaling"),
-        subscribeChannel(rosterChannel, "roster").catch(e => console.warn("[Voice] Roster unavailable", e)),
-        subscribeChannel(observerChannel, "observer").catch(e => console.warn("[Voice] Observer unavailable", e)),
-      ]);
-
-      // Use the processed stream (noise may have finished above)
-      localStreamRef.current = processedStream;
 
       const presenceChannel = supabase.channel(`voice-pres-${channelId}`, {
         config: { presence: { key: currentUserId } },
@@ -730,7 +719,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
         const users = Array.from(userMap.values());
 
-        // Ensure local user is always included (in case track hasn't propagated yet)
+        // Ensure local user is always included
         if (isConnectedRef.current && !userMap.has(currentUserId)) {
           users.push({
             odId: currentUserId,
@@ -743,15 +732,14 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
 
         setConnectedUsers(users);
 
-        // Broadcast roster to observers (both channels)
+        // Broadcast roster to observers (fire-and-forget)
         const rosterPayload = { type: "broadcast" as const, event: "voice-roster", payload: { users } };
-        rosterChannelRef.current?.send(rosterPayload);
-        observerChannelRef.current?.send(rosterPayload);
+        rosterChannelRef.current?.send(rosterPayload).catch(() => {});
+        observerChannelRef.current?.send(rosterPayload).catch(() => {});
 
-        // Initiate WebRTC connections for ALL remote users (both directions try)
+        // Initiate WebRTC connections for remote users
         users.forEach((u) => {
           if (u.odId !== currentUserId && !peerConnectionsRef.current.has(u.odId)) {
-            // Only the user with the smaller ID initiates
             if (currentUserId < u.odId) {
               initiateConnectionRef.current?.(u.odId);
             }
@@ -762,7 +750,6 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       presenceChannel.on("presence", { event: "sync" }, syncPresenceState);
 
       presenceChannel.on("presence", { event: "join" }, ({ key, newPresences }) => {
-        // Skip observer joins
         if (key.startsWith("observer-")) return;
 
         const joinedUserIds = new Set<string>();
@@ -777,81 +764,72 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         }
 
         joinedUserIds.forEach((joinedUserId) => {
-          // Cancel any pending leave timer — user is back
           const leaveTimer = leaveTimersRef.current.get(joinedUserId);
           if (leaveTimer) {
             clearTimeout(leaveTimer);
             leaveTimersRef.current.delete(joinedUserId);
-            console.log('[Voice] Cancelled leave timer for rejoining user:', joinedUserId);
           }
 
           if (!peerConnectionsRef.current.has(joinedUserId) && currentUserId < joinedUserId) {
-            console.log('[Voice] Join event → initiating connection to', joinedUserId);
             initiateConnectionRef.current?.(joinedUserId);
           }
         });
 
-        // Also re-sync presence state to update the user list
         syncPresenceState();
       });
 
       presenceChannel.on("presence", { event: "leave" }, ({ key }) => {
         if (key.startsWith("observer-")) return;
         if (key !== currentUserId) {
-          console.log('[Voice] Presence leave:', key);
-          // Debounce: presence track() updates cause transient leave+rejoin.
-          // Wait before destroying the peer connection to avoid reconnection loops.
           const existingTimer = leaveTimersRef.current.get(key);
           if (existingTimer) clearTimeout(existingTimer);
 
           leaveTimersRef.current.set(key, setTimeout(() => {
             leaveTimersRef.current.delete(key);
-            // Check if the user actually rejoined during the debounce window
             const state = presenceChannelRef.current?.presenceState() || {};
             const stillPresent = Object.entries(state).some(([k, presences]: [string, any[]]) =>
               k === key || presences.some((p: any) => p.odId === key)
             );
-            if (stillPresent) {
-              console.log('[Voice] User', key, 'rejoined during debounce — keeping connection');
-              return;
-            }
-
-            console.log('[Voice] User', key, 'confirmed left — removing peer');
+            if (stillPresent) return;
             removePeer(key);
             syncPresenceState();
           }, 3000));
         }
       });
 
-      await subscribeChannel(presenceChannel, "presence");
+      // Subscribe ALL channels in parallel — only signaling + presence are critical
+      // Roster and observer are best-effort (don't block join)
+      await Promise.all([
+        noisePromise,
+        subscribeChannel(signalingChannel, "signaling"),
+        subscribeChannel(presenceChannel, "presence"),
+        // Non-critical: fire-and-forget
+        subscribeChannel(rosterChannel, "roster", 3000).catch(e => console.warn("[Voice] Roster unavailable", e)),
+        subscribeChannel(observerChannel, "observer", 3000).catch(e => console.warn("[Voice] Observer unavailable", e)),
+      ]);
 
-      // Do not block connection forever on presence track ack
-      try {
-        await withTimeout(
-          presenceChannel.track({
-            odId: currentUserId,
-            username: currentUsername,
-            avatarUrl: currentPresenceAvatar,
-            isSpeaking: false,
-            isMuted: false,
-          }),
-          4000,
-          "presence track"
-        );
-      } catch (trackError) {
-        console.warn("[Voice] Presence track delayed, continuing join", trackError);
-      }
+      // Use the processed stream
+      localStreamRef.current = processedStream;
+
+      // Track presence (don't block on ack)
+      presenceChannel.track({
+        odId: currentUserId,
+        username: currentUsername,
+        avatarUrl: currentPresenceAvatar,
+        isSpeaking: false,
+        isMuted: false,
+      }).catch(err => console.warn("[Voice] Presence track delayed", err));
 
       // Mark connected BEFORE syncing so the self-add fallback works
       isConnectedRef.current = true;
 
-      // Immediately sync presence state (ensures self + any existing users are visible)
+      // Immediately sync presence state
       syncPresenceState();
 
-      // Also broadcast initial roster to observers
+      // Broadcast initial roster (fire-and-forget)
       const initialRoster = { type: "broadcast" as const, event: "voice-roster", payload: { users: [{ odId: currentUserId, username: currentUsername, avatarUrl: currentPresenceAvatar, isSpeaking: false, isMuted: false }] } };
-      rosterChannelRef.current?.send(initialRoster);
-      observerChannelRef.current?.send(initialRoster);
+      rosterChannelRef.current?.send(initialRoster).catch(() => {});
+      observerChannelRef.current?.send(initialRoster).catch(() => {});
 
       startVoiceDetection(rawStream);
       startStatsMonitoring();
