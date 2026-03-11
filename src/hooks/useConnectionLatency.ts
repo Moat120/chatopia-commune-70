@@ -24,7 +24,7 @@ export const useConnectionLatency = ({
   });
 
   const previousRtt = useRef<number>(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const getQualityFromPing = (ping: number): LatencyStats['quality'] => {
     if (ping <= 50) return 'excellent';
