@@ -632,13 +632,13 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
       // Parallelize: TURN fetch + getUserMedia + stale channel cleanup all at once
       const [turnResult, rawStream] = await Promise.all([
         // TURN credentials (non-critical, fallback to static)
-        withTimeout(getDynamicRtcConfig(), 5000, "TURN config")
+        withTimeout(getDynamicRtcConfig(), 3000, "TURN config")
           .then(config => { rtcConfigRef.current = config; console.log('[Voice] Using ICE config with', config.iceServers?.length, 'servers'); return config; })
           .catch(err => { console.warn('[Voice] TURN config unavailable, using static', err); rtcConfigRef.current = RTC_CONFIG; return RTC_CONFIG; }),
         // getUserMedia
         withTimeout(
           navigator.mediaDevices.getUserMedia({ audio: await getOptimizedAudioConstraints() }),
-          8000,
+          5000,
           "getUserMedia"
         ),
         // Cleanup stale channels in parallel
