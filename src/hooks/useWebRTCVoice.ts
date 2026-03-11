@@ -626,7 +626,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
         onError?.("Connexion vocale expirée, réessaie.");
         cleanup();
       }
-    }, 20000);
+    }, 12000);
 
     try {
       // Parallelize: TURN fetch + getUserMedia + stale channel cleanup all at once
