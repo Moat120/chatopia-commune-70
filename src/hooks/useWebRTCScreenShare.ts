@@ -474,41 +474,50 @@ export const useWebRTCScreenShare = ({ channelId, onError }: UseWebRTCScreenShar
 
     try {
       // CRITICAL: getDisplayMedia MUST be called FIRST, directly from user gesture.
-      // Any async operation before this (like fetching TURN credentials) will break
-      // the user gesture chain and browsers will deny the permission.
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: preset.width, max: preset.width },
           height: { ideal: preset.height, max: preset.height },
           frameRate: { ideal: preset.frameRate, max: preset.frameRate },
-          // @ts-ignore
+          // @ts-ignore — Chrome-specific for sharp screen content
           cursor: "always",
+          // @ts-ignore — Hint to encoder: prioritize detail (text sharpness) over motion
+          resizeMode: "none",
         },
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
           sampleRate: { ideal: 48000 },
+          sampleSize: { ideal: 16 },
           channelCount: { ideal: 2 },
         },
         // @ts-ignore
         preferCurrentTab: false,
         selfBrowserSurface: "exclude",
         surfaceSwitching: "include",
+        systemAudio: "include",
       } as any);
 
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        // Set content hint for sharp text/UI
+        // Content hint: 'detail' = sharp text, 'motion' = smooth video
         try { (videoTrack as any).contentHint = 'detail'; } catch {}
-        // Apply resolution constraints
+        
+        // Force exact resolution + framerate constraints
         try {
           await videoTrack.applyConstraints({
-            width: { ideal: preset.width },
-            height: { ideal: preset.height },
-            frameRate: { ideal: preset.frameRate },
+            width: { ideal: preset.width, max: preset.width },
+            height: { ideal: preset.height, max: preset.height },
+            frameRate: { ideal: preset.frameRate, max: preset.frameRate },
           });
-        } catch {}
+        } catch (e) {
+          console.warn('[ScreenShare] Could not apply exact constraints:', e);
+        }
+        
+        // Log actual captured settings
+        const settings = videoTrack.getSettings();
+        console.log(`[ScreenShare] Captured: ${settings.width}x${settings.height}@${settings.frameRate}fps (requested: ${preset.width}x${preset.height}@${preset.frameRate}fps)`);
       }
 
       const audioTracks = stream.getAudioTracks();
