@@ -9,80 +9,80 @@
 
 @layer base {
   :root {
-    /* Core palette — deep, rich, Apple-like dark */
-    --background: 225 20% 6%;
-    --foreground: 210 15% 95%;
+    /* Core palette — deep indigo night, Discord-inspired */
+    --background: 240 18% 7%;
+    --foreground: 240 15% 96%;
 
-    --card: 225 18% 10%;
-    --card-foreground: 210 15% 95%;
+    --card: 240 16% 11%;
+    --card-foreground: 240 15% 96%;
 
-    --popover: 225 18% 12%;
-    --popover-foreground: 210 15% 95%;
+    --popover: 240 16% 13%;
+    --popover-foreground: 240 15% 96%;
 
-    /* Primary — iOS Blue */
-    --primary: 211 100% 50%;
+    /* Primary — vibrant Indigo/Violet (Discord blurple, refined) */
+    --primary: 252 87% 67%;
     --primary-foreground: 0 0% 100%;
 
     /* Secondary */
-    --secondary: 225 14% 14%;
-    --secondary-foreground: 210 15% 95%;
+    --secondary: 240 14% 15%;
+    --secondary-foreground: 240 15% 96%;
 
-    /* Accent spectrum */
-    --accent-cyan: 175 80% 50%;
-    --accent-rose: 340 82% 60%;
-    --accent-amber: 38 92% 55%;
-    --accent-emerald: 160 72% 46%;
+    /* Accent spectrum — harmonized with violet primary */
+    --accent-cyan: 190 90% 58%;
+    --accent-rose: 330 85% 66%;
+    --accent-amber: 35 95% 60%;
+    --accent-emerald: 158 70% 50%;
 
-    --muted: 225 12% 18%;
-    --muted-foreground: 215 10% 50%;
+    --muted: 240 12% 18%;
+    --muted-foreground: 240 8% 58%;
 
-    --accent: 211 100% 50%;
+    --accent: 252 87% 67%;
     --accent-foreground: 0 0% 100%;
 
     /* Status */
-    --destructive: 0 72% 52%;
+    --destructive: 354 80% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 160 72% 46%;
+    --success: 158 70% 50%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 55%;
-    --warning-foreground: 225 20% 8%;
+    --warning: 35 95% 60%;
+    --warning-foreground: 240 18% 8%;
 
     /* Structure */
-    --border: 225 12% 16%;
-    --input: 225 14% 16%;
-    --ring: 211 100% 50%;
+    --border: 240 12% 17%;
+    --input: 240 14% 16%;
+    --ring: 252 87% 67%;
 
     --radius: 0.875rem;
 
     /* Layout */
-    --server-sidebar: 225 22% 5%;
-    --channel-sidebar: 225 18% 8%;
-    --chat-background: 225 20% 6%;
-    
-    --hover-bg: 225 14% 14%;
-    --active-channel: 211 100% 50%;
+    --server-sidebar: 240 20% 5%;
+    --channel-sidebar: 240 18% 8%;
+    --chat-background: 240 18% 7%;
+
+    --hover-bg: 240 14% 15%;
+    --active-channel: 252 87% 67%;
 
     /* Voice */
-    --voice-speaking: 160 72% 46%;
-    --voice-muted: 0 72% 52%;
-    --voice-connected: 160 72% 46%;
+    --voice-speaking: 158 70% 50%;
+    --voice-muted: 354 80% 58%;
+    --voice-connected: 158 70% 50%;
 
     /* Glow */
-    --glow-primary: 211 100% 50%;
-    --glow-success: 160 72% 46%;
-    --glow-cyan: 175 80% 50%;
+    --glow-primary: 252 87% 67%;
+    --glow-success: 158 70% 50%;
+    --glow-cyan: 190 90% 58%;
 
     /* Sidebar */
-    --sidebar-background: 225 22% 5%;
-    --sidebar-foreground: 210 15% 95%;
-    --sidebar-primary: 211 100% 50%;
+    --sidebar-background: 240 20% 5%;
+    --sidebar-foreground: 240 15% 96%;
+    --sidebar-primary: 252 87% 67%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 225 14% 14%;
-    --sidebar-accent-foreground: 210 15% 95%;
-    --sidebar-border: 225 12% 14%;
-    --sidebar-ring: 211 100% 50%;
+    --sidebar-accent: 240 14% 14%;
+    --sidebar-accent-foreground: 240 15% 96%;
+    --sidebar-border: 240 12% 14%;
+    --sidebar-ring: 252 87% 67%;
   }
 }
 
@@ -97,11 +97,25 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1, "ss01" 1;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.011em;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Subtle global ambient glow — fixed, GPU-cheap, no animation */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 15% 0%, hsl(var(--primary) / 0.10) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 85% 100%, hsl(var(--accent-rose) / 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 100% 20%, hsl(var(--accent-cyan) / 0.05) 0%, transparent 60%);
   }
 
   /* Ultra-thin scrollbar with smooth fade */
@@ -115,18 +129,35 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.15);
+    background: hsl(var(--muted-foreground) / 0.18);
     border-radius: 10px;
     transition: background 0.2s;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.3);
+    background: hsl(var(--primary) / 0.45);
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.3);
+    background: hsl(var(--primary) / 0.35);
     color: hsl(var(--foreground));
+  }
+
+  /* Respect reduced-motion: kill heavy infinite animations */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Ensure app content sits above body::before ambient layer */
+  #root {
+    position: relative;
+    z-index: 1;
   }
 }
 
@@ -250,19 +281,18 @@
   .aurora-bg::before {
     content: "";
     @apply absolute -inset-[50%] pointer-events-none;
-    background: 
-      radial-gradient(ellipse 80% 50% at 20% 20%, hsl(var(--primary) / 0.12) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 40% at 80% 30%, hsl(var(--accent-cyan) / 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse 70% 60% at 50% 80%, hsl(var(--accent-rose) / 0.06) 0%, transparent 50%),
-      radial-gradient(ellipse 50% 30% at 10% 70%, hsl(var(--accent-emerald) / 0.05) 0%, transparent 50%);
-    animation: aurora-shift 20s ease-in-out infinite;
+    background:
+      radial-gradient(ellipse 70% 50% at 20% 25%, hsl(var(--primary) / 0.18) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 45% at 80% 30%, hsl(var(--accent-rose) / 0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 55% at 50% 85%, hsl(var(--accent-cyan) / 0.08) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 35% at 10% 75%, hsl(252 87% 67% / 0.07) 0%, transparent 55%);
+    animation: aurora-shift 28s ease-in-out infinite;
+    will-change: transform;
   }
 
   @keyframes aurora-shift {
-    0%, 100% { transform: rotate(0deg) scale(1); }
-    25% { transform: rotate(5deg) scale(1.05); }
-    50% { transform: rotate(0deg) scale(1.1); }
-    75% { transform: rotate(-5deg) scale(1.05); }
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(2%, -2%, 0) scale(1.06); }
   }
 
   /* ============================================
@@ -271,10 +301,10 @@
 
   .mesh-gradient {
     background: 
-      radial-gradient(at 0% 0%, hsl(var(--primary) / 0.12) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, hsl(var(--accent-cyan) / 0.08) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, hsl(var(--accent-rose) / 0.06) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, hsl(var(--success) / 0.04) 0px, transparent 50%),
+      radial-gradient(at 0% 0%, hsl(var(--primary) / 0.16) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsl(var(--accent-rose) / 0.10) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, hsl(var(--accent-cyan) / 0.08) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(var(--success) / 0.05) 0px, transparent 50%),
       hsl(var(--background));
   }
 
@@ -580,20 +610,22 @@
 
   .float-subtle {
     animation: float-subtle 5s ease-in-out infinite;
+    will-change: transform;
   }
 
   @keyframes float-subtle {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-10px) rotate(1deg); }
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -8px, 0); }
   }
 
   .float-slow {
     animation: float-slow 8s ease-in-out infinite;
+    will-change: transform;
   }
 
   @keyframes float-slow {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -6px, 0); }
   }
 
   .pulse-soft {
@@ -607,14 +639,15 @@
 
   .breathing {
     animation: breathing 4s ease-in-out infinite;
+    will-change: transform, opacity;
   }
 
   @keyframes breathing {
-    0%, 100% { 
+    0%, 100% {
       transform: scale(1);
       opacity: 1;
     }
-    50% { 
+    50% {
       transform: scale(1.03);
       opacity: 0.85;
     }
@@ -670,14 +703,14 @@
     background: linear-gradient(
       135deg,
       hsl(var(--primary)) 0%,
-      hsl(var(--accent-cyan)) 50%,
-      hsl(var(--primary)) 100%
+      hsl(var(--accent-rose)) 50%,
+      hsl(var(--accent-cyan)) 100%
     );
     background-size: 200% auto;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: gradient-flow 4s ease-in-out infinite;
+    animation: gradient-flow 6s ease-in-out infinite;
   }
 
   @keyframes gradient-flow {
@@ -689,7 +722,7 @@
     background: linear-gradient(
       135deg,
       hsl(var(--primary)) 0%,
-      hsl(var(--accent-cyan)) 100%
+      hsl(var(--accent-rose)) 100%
     );
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;

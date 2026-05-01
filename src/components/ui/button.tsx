@@ -19,9 +19,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: cn(
-          "bg-primary text-primary-foreground rounded-xl",
-          "shadow-[0_2px_12px_hsl(var(--primary)/0.25)]",
-          "hover:shadow-[0_4px_20px_hsl(var(--primary)/0.35)] hover:brightness-110",
+          "text-primary-foreground rounded-xl",
+          "bg-gradient-to-br from-primary via-primary to-[hsl(252_87%_60%)]",
+          "shadow-[0_2px_14px_hsl(var(--primary)/0.35),inset_0_1px_0_hsl(0_0%_100%/0.12)]",
+          "hover:shadow-[0_6px_24px_hsl(var(--primary)/0.45),inset_0_1px_0_hsl(0_0%_100%/0.18)] hover:brightness-110",
         ),
         destructive: cn(
           "bg-destructive text-destructive-foreground rounded-xl",
