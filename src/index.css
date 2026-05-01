@@ -703,14 +703,14 @@
     background: linear-gradient(
       135deg,
       hsl(var(--primary)) 0%,
-      hsl(var(--accent-cyan)) 50%,
-      hsl(var(--primary)) 100%
+      hsl(var(--accent-rose)) 50%,
+      hsl(var(--accent-cyan)) 100%
     );
     background-size: 200% auto;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: gradient-flow 4s ease-in-out infinite;
+    animation: gradient-flow 6s ease-in-out infinite;
   }
 
   @keyframes gradient-flow {
@@ -722,7 +722,7 @@
     background: linear-gradient(
       135deg,
       hsl(var(--primary)) 0%,
-      hsl(var(--accent-cyan)) 100%
+      hsl(var(--accent-rose)) 100%
     );
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
