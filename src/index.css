@@ -97,11 +97,25 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, 'Segoe UI', sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1, "ss01" 1;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.011em;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Subtle global ambient glow — fixed, GPU-cheap, no animation */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 15% 0%, hsl(var(--primary) / 0.10) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 85% 100%, hsl(var(--accent-rose) / 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 100% 20%, hsl(var(--accent-cyan) / 0.05) 0%, transparent 60%);
   }
 
   /* Ultra-thin scrollbar with smooth fade */
@@ -115,18 +129,35 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.15);
+    background: hsl(var(--muted-foreground) / 0.18);
     border-radius: 10px;
     transition: background 0.2s;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.3);
+    background: hsl(var(--primary) / 0.45);
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.3);
+    background: hsl(var(--primary) / 0.35);
     color: hsl(var(--foreground));
+  }
+
+  /* Respect reduced-motion: kill heavy infinite animations */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Ensure app content sits above body::before ambient layer */
+  #root {
+    position: relative;
+    z-index: 1;
   }
 }
 
