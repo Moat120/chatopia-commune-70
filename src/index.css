@@ -610,20 +610,22 @@
 
   .float-subtle {
     animation: float-subtle 5s ease-in-out infinite;
+    will-change: transform;
   }
 
   @keyframes float-subtle {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-10px) rotate(1deg); }
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -8px, 0); }
   }
 
   .float-slow {
     animation: float-slow 8s ease-in-out infinite;
+    will-change: transform;
   }
 
   @keyframes float-slow {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -6px, 0); }
   }
 
   .pulse-soft {
@@ -637,14 +639,15 @@
 
   .breathing {
     animation: breathing 4s ease-in-out infinite;
+    will-change: transform, opacity;
   }
 
   @keyframes breathing {
-    0%, 100% { 
+    0%, 100% {
       transform: scale(1);
       opacity: 1;
     }
-    50% { 
+    50% {
       transform: scale(1.03);
       opacity: 0.85;
     }
