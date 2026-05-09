@@ -1,4 +1,4 @@
-import { Phone, PhoneOff, Mic, MicOff, Monitor, MonitorOff, Loader2, VolumeX, Volume2 } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Monitor, MonitorOff, Loader2, VolumeX, Volume2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -9,11 +9,14 @@ interface VoiceControlsWithScreenShareProps {
   isMuted: boolean;
   isScreenSharing: boolean;
   isDeafened?: boolean;
+  noiseBypass?: boolean;
+  noiseEngine?: string | null;
   onJoin: () => void;
   onLeave: () => void;
   onToggleMute: () => void;
   onToggleScreenShare: () => void;
   onToggleDeafen?: () => void;
+  onToggleNoise?: () => void;
 }
 
 const ControlButton = ({
