@@ -175,6 +175,9 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
             onLeave={handleLeave}
             onToggleMute={toggleMute}
             onToggleDeafen={handleToggleDeafen}
+            noiseBypass={noiseBypass}
+            noiseEngine={noiseEngine}
+            onToggleNoise={toggleNoiseBypass}
           />
         </div>
       </div>
