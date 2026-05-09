@@ -900,6 +900,38 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
     }
   }, [isMuted, currentUserId, currentUsername, currentPresenceAvatar]);
 
+  /** Hot-swap the outbound audio track between RNNoise-processed and raw mic. */
+  const toggleNoiseBypass = useCallback(async () => {
+    const proc = noiseProcessorRef.current;
+    if (!proc) return;
+    const next = !proc.isBypassed();
+    proc.setBypass(next);
+    const newTrack = proc.getActiveTrack();
+    if (!newTrack) return;
+
+    // Preserve mute state on the new track
+    newTrack.enabled = !isMutedRef.current;
+
+    // Replace track on every active peer connection (no renegotiation needed).
+    const replacements: Promise<void>[] = [];
+    peerConnectionsRef.current.forEach((pc) => {
+      pc.getSenders().forEach((sender) => {
+        if (sender.track?.kind === 'audio') {
+          replacements.push(sender.replaceTrack(newTrack).catch(() => {}));
+        }
+      });
+    });
+    await Promise.all(replacements);
+
+    // Swap track on the local stream too (so VAD / level meter follow).
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach(t => localStreamRef.current!.removeTrack(t));
+      localStreamRef.current.addTrack(newTrack);
+    }
+
+    setNoiseBypass(next);
+  }, []);
+
   useEffect(() => {
     return () => {
       cleanup();
