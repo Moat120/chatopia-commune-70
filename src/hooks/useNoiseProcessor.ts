@@ -278,6 +278,8 @@ export class AdvancedNoiseProcessor {
     this.audioContext = null;
     this.sourceNode = null;
     this.destinationNode = null;
+    this.bypassDestination = null;
+    this.rawStream = null;
     this.rnnoiseNode = null;
     this.impulseGateNode = null;
     this.fallbackWorkletNode = null;
