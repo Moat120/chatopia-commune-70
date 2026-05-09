@@ -129,6 +129,7 @@ export const useWebRTCVoice = ({ channelId, onError }: UseWebRTCVoiceProps) => {
   const [isPttActive, setIsPttActive] = useState(false);
   const [userVolumes, setUserVolumes] = useState<Record<string, number>>({});
   const [noiseEngine, setNoiseEngine] = useState<string | null>(null);
+  const [noiseBypass, setNoiseBypass] = useState(false);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const rawStreamRef = useRef<MediaStream | null>(null);
