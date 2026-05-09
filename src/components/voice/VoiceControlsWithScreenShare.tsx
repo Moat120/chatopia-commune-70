@@ -103,11 +103,14 @@ const VoiceControlsWithScreenShare = ({
   isMuted,
   isScreenSharing,
   isDeafened = false,
+  noiseBypass = false,
+  noiseEngine,
   onJoin,
   onLeave,
   onToggleMute,
   onToggleScreenShare,
   onToggleDeafen,
+  onToggleNoise,
 }: VoiceControlsWithScreenShareProps) => {
   if (!isConnected) {
     return (
