@@ -229,6 +229,32 @@ export class AdvancedNoiseProcessor {
     return this.engineName;
   }
 
+  /** Track to send to peers (processed by RNNoise pipeline). */
+  getProcessedTrack(): MediaStreamTrack | null {
+    return this.destinationNode?.stream.getAudioTracks()[0] || null;
+  }
+
+  /** Raw mic track (no DSP), for bypass mode. */
+  getBypassTrack(): MediaStreamTrack | null {
+    return this.bypassDestination?.stream.getAudioTracks()[0]
+      || this.rawStream?.getAudioTracks()[0]
+      || null;
+  }
+
+  /** Returns the active outbound track based on current bypass state. */
+  getActiveTrack(): MediaStreamTrack | null {
+    return this.bypassed ? this.getBypassTrack() : this.getProcessedTrack();
+  }
+
+  isBypassed(): boolean {
+    return this.bypassed;
+  }
+
+  setBypass(bypass: boolean) {
+    this.bypassed = bypass;
+    console.log(`[NoiseProcessor] Bypass → ${bypass ? 'OFF (raw mic)' : 'ON (RNNoise)'}`);
+  }
+
   cleanup() {
     try {
       this.sourceNode?.disconnect();
