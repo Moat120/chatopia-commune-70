@@ -316,6 +316,9 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
             onToggleMute={toggleMute}
             onToggleScreenShare={handleToggleScreenShare}
             onToggleDeafen={handleToggleDeafen}
+            noiseBypass={noiseBypass}
+            noiseEngine={noiseEngine}
+            onToggleNoise={toggleNoiseBypass}
           />
         </div>
 
