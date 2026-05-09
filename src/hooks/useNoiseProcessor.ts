@@ -39,6 +39,9 @@ export class AdvancedNoiseProcessor {
   private audioContext: AudioContext | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private destinationNode: MediaStreamAudioDestinationNode | null = null;
+  private bypassDestination: MediaStreamAudioDestinationNode | null = null;
+  private rawStream: MediaStream | null = null;
+  private bypassed = false;
   private gainNode: GainNode | null = null;
   private highpassFilter: BiquadFilterNode | null = null;
   private deEsserFilter: BiquadFilterNode | null = null;
