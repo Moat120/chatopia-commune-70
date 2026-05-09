@@ -1,4 +1,4 @@
-import { Phone, PhoneOff, Mic, MicOff, Loader2, VolumeX, Volume2 } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Loader2, VolumeX, Volume2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useSound } from "@/hooks/useSound";
@@ -8,10 +8,13 @@ interface VoiceControlsProps {
   isConnecting: boolean;
   isMuted: boolean;
   isDeafened?: boolean;
+  noiseBypass?: boolean;
+  noiseEngine?: string | null;
   onJoin: () => void;
   onLeave: () => void;
   onToggleMute: () => void;
   onToggleDeafen?: () => void;
+  onToggleNoise?: () => void;
 }
 
 const VoiceControls = ({
@@ -19,10 +22,13 @@ const VoiceControls = ({
   isConnecting,
   isMuted,
   isDeafened = false,
+  noiseBypass = false,
+  noiseEngine,
   onJoin,
   onLeave,
   onToggleMute,
-  onToggleDeafen
+  onToggleDeafen,
+  onToggleNoise,
 }: VoiceControlsProps) => {
   const { playJoin, playLeave, playMute, playUnmute } = useSound();
 
