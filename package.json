@@ -42,6 +42,7 @@
     "@sapphi-red/web-noise-suppressor": "^0.3.5",
     "@supabase/supabase-js": "^2.75.1",
     "@tanstack/react-query": "^5.83.0",
+    "@timephy/rnnoise-wasm": "^1.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
