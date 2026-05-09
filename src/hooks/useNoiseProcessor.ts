@@ -59,12 +59,16 @@ export class AdvancedNoiseProcessor {
     try {
       this.processingStartTime = performance.now();
       this.mode = getNoiseSuppressionMode();
+      this.rawStream = stream;
 
       // Use device sample rate when possible (avoids double resampling).
       // RNNoise s'attend à 48kHz; AudioContext resamplera depuis le device si besoin.
       this.audioContext = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.destinationNode = this.audioContext.createMediaStreamDestination();
+      // Bypass tap: raw mic → straight out, used when suppression is OFF
+      this.bypassDestination = this.audioContext.createMediaStreamDestination();
+      this.sourceNode.connect(this.bypassDestination);
 
       // === Stage 0: HighPass 80Hz (avant RNNoise pour nettoyer la VAD) ===
       this.highpassFilter = this.audioContext.createBiquadFilter();
