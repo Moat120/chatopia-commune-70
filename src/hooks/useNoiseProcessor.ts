@@ -39,6 +39,9 @@ export class AdvancedNoiseProcessor {
   private audioContext: AudioContext | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private destinationNode: MediaStreamAudioDestinationNode | null = null;
+  private bypassDestination: MediaStreamAudioDestinationNode | null = null;
+  private rawStream: MediaStream | null = null;
+  private bypassed = false;
   private gainNode: GainNode | null = null;
   private highpassFilter: BiquadFilterNode | null = null;
   private deEsserFilter: BiquadFilterNode | null = null;
@@ -56,12 +59,16 @@ export class AdvancedNoiseProcessor {
     try {
       this.processingStartTime = performance.now();
       this.mode = getNoiseSuppressionMode();
+      this.rawStream = stream;
 
       // Use device sample rate when possible (avoids double resampling).
       // RNNoise s'attend à 48kHz; AudioContext resamplera depuis le device si besoin.
       this.audioContext = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.destinationNode = this.audioContext.createMediaStreamDestination();
+      // Bypass tap: raw mic → straight out, used when suppression is OFF
+      this.bypassDestination = this.audioContext.createMediaStreamDestination();
+      this.sourceNode.connect(this.bypassDestination);
 
       // === Stage 0: HighPass 80Hz (avant RNNoise pour nettoyer la VAD) ===
       this.highpassFilter = this.audioContext.createBiquadFilter();
@@ -222,6 +229,32 @@ export class AdvancedNoiseProcessor {
     return this.engineName;
   }
 
+  /** Track to send to peers (processed by RNNoise pipeline). */
+  getProcessedTrack(): MediaStreamTrack | null {
+    return this.destinationNode?.stream.getAudioTracks()[0] || null;
+  }
+
+  /** Raw mic track (no DSP), for bypass mode. */
+  getBypassTrack(): MediaStreamTrack | null {
+    return this.bypassDestination?.stream.getAudioTracks()[0]
+      || this.rawStream?.getAudioTracks()[0]
+      || null;
+  }
+
+  /** Returns the active outbound track based on current bypass state. */
+  getActiveTrack(): MediaStreamTrack | null {
+    return this.bypassed ? this.getBypassTrack() : this.getProcessedTrack();
+  }
+
+  isBypassed(): boolean {
+    return this.bypassed;
+  }
+
+  setBypass(bypass: boolean) {
+    this.bypassed = bypass;
+    console.log(`[NoiseProcessor] Bypass → ${bypass ? 'OFF (raw mic)' : 'ON (RNNoise)'}`);
+  }
+
   cleanup() {
     try {
       this.sourceNode?.disconnect();
@@ -245,6 +278,8 @@ export class AdvancedNoiseProcessor {
     this.audioContext = null;
     this.sourceNode = null;
     this.destinationNode = null;
+    this.bypassDestination = null;
+    this.rawStream = null;
     this.rnnoiseNode = null;
     this.impulseGateNode = null;
     this.fallbackWorkletNode = null;

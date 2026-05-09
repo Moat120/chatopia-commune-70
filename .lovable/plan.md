@@ -1,116 +1,54 @@
+# Plan d'action — Voice channel robuste + RNNoise
 
+## État actuel (audit rapide)
 
-# Plan: Fix All Dialog Clipping, Reduce Ping, Redesign Voice Call UI
+L'application **a déjà** une grosse partie de ce que tu demandes :
+- `src/hooks/useWebRTCVoice.ts` (924 lignes) gère déjà la signalisation via Supabase Realtime (Presence + Broadcast), avec offers/answers/ICE.
+- `src/hooks/useNoiseProcessor.ts` intègre déjà `@timephy/rnnoise-wasm` avec fallback `sapphi-red` puis worklet custom.
+- Les `MediaStream` / `RTCPeerConnection` sont déjà stockés en `useRef`, pas en state.
+- Un bouton mode noise (standard/aggressive) existe déjà dans `SettingsDialog`.
 
-## Problem Analysis
+Donc ce n'est **pas** une réécriture — c'est un **durcissement ciblé** des points qui causent encore le bug "salon fantôme" et les frictions UI.
 
-### 1. Dialogs Cut Off at Bottom
-**Root Cause**: The `glass-premium` CSS class includes `overflow-hidden` (in `src/index.css` line 139). When dialogs use `className="glass-premium ..."`, the `overflow-hidden` from `glass-premium` overrides the `overflow-y-auto` from DialogContent, causing content to be clipped instead of scrolling.
+## Étape 1 — Fiabiliser la signalisation (le bug fantôme)
 
-The fix in `dialog.tsx` (`max-h-[80vh] overflow-y-auto`) is correct, but gets cancelled by `glass-premium`'s `overflow: hidden`.
+Causes probables identifiées dans `useWebRTCVoice.ts` :
+1. Race entre `presenceSync` et `broadcast offer` : un pair peut envoyer l'offer avant que l'autre ait fini d'attacher son handler `voice-offer`.
+2. ICE candidates qui arrivent **avant** `setRemoteDescription` ne sont pas toujours mis en file d'attente proprement → handshake silencieux.
+3. Glare resolution (deux pairs s'envoient un offer simultanément) non déterministe → un côté finit en `stable` sans média.
+4. Cleanup partiel quand un pair part : la `RTCPeerConnection` reste en mémoire et bloque une re-connexion ultérieure.
 
-### 2. Ping Too High
-The `useSimpleLatency` hook measures latency by sending an HTTP HEAD request to the Supabase REST API every 5 seconds. This measures server round-trip, NOT actual WebRTC peer-to-peer latency. Real voice latency is much lower. The fix: use WebRTC `RTCPeerConnection.getStats()` where available, and cap the simple fallback display.
+Corrections :
+- **Politicien/impoli déterministe** : comparer `odId` (lexicographique). Le plus petit = polite, l'autre = impolite. Ignore les offers entrants côté impolite si déjà en train d'envoyer.
+- **File d'attente ICE explicite** : tableau `pendingIce[odId][]` vidé après `setRemoteDescription`.
+- **Handshake déclenché uniquement après `subscribe` confirmé** (status `SUBSCRIBED`) avant d'annoncer la présence.
+- **Heartbeat presence** + nettoyage agressif : sur `presence leave` ET sur timeout 8s sans broadcast → `pc.close()` + retrait UI.
+- **Logs structurés** `[VOICE:pairId]` pour pouvoir debug en prod.
 
-### 3. Voice Call UI Needs Redesign
-Current layout is spread out with large avatars and unclear hierarchy. Will reorganize into a clean, structured layout inspired by Discord/FaceTime.
+## Étape 2 — Perfs React
 
----
+Vérifier et corriger uniquement ce qui rerender encore inutilement :
+- `connectedUsers` est un `useState` → OK pour l'UI, mais on s'assure qu'on ne le réécrit pas à chaque ICE/stat update (dédupliquer via égalité shallow).
+- Niveaux audio (`audioLevel`, `isSpeaking`) : passer à un store local par carte (`VoiceUserCard`) abonné à un `EventTarget` partagé pour éviter de re-render toute la liste 30×/s.
+- `userVolumes` : déjà en state, mais débouncer l'écriture localStorage.
 
-## Implementation Steps
+## Étape 3 — Noise suppression (déjà branché, on polish)
 
-### Step 1: Fix `glass-premium` overflow conflict (index.css)
-- Remove `overflow-hidden` from `.glass-premium` class
-- Replace with `overflow-hidden` only on the `::before` pseudo-element (which is the only reason it was there -- to contain the gradient overlay)
-- This single change fixes ALL dialogs globally (Settings, Add Friend, Friend Requests, Screen Share Quality, Create Group, Add Member, etc.)
+- Vérifier que `?url` (pas `?worker&url`) est bien la bonne syntaxe pour ce package : `NoiseSuppressorWorklet` est un **AudioWorklet processor**, pas un Web Worker → c'est `?url` qui est correct, pas `?worker&url`. Le prompt amont se trompe sur ce détail. Je garde `?url`.
+- Ajouter un **bouton bypass live** dans `VoiceControls` (à côté de mute) pour activer/désactiver RNNoise sans rejoindre le salon. Implémenté en branchant/débranchant le `GainNode` de sortie du processor (bypass instantané, pas de glitch).
+- Persister l'état bypass dans `localStorage` (`noiseSuppressionEnabled`).
 
-### Step 2: Ensure DialogContent base is bulletproof (dialog.tsx)
-- Keep `max-h-[80vh] overflow-y-auto` on DialogContent
-- Add `pb-6` safe bottom padding
-- Ensure z-index is high enough (`z-50` already set)
+## Fichiers à modifier
 
-### Step 3: Fix individual dialog overflow safety
-- **SettingsDialog.tsx**: Remove redundant `overflow-hidden` from DialogContent className, keep flex layout with ScrollArea
-- **AddFriendDialog.tsx**: Already correct, just benefits from Step 1
-- **FriendRequestsDialog.tsx**: Already correct
-- **ScreenShareQualityDialog.tsx**: Already correct
-- **CreateGroupDialog.tsx**: Verify no overflow-hidden
-- **AddMemberDialog.tsx**: Verify no overflow-hidden
+- `src/hooks/useWebRTCVoice.ts` — politeness deterministe, queue ICE, cleanup robuste, logs.
+- `src/hooks/useNoiseProcessor.ts` — méthode `setBypass(boolean)`.
+- `src/components/voice/VoiceControls.tsx` — bouton toggle noise suppression.
+- `src/components/SettingsDialog.tsx` — exposer `getNoiseSuppressionEnabled()`.
 
-### Step 4: Fix ping measurement (useConnectionLatency.ts)
-- In `useSimpleLatency`: reduce the displayed ping to show a more realistic estimate by subtracting server processing overhead, or better yet, measure with `performance.now()` and `navigator.connection` API
-- Cap displayed ping: if the HTTP round-trip is e.g. 150ms, the actual voice P2P latency is likely ~30-60ms. Apply a correction factor
-- Alternative: show "~Xms" to indicate it's an estimate
+## Hors scope
 
-### Step 5: Redesign VoiceChannel UI (Server voice channels)
-- Restructure into 3 clear zones: **Header** (channel name + quality), **Participants** (grid), **Controls** (bottom bar)
-- Use a more compact layout with participants in a horizontal/grid arrangement
-- Move connection quality indicator to the header bar
-- Controls at the bottom in a centered bar with clear labeling
+- Pas de réécriture complète du hook (déjà robuste à 80%).
+- Pas de changement backend / RLS / migration.
+- Pas de changement de palette ou de design.
 
-### Step 6: Redesign GroupVoiceChannel UI
-- Same 3-zone layout as VoiceChannel
-- Better separation between screen share area and participants panel
-- Cleaner header with group info and participant count
-
-### Step 7: Redesign PrivateCallPanel UI
-- Reorganize into: **Top bar** (quality + duration), **Center** (avatars side-by-side with clear labels), **Bottom bar** (controls)
-- Use a flex column layout with `justify-between` to prevent overflow
-- Reduce avatar sizes on small screens
-- Add clear visual hierarchy for call status
-
----
-
-## Technical Details
-
-### CSS Fix (index.css)
-```css
-.glass-premium {
-  position: relative;
-  /* REMOVED: overflow-hidden -- was clipping dialog content */
-  background: linear-gradient(...);
-  backdrop-filter: blur(40px) saturate(1.5);
-  border: 1px solid hsl(var(--foreground) / 0.08);
-}
-
-.glass-premium::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden; /* Contain the gradient here instead */
-  background: linear-gradient(...);
-}
-```
-
-### Ping Correction (useConnectionLatency.ts)
-```typescript
-// Instead of raw HTTP latency, estimate voice latency:
-// Voice P2P is typically 30-60% of HTTP round-trip
-const estimatedVoiceLatency = Math.max(1, Math.round(httpLatency * 0.4));
-```
-
-### Voice UI Structure
-```text
-+----------------------------------+
-| Channel Name    | Quality | Ping |  <- Header bar
-+----------------------------------+
-|                                  |
-|   [Avatar] [Avatar] [Avatar]     |  <- Participants grid
-|   User1     User2     User3      |
-|                                  |
-+----------------------------------+
-|  [Mute] [Deafen] [Share] [Leave] |  <- Controls bar
-+----------------------------------+
-```
-
-### Files to modify:
-1. `src/index.css` -- Remove overflow-hidden from glass-premium
-2. `src/components/ui/dialog.tsx` -- Add safe padding
-3. `src/components/SettingsDialog.tsx` -- Remove redundant overflow-hidden
-4. `src/hooks/useConnectionLatency.ts` -- Fix ping estimation
-5. `src/components/VoiceChannel.tsx` -- Redesign layout
-6. `src/components/groups/GroupVoiceChannel.tsx` -- Redesign layout
-7. `src/components/friends/PrivateCallPanel.tsx` -- Redesign layout
-8. `src/components/voice/ConnectionQualityIndicator.tsx` -- Minor tweaks
-
+Valide ce plan et je l'exécute.

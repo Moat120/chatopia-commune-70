@@ -1,4 +1,4 @@
-import { Phone, PhoneOff, Mic, MicOff, Loader2, VolumeX, Volume2 } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Loader2, VolumeX, Volume2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useSound } from "@/hooks/useSound";
@@ -8,10 +8,13 @@ interface VoiceControlsProps {
   isConnecting: boolean;
   isMuted: boolean;
   isDeafened?: boolean;
+  noiseBypass?: boolean;
+  noiseEngine?: string | null;
   onJoin: () => void;
   onLeave: () => void;
   onToggleMute: () => void;
   onToggleDeafen?: () => void;
+  onToggleNoise?: () => void;
 }
 
 const VoiceControls = ({
@@ -19,10 +22,13 @@ const VoiceControls = ({
   isConnecting,
   isMuted,
   isDeafened = false,
+  noiseBypass = false,
+  noiseEngine,
   onJoin,
   onLeave,
   onToggleMute,
-  onToggleDeafen
+  onToggleDeafen,
+  onToggleNoise,
 }: VoiceControlsProps) => {
   const { playJoin, playLeave, playMute, playUnmute } = useSound();
 
@@ -161,6 +167,48 @@ const VoiceControls = ({
             "pointer-events-none whitespace-nowrap shadow-xl"
           )}>
             {isDeafened ? "Activer le son" : "Désactiver le son"}
+          </span>
+        </Button>
+      )}
+
+      {/* Noise suppression toggle */}
+      {onToggleNoise && (
+        <Button
+          onClick={onToggleNoise}
+          size="lg"
+          className={cn(
+            "relative group h-16 w-16 rounded-2xl p-0",
+            "transition-all duration-300 ease-out",
+            "hover:-translate-y-0.5 hover:shadow-xl",
+            !noiseBypass
+              ? cn(
+                  "bg-gradient-to-br from-primary/25 to-primary/10",
+                  "border-2 border-primary/30",
+                  "text-primary hover:text-primary",
+                  "hover:from-primary/35 hover:to-primary/20",
+                  "hover:shadow-primary/20"
+                )
+              : cn(
+                  "bg-gradient-to-br from-secondary/80 to-secondary/40",
+                  "border-2 border-white/[0.08]",
+                  "text-muted-foreground hover:text-foreground",
+                  "hover:from-secondary hover:to-secondary/60",
+                  "hover:border-white/[0.15]"
+                )
+          )}
+        >
+          <Sparkles className={cn("h-6 w-6", !noiseBypass && "drop-shadow-[0_0_8px_hsl(var(--primary)/0.6)]")} />
+
+          <span className={cn(
+            "absolute -bottom-10 left-1/2 -translate-x-1/2",
+            "px-3 py-1.5 rounded-lg text-xs font-medium",
+            "bg-popover/95 backdrop-blur-xl border border-border/50",
+            "opacity-0 group-hover:opacity-100 transition-all duration-200",
+            "pointer-events-none whitespace-nowrap shadow-xl"
+          )}>
+            {noiseBypass
+              ? "Activer la suppression de bruit"
+              : `Désactiver la suppression${noiseEngine ? ` (${noiseEngine})` : ""}`}
           </span>
         </Button>
       )}

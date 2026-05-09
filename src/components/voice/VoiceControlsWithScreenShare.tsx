@@ -1,4 +1,4 @@
-import { Phone, PhoneOff, Mic, MicOff, Monitor, MonitorOff, Loader2, VolumeX, Volume2 } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Monitor, MonitorOff, Loader2, VolumeX, Volume2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -9,11 +9,14 @@ interface VoiceControlsWithScreenShareProps {
   isMuted: boolean;
   isScreenSharing: boolean;
   isDeafened?: boolean;
+  noiseBypass?: boolean;
+  noiseEngine?: string | null;
   onJoin: () => void;
   onLeave: () => void;
   onToggleMute: () => void;
   onToggleScreenShare: () => void;
   onToggleDeafen?: () => void;
+  onToggleNoise?: () => void;
 }
 
 const ControlButton = ({
@@ -100,11 +103,14 @@ const VoiceControlsWithScreenShare = ({
   isMuted,
   isScreenSharing,
   isDeafened = false,
+  noiseBypass = false,
+  noiseEngine,
   onJoin,
   onLeave,
   onToggleMute,
   onToggleScreenShare,
   onToggleDeafen,
+  onToggleNoise,
 }: VoiceControlsWithScreenShareProps) => {
   if (!isConnected) {
     return (
@@ -176,6 +182,19 @@ const VoiceControlsWithScreenShare = ({
         activeIcon={<MonitorOff className="h-5 w-5" />}
         label={isScreenSharing ? "Arrêter le partage" : "Partager l'écran"}
       />
+
+      {onToggleNoise && (
+        <ControlButton
+          onClick={onToggleNoise}
+          active={!noiseBypass}
+          activeColor="primary"
+          icon={<Sparkles className="h-5 w-5 opacity-50" />}
+          activeIcon={<Sparkles className="h-5 w-5 drop-shadow-[0_0_6px_hsl(var(--primary)/0.7)]" />}
+          label={noiseBypass
+            ? "Activer la suppression de bruit"
+            : `Suppression de bruit active${noiseEngine ? ` (${noiseEngine})` : ""}`}
+        />
+      )}
 
       {/* Separator */}
       <div className="w-px h-8 bg-white/[0.06] mx-1" />

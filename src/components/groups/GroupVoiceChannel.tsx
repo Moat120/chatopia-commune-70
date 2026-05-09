@@ -40,10 +40,12 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
     audioLevel,
     userVolumes,
     noiseEngine,
+    noiseBypass,
     setUserVolume,
     join,
     leave,
     toggleMute,
+    toggleNoiseBypass,
   } = useWebRTCVoice({
     channelId: `group-${group.id}`,
     onError: (error) => {
@@ -314,6 +316,9 @@ const GroupVoiceChannel = ({ group, onEnd }: GroupVoiceChannelProps) => {
             onToggleMute={toggleMute}
             onToggleScreenShare={handleToggleScreenShare}
             onToggleDeafen={handleToggleDeafen}
+            noiseBypass={noiseBypass}
+            noiseEngine={noiseEngine}
+            onToggleNoise={toggleNoiseBypass}
           />
         </div>
 

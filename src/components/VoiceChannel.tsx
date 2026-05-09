@@ -29,10 +29,12 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     audioLevel,
     userVolumes,
     noiseEngine,
+    noiseBypass,
     setUserVolume,
     join,
     leave,
-    toggleMute
+    toggleMute,
+    toggleNoiseBypass,
   } = useWebRTCVoice({
     channelId,
     onError: (error) => {
@@ -173,6 +175,9 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
             onLeave={handleLeave}
             onToggleMute={toggleMute}
             onToggleDeafen={handleToggleDeafen}
+            noiseBypass={noiseBypass}
+            noiseEngine={noiseEngine}
+            onToggleNoise={toggleNoiseBypass}
           />
         </div>
       </div>
