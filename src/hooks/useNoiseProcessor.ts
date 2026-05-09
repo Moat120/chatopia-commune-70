@@ -77,7 +77,7 @@ export class AdvancedNoiseProcessor {
       let rnnoiseLoaded = false;
       try {
         const { NoiseSuppressorWorklet_Name } = await import('@timephy/rnnoise-wasm');
-        const workletUrl = (await import('@timephy/rnnoise-wasm/dist/NoiseSuppressorWorklet.js?url')).default;
+        const workletUrl = (await import('@timephy/rnnoise-wasm/NoiseSuppressorWorklet?url')).default;
         await this.audioContext.audioWorklet.addModule(workletUrl);
         this.rnnoiseNode = new AudioWorkletNode(this.audioContext, NoiseSuppressorWorklet_Name);
         lastNode.connect(this.rnnoiseNode);
