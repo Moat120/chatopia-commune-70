@@ -183,6 +183,19 @@ const VoiceControlsWithScreenShare = ({
         label={isScreenSharing ? "Arrêter le partage" : "Partager l'écran"}
       />
 
+      {onToggleNoise && (
+        <ControlButton
+          onClick={onToggleNoise}
+          active={!noiseBypass}
+          activeColor="primary"
+          icon={<Sparkles className="h-5 w-5 opacity-50" />}
+          activeIcon={<Sparkles className="h-5 w-5 drop-shadow-[0_0_6px_hsl(var(--primary)/0.7)]" />}
+          label={noiseBypass
+            ? "Activer la suppression de bruit"
+            : `Suppression de bruit active${noiseEngine ? ` (${noiseEngine})` : ""}`}
+        />
+      )}
+
       {/* Separator */}
       <div className="w-px h-8 bg-white/[0.06] mx-1" />
 
